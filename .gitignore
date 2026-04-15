@@ -1,0 +1,36 @@
+# 编译输出目录
+bin/
+obj/
+
+# 用户自定义配置文件
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# 构建工具相关
+*.builds
+*.log
+
+# 临时文件
+*.tmp
+*.temp
+.cache/
+
+# VS 相关
+.vs/
+.vscode/
+*.vscode/
+
+# 程序集缓存
+*.pdb
+*.mdf
+*.ldf
+*.sdf
+
+# 发布目录
+publish/
+
+# 其他编译产物
+*.exe
+*.dll
