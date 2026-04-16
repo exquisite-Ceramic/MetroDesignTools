@@ -31,6 +31,8 @@ obj/
 # 发布目录
 publish/
 
-# 其他编译产物
+# 编译产物（排除 build/References 下的 AutoCAD 依赖库）
 *.exe
 *.dll
+!build/References/*.dll
+!MetroDesignToolKits/build/References/*.dll
