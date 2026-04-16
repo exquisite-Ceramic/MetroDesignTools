@@ -25,8 +25,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MetroToolKits.SectionGenera
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MetroToolKits.SectionGenerator.Infrastructure", "src\Plugins\SectionGenerator\MetroToolKits.SectionGenerator.Infrastructure\MetroToolKits.SectionGenerator.Infrastructure.csproj", "{A8774497-A91B-4072-83AE-3A515E316A5F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MetroToolKits.SectionGenerator.CadAdapter", "src\Plugins\SectionGenerator\MetroToolKits.SectionGenerator.CadAdapter\MetroToolKits.SectionGenerator.CadAdapter.csproj", "{EC8C5724-CCB6-4BEA-A3A8-4A3392954F06}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MetroToolKits.SectionGenerator.Plugin", "src\Plugins\SectionGenerator\MetroToolKits.SectionGenerator.Plugin\MetroToolKits.SectionGenerator.Plugin.csproj", "{5E3AAA08-ABA0-4F31-A58C-0ABBBDCABDCF}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MetroToolKits.Foundation.Building", "src\Shared\MetroToolKits.Foundation.Building\MetroToolKits.Foundation.Building.csproj", "{F1A2B3C4-D5E6-7890-ABCD-EF1234567890}"
@@ -70,10 +68,6 @@ Global
 		{A8774497-A91B-4072-83AE-3A515E316A5F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A8774497-A91B-4072-83AE-3A515E316A5F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A8774497-A91B-4072-83AE-3A515E316A5F}.Release|Any CPU.Build.0 = Release|Any CPU
-		{EC8C5724-CCB6-4BEA-A3A8-4A3392954F06}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{EC8C5724-CCB6-4BEA-A3A8-4A3392954F06}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{EC8C5724-CCB6-4BEA-A3A8-4A3392954F06}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{EC8C5724-CCB6-4BEA-A3A8-4A3392954F06}.Release|Any CPU.Build.0 = Release|Any CPU
 		{5E3AAA08-ABA0-4F31-A58C-0ABBBDCABDCF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{5E3AAA08-ABA0-4F31-A58C-0ABBBDCABDCF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5E3AAA08-ABA0-4F31-A58C-0ABBBDCABDCF}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -103,7 +97,6 @@ Global
 		{3B103E39-E55B-4A0C-A45A-F724E6F0EC59} = {E32DD235-48C5-43EA-8860-A33D99CC4D55}
 		{8749094F-4B0F-47BF-B677-E39F89C0E5D8} = {E32DD235-48C5-43EA-8860-A33D99CC4D55}
 		{A8774497-A91B-4072-83AE-3A515E316A5F} = {E32DD235-48C5-43EA-8860-A33D99CC4D55}
-		{EC8C5724-CCB6-4BEA-A3A8-4A3392954F06} = {E32DD235-48C5-43EA-8860-A33D99CC4D55}
 		{5E3AAA08-ABA0-4F31-A58C-0ABBBDCABDCF} = {E32DD235-48C5-43EA-8860-A33D99CC4D55}
 		{D6C0D96F-C9CD-4D8B-B3A0-1658E5E7CF6E} = {0E2ACAF4-28C9-40DA-B2BD-BA8BC21D8AF2}
 		{AD06651A-04E6-4739-B1ED-EF017EBA13CD} = {D6C0D96F-C9CD-4D8B-B3A0-1658E5E7CF6E}

@@ -38,7 +38,6 @@
     <ProjectReference Include="..\MetroToolKits.SectionGenerator.Core\MetroToolKits.SectionGenerator.Core.csproj" />
     <ProjectReference Include="..\MetroToolKits.SectionGenerator.App\MetroToolKits.SectionGenerator.App.csproj" />
     <ProjectReference Include="..\MetroToolKits.SectionGenerator.Infrastructure\MetroToolKits.SectionGenerator.Infrastructure.csproj" />
-    <ProjectReference Include="..\MetroToolKits.SectionGenerator.CadAdapter\MetroToolKits.SectionGenerator.CadAdapter.csproj" />
   </ItemGroup>
 
   <ItemGroup>

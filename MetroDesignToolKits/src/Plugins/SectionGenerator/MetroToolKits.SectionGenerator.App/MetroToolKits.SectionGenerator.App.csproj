@@ -12,6 +12,7 @@
     <ProjectReference Include="..\..\..\Shared\MetroToolKits.Foundation.Core\MetroToolKits.Foundation.Core.csproj" />
     <ProjectReference Include="..\..\..\Shared\MetroToolKits.Foundation.Building\MetroToolKits.Foundation.Building.csproj" />
     <ProjectReference Include="..\MetroToolKits.SectionGenerator.Core\MetroToolKits.SectionGenerator.Core.csproj" />
+    <ProjectReference Include="..\..\..\Bootstrap\MetroToolKits.Bootstrap\MetroToolKits.Bootstrap.csproj" />
   </ItemGroup>
 
   <ItemGroup>

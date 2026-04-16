@@ -6,7 +6,6 @@ using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.Foundation.Cad.Services;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.UseCases;
-using MetroToolKits.SectionGenerator.CadAdapter;
 using MetroToolKits.SectionGenerator.Infrastructure.Recognition;
 using MetroToolKits.SectionGenerator.Infrastructure.Repositories;
 using MetroToolKits.SectionGenerator.Infrastructure.Services;
@@ -53,16 +52,26 @@ public class SectionGeneratorPlugin : IPlugin
 
         // Core 层
         services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.SectionComposer>();
+        services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.MultiFloorSectionComposer>();
         services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.FloorGeometryHasher>();
 
-        // 绘图服务
+        // 快照仓储 + 块删除服务
+        services.AddSingleton<ISectionSnapshotRepository, XDataSnapshotRepository>();
+        services.AddSingleton<IBlockEraseService, CadBlockEraseService>();
+
+        // 绘图服务（已从 CadAdapter 合并至 Infrastructure）
         services.AddSingleton<IDrawingService, CadDrawingService>();
 
         // 用例
         services.AddSingleton<IGenerateSectionUseCase, GenerateSectionUseCase>();
+        services.AddSingleton<ICheckSectionUpdatesUseCase, CheckSectionUpdatesUseCase>();
+        services.AddSingleton<IUpdateSectionUseCase, UpdateSectionUseCase>();
 
         // 命令
         services.AddTransient<GenSectionCommand>();
+        services.AddTransient<FloorConfigCommand>();
+        services.AddTransient<CheckSectionUpdatesCommand>();
+        services.AddTransient<UpdateSectionCommand>();
         services.AddTransient<ConvertRegionElementsCommand>();
         services.AddTransient<RevertElementConversionCommand>();
         services.AddTransient<OpenLayerMappingCommand>();
@@ -71,6 +80,9 @@ public class SectionGeneratorPlugin : IPlugin
     public void RegisterCommands(ICommandRegistry registry)
     {
         registry.RegisterCommand<GenSectionCommand>("GenSection");
+        registry.RegisterCommand<FloorConfigCommand>("FloorConfig");
+        registry.RegisterCommand<CheckSectionUpdatesCommand>("CheckSectionUpdates");
+        registry.RegisterCommand<UpdateSectionCommand>("UpdateSection");
         registry.RegisterCommand<ConvertRegionElementsCommand>("ConvertRegion");
         registry.RegisterCommand<RevertElementConversionCommand>("RevertConversion");
         registry.RegisterCommand<OpenLayerMappingCommand>("LayerMapping");
@@ -91,9 +103,9 @@ public class OpenLayerMappingCommand
         ElementConversionBackupService backupService,
         ElementTypeLoader typeLoader)
     {
-        _layerService = layerService;
+        _layerService  = layerService;
         _backupService = backupService;
-        _typeLoader = typeLoader;
+        _typeLoader    = typeLoader;
     }
 
     [Autodesk.AutoCAD.Runtime.CommandMethod("LayerMapping")]

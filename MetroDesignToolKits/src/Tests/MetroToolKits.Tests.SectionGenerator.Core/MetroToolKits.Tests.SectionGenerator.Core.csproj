@@ -14,6 +14,7 @@
     <PackageReference Include="xunit" Version="2.5.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
     <PackageReference Include="FluentAssertions" Version="6.12.0" />
+    <PackageReference Include="NSubstitute" Version="5.1.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,6 +25,7 @@
     <ProjectReference Include="..\..\Shared\MetroToolKits.Foundation.Core\MetroToolKits.Foundation.Core.csproj" />
     <ProjectReference Include="..\..\Shared\MetroToolKits.Foundation.Building\MetroToolKits.Foundation.Building.csproj" />
     <ProjectReference Include="..\..\Plugins\SectionGenerator\MetroToolKits.SectionGenerator.Core\MetroToolKits.SectionGenerator.Core.csproj" />
+    <ProjectReference Include="..\..\Plugins\SectionGenerator\MetroToolKits.SectionGenerator.App\MetroToolKits.SectionGenerator.App.csproj" />
   </ItemGroup>
 
 </Project>

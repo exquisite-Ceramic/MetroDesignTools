@@ -47,6 +47,7 @@ public static class Startup
             var services = new ServiceCollection();
             services.AddSingleton(_loggerFactory);
             services.AddSingleton(_userLogger);
+            services.AddSingleton<MetroToolKits.Foundation.Core.Logging.IUserLogger>(_userLogger);
             services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
 
             // 5. 加载插件

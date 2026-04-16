@@ -1,34 +1,48 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using MetroToolKits.Foundation.Building.Elements;
 using MetroToolKits.Foundation.Core.Geometry;
+using MetroToolKits.Foundation.Core.Logging;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
 namespace MetroToolKits.SectionGenerator.App.UseCases;
 
 /// <summary>
-/// 剖面生成用例实现（单层）
+/// 剖面生成用例实现（支持单层和多楼层）
 /// </summary>
 public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
 {
     private readonly IFloorConfigRepository _configRepo;
     private readonly IElementRecognizer _elementRecognizer;
     private readonly SectionComposer _composer;
+    private readonly MultiFloorSectionComposer _multiComposer;
     private readonly IDrawingService _drawingService;
+    private readonly ISectionSnapshotRepository _snapshotRepo;
+    private readonly FloorGeometryHasher _hasher;
     private readonly ILogger<GenerateSectionUseCase> _logger;
+    private readonly IUserLogger _userLogger;
 
     public GenerateSectionUseCase(
         IFloorConfigRepository configRepo,
         IElementRecognizer elementRecognizer,
         SectionComposer composer,
+        MultiFloorSectionComposer multiComposer,
         IDrawingService drawingService,
-        ILogger<GenerateSectionUseCase> logger)
+        ISectionSnapshotRepository snapshotRepo,
+        FloorGeometryHasher hasher,
+        ILogger<GenerateSectionUseCase> logger,
+        IUserLogger userLogger)
     {
-        _configRepo        = configRepo;
+        _configRepo     = configRepo;
         _elementRecognizer = elementRecognizer;
-        _composer          = composer;
-        _drawingService    = drawingService;
-        _logger            = logger;
+        _composer       = composer;
+        _multiComposer  = multiComposer;
+        _drawingService = drawingService;
+        _snapshotRepo   = snapshotRepo;
+        _hasher         = hasher;
+        _logger         = logger;
+        _userLogger     = userLogger;
     }
 
     public GenerateSectionResult Execute(GenerateSectionRequest request)
@@ -36,42 +50,74 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
         var sw = Stopwatch.StartNew();
         try
         {
-            // 1. 加载楼层配置
-            var floorConfig = request.FloorConfig ?? GetDefaultFloorConfig();
-            _logger.LogDebug("楼层构件获取，楼层: {FloorName}", floorConfig.Name);
+            var config = _configRepo.Load();
+            var floors = config.Floors;
 
-            // 2. 构建剖切线
-            var sectionLine  = new Line3D(request.CutLineStart, request.CutLineEnd);
+            if (floors.Count == 0)
+            {
+                _logger.LogWarning("未找到楼层配置，使用默认单层");
+                _userLogger.FloorConfigMissing();
+                floors = new List<FloorConfig>
+                {
+                    new() { Name = "F1", Height = 5200, BottomSlabThickness = 800,
+                            TopSlabThickness = 600, FinishThickness = 120 }
+                };
+            }
+
+            var sectionLine   = new Line3D(request.CutLineStart, request.CutLineEnd);
             var viewDirection = ComputeViewDirection(sectionLine);
 
-            // 3. 识别构件
-            var elements = _elementRecognizer.RecognizeElements(sectionLine, request.ViewDepth);
-            _logger.LogDebug("楼层 {FloorName} 识别到 {ElementCount} 个构件",
-                floorConfig.Name, elements.Count);
+            _logger.LogInformation("执行 GenSection 命令，楼层数: {FloorCount}，剖切线长度: {Length:F2}",
+                floors.Count, sectionLine.Length);
 
-            if (elements.Count == 0)
-                _logger.LogWarning("楼层 {FloorName} 未识别到任何构件", floorConfig.Name);
+            // 逐层识别构件，同时输出进度
+            var floorElements = new Dictionary<string, IReadOnlyList<BuildingElement>>();
+            for (int i = 0; i < floors.Count; i++)
+            {
+                var floor = floors[i];
+                if (floors.Count > 1)
+                    _userLogger.SectionProgress(floor.Name, i + 1, floors.Count);
+                else
+                    _userLogger.SectionGenerating(floor.Name);
 
-            // 4. 计算剖面几何
+                var elements = _elementRecognizer.RecognizeElements(sectionLine, request.ViewDepth);
+                floorElements[floor.Name] = elements;
+                _logger.LogDebug("楼层 {FloorName} 识别到 {Count} 个构件", floor.Name, elements.Count);
+
+                if (elements.Count == 0)
+                {
+                    _logger.LogWarning("楼层 {FloorName} 未识别到任何构件", floor.Name);
+                    _userLogger.FloorSkipped(floor.Name, "未识别到任何构件");
+                }
+            }
+
+            // 多楼层堆叠计算
             var composeSw = Stopwatch.StartNew();
-            var geometryData = _composer.Generate(sectionLine, viewDirection, elements, floorConfig);
+            var multiData = _multiComposer.Generate(sectionLine, viewDirection, floorElements, floors);
             composeSw.Stop();
-            _logger.LogDebug("楼层 {FloorName} 剖切计算耗时 {ElapsedMs}ms",
-                floorConfig.Name, composeSw.ElapsedMilliseconds);
+            _logger.LogDebug("多楼层剖切计算耗时 {ElapsedMs}ms，总高度: {TotalHeight:F2}",
+                composeSw.ElapsedMilliseconds, multiData.TotalHeight);
 
-            // 5. 绘制块
-            var blockName = _drawingService.DrawSectionBlock(
-                geometryData, request.InsertionPoint, floorConfig);
+            // 绘制块
+            var blockName = _drawingService.DrawMultiFloorSectionBlock(
+                multiData, request.InsertionPoint, floors);
+
+            // 写入快照（含各楼层哈希）
+            var snapshot = BuildSnapshot(blockName, request, floors, floorElements, multiData);
+            _snapshotRepo.Save(blockName, snapshot);
+            _logger.LogDebug("写入剖面快照，楼层哈希: {Hashes}",
+                string.Join(", ", snapshot.FloorSnapshots.Select(f => $"{f.FloorName}:{f.GeometryHash}")));
 
             sw.Stop();
-            _logger.LogInformation("创建剖面块 {BlockName}，插入点: {InsertionPoint}，总耗时: {ElapsedMs}ms",
-                blockName, request.InsertionPoint, sw.ElapsedMilliseconds);
+            _logger.LogInformation("创建剖面块 {BlockName}，楼层数: {FloorCount}，总耗时: {ElapsedMs}ms",
+                blockName, floors.Count, sw.ElapsedMilliseconds);
 
             return new GenerateSectionResult
             {
-                Success      = true,
-                BlockName    = blockName,
-                GeometryData = geometryData
+                Success     = true,
+                BlockName   = blockName,
+                FloorCount  = floors.Count,
+                TotalHeight = multiData.TotalHeight
             };
         }
         catch (Exception ex)
@@ -82,13 +128,33 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
         }
     }
 
-    private FloorConfig GetDefaultFloorConfig()
+    private SectionSnapshot BuildSnapshot(
+        string blockName,
+        GenerateSectionRequest request,
+        IReadOnlyList<FloorConfig> floors,
+        Dictionary<string, IReadOnlyList<BuildingElement>> floorElements,
+        MultiFloorSectionData multiData)
     {
-        var config = _configRepo.Load();
-        return config.Floors.FirstOrDefault() ?? new FloorConfig
+        var floorSnapshots = floors.Select(f =>
         {
-            Name = "F1", Height = 5200,
-            BottomSlabThickness = 800, TopSlabThickness = 600, FinishThickness = 120
+            var elements = floorElements.TryGetValue(f.Name, out var list) ? list : Array.Empty<BuildingElement>();
+            return new FloorSnapshot
+            {
+                FloorName    = f.Name,
+                GeometryHash = _hasher.ComputeHash(elements),
+                ElementCount = elements.Count
+            };
+        }).ToList();
+
+        return new SectionSnapshot
+        {
+            BlockName             = blockName,
+            CutLineStart          = request.CutLineStart,
+            CutLineEnd            = request.CutLineEnd,
+            InsertionPoint        = request.InsertionPoint,
+            ViewDepth             = request.ViewDepth,
+            TotalHeight           = multiData.TotalHeight,
+            FloorSnapshots        = floorSnapshots
         };
     }
 

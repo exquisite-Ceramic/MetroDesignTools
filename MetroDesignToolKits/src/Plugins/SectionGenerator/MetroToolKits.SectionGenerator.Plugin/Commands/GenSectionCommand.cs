@@ -1,7 +1,7 @@
+using MetroToolKits.Foundation.Core.Logging;
 using System.Diagnostics;
 using Autodesk.AutoCAD.EditorInput;
 using Microsoft.Extensions.Logging;
-using MetroToolKits.Bootstrap.Logging;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
@@ -15,12 +15,12 @@ public sealed class GenSectionCommand
 {
     private readonly IGenerateSectionUseCase _useCase;
     private readonly ILogger<GenSectionCommand> _logger;
-    private readonly UserLogger _userLogger;
+    private readonly IUserLogger _userLogger;
 
     public GenSectionCommand(
         IGenerateSectionUseCase useCase,
         ILogger<GenSectionCommand> logger,
-        UserLogger userLogger)
+        IUserLogger userLogger)
     {
         _useCase    = useCase;
         _logger     = logger;
@@ -84,7 +84,7 @@ public sealed class GenSectionCommand
         var insertPt = new Point3D(ptResult.Value.X, ptResult.Value.Y, ptResult.Value.Z);
 
         // 步骤4：执行用例
-        _userLogger.SectionGenerating("F1");
+        _userLogger.SectionGenerating("（加载楼层配置中...）");
         var sw = Stopwatch.StartNew();
 
         var result = _useCase.Execute(new GenerateSectionRequest
@@ -99,9 +99,9 @@ public sealed class GenSectionCommand
 
         if (result.Success)
         {
-            _userLogger.SectionCreated(result.BlockName!, 1, sw.ElapsedMilliseconds);
-            _logger.LogInformation("剖面生成完成，块名称: {BlockName}，耗时: {ElapsedMs}ms",
-                result.BlockName, sw.ElapsedMilliseconds);
+            _userLogger.SectionCreated(result.BlockName!, result.FloorCount, sw.ElapsedMilliseconds);
+            _logger.LogInformation("剖面生成完成，块名称: {BlockName}，楼层数: {FloorCount}，耗时: {ElapsedMs}ms",
+                result.BlockName, result.FloorCount, sw.ElapsedMilliseconds);
         }
         else
         {
@@ -110,3 +110,4 @@ public sealed class GenSectionCommand
         }
     }
 }
+

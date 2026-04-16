@@ -1,4 +1,5 @@
 using Autodesk.AutoCAD.ApplicationServices;
+using MetroToolKits.Foundation.Core.Logging;
 using Newtonsoft.Json;
 using AcadApp = Autodesk.AutoCAD.ApplicationServices.Application;
 
@@ -7,7 +8,7 @@ namespace MetroToolKits.Bootstrap.Logging;
 /// <summary>
 /// 用户日志服务 - 面向最终用户的命令行提示 + 用户日志文件
 /// </summary>
-public sealed class UserLogger
+public sealed class UserLogger : IUserLogger
 {
     private readonly FileLoggerProcessor? _fileProcessor;
     private readonly UserLogVerbosity _verbosity;
@@ -119,6 +120,12 @@ public sealed class UserLogger
         if (_verbosity >= UserLogVerbosity.Verbose)
             WriteToCommandLine($"已加载楼层配置: {floorCount} 个楼层 ({string.Join(",", floorNames)})");
         WriteToFile("INFO", "Floor config loaded", new { floorCount });
+    }
+
+    public void FloorConfigSaved(int floorCount, string[] floorNames)
+    {
+        WriteToCommandLine($"楼层配置已保存: {floorCount} 个楼层 ({string.Join(",", floorNames)})");
+        WriteToFile("INFO", "Floor config saved", new { floorCount, floors = string.Join(",", floorNames) });
     }
 
     public void FloorConfigMissing()
