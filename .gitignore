@@ -31,8 +31,8 @@ obj/
 # 发布目录
 publish/
 
-# 编译产物（排除 build/References 下的 AutoCAD 依赖库）
+# 编译产物
+# AutoCAD 依赖 DLL（acdbmgd.dll / acmgd.dll / accoremgd.dll）不随仓库分发，
+# 需从本机 AutoCAD 安装目录手动复制到 build/References/，见该目录下的 README.md
 *.exe
 *.dll
-!build/References/*.dll
-!MetroDesignToolKits/build/References/*.dll
