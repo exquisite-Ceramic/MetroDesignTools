@@ -26,7 +26,7 @@ MetroToolKits 是一个基于 AutoCAD .NET API 开发的 CAD 工具集，旨在�
    - `MetroToolKits.Foundation.Core.dll`
    - `MetroToolKits.Foundation.Cad.dll`
    - `MetroToolKits.Foundation.Building.dll`
-   - `MetroToolKits.SectionGenerator.Plugin.dll`
+   - `MetroToolKits.SectionGenerator.Plugin.dll`（插件，被 Bootstrap 自动扫描）
    - `MetroToolKits.SectionGenerator.Core.dll`
    - `MetroToolKits.SectionGenerator.App.dll`
    - `MetroToolKits.SectionGenerator.Infrastructure.dll`
@@ -220,6 +220,8 @@ public interface IPlugin
 - **自动发现**：`Bootstrap` 扫描同目录下所有 `MetroToolKits.*.Plugin.dll`
 - **动态注册**：插件向 DI 容器注册自身服务，命令自动可用
 - **物理拔插**：复制新插件 DLL 即可扩展功能，删除 DLL 即可移除功能
+
+> **命名规范**：插件项目的 `AssemblyName` 必须符合 `MetroToolKits.*.Plugin` 格式，Bootstrap 通过文件名模式 `MetroToolKits.*.Plugin.dll` 扫描，再通过反射查找 `IPlugin` 实现类完成加载。
 
 ---
 

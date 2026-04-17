@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>MetroToolKits.SectionGenerator.Plugin</RootNamespace>
-    <AssemblyName>MetroToolKits.SectionGenerator</AssemblyName>
+    <AssemblyName>MetroToolKits.SectionGenerator.Plugin</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
