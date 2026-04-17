@@ -21,7 +21,9 @@ namespace MetroToolKits.SectionGenerator.Plugin;
 public class SectionGeneratorPlugin : IPlugin
 {
     public string Name    => "SectionGenerator";
-    public string Version => "1.0.0";
+    public string Version =>
+        typeof(SectionGeneratorPlugin).Assembly
+            .GetName().Version?.ToString(3) ?? "1.1.0";
 
     public void ConfigureServices(IServiceCollection services)
     {

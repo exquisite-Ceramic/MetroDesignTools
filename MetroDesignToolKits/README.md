@@ -6,7 +6,7 @@ MetroToolKits 是一个基于 AutoCAD .NET API 开发的 CAD 工具集，旨在�
 
 | 工具名称 | 说明 | 状态 |
 |---------|------|------|
-| **SectionGenerator** | 建筑剖面图自动生成器 | ✅ 已发布 |
+| **SectionGenerator** | 建筑剖面图自动生成器 | 🚧 开发完成，内部可用（v1.1.0-beta） |
 
 ---
 
@@ -341,17 +341,25 @@ dotnet publish -c Release
 
 ## 版本历史
 
-### v1.1.0 (2026-04-16)
+> **状态说明**
+> - 🚧 **内部可用（beta）**：功能开发完成，可在内部环境使用，尚未正式打包发布
+> - ✅ **正式发布**：已完成打包、测试、Git tag 和 GitHub Release
+
+### v1.1.0-beta（当前，内部可用）
+
 - 完成阶段一~五开发（基础设施、构件识别、单层/多层剖面生成、变更检测）
 - 架构纠偏：提取 `IUserLogger` 接口，消除 App 层对 Bootstrap 的直接依赖
 - 架构纠偏：合并 `CadAdapter` 层至 `Infrastructure`，简化项目结构
+- 删除旧 `SectionGenerator.*` 命名空间和 `ServiceLocator` 残留
+- 切断 App 层对 Bootstrap 层的项目级依赖
 - 新增 `Foundation.Building` 共享层（建筑构件领域模型）
 - 新增日志系统（开发日志 + 用户日志，支持配置文件切换）
 - 单元测试：100 个测试用例，全部通过
+- 统一版本源：`Directory.Build.props`
 
-### v1.0.0 (2024)
-- 初始版本发布
-- 实现 SectionGenerator 剖面图生成功能
+### v1.0.0（2024，历史版本）
+
+- 初始版本，实现 SectionGenerator 剖面图生成功能
 - 支持可配置参数和坡度设置
 - 采用插件化架构，支持动态加载扩展
 
