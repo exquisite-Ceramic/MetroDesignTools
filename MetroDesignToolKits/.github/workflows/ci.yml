@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore MetroToolKits.sln
+
+    - name: Build
+      run: dotnet build MetroToolKits.sln --no-restore -c Debug
+
+    - name: Run unit tests
+      run: |
+        dotnet test MetroToolKits.sln `
+          --filter "FullyQualifiedName~MetroToolKits.Tests" `
+          --no-build `
+          --verbosity normal `
+          --logger "console;verbosity=detailed"
+
+    - name: Test summary
+      if: always()
+      run: |
+        Write-Host "单元测试完成（不依赖 AutoCAD 的测试）" -ForegroundColor Green
+        Write-Host "集成测试需在本地 AutoCAD 环境中手动执行" -ForegroundColor Yellow

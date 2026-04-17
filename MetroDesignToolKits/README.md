@@ -290,22 +290,40 @@ MetroToolKits.Foundation.Cad
 
 ## 开发说明
 
-### 编译项目
+详细构建与测试流程见 [docs/构建与测试指南.md](./docs/构建与测试指南.md)。
+
+### 快速开始
 
 ```bash
-dotnet build
+# 1. 将 AutoCAD DLL 复制到 build/References/（见构建指南 §1.2）
+
+# 2. 还原 + 编译 + 测试（一键）
+.\build.ps1 all
+
+# 或分步执行
+dotnet restore MetroToolKits.sln
+dotnet build MetroToolKits.sln
+dotnet test MetroToolKits.sln --filter "FullyQualifiedName~MetroToolKits.Tests"
 ```
 
-### 运行测试
+### 测试范围
 
-```bash
-dotnet test
-```
+| 类型 | 项目 | 数量 | 是否需要 AutoCAD |
+|:---|:---|:---|:---|
+| 单元测试 | `MetroToolKits.Tests.Foundation` | 49 | ❌ 不需要 |
+| 单元测试 | `MetroToolKits.Tests.SectionGenerator.Core` | 51 | ❌ 不需要 |
+| 集成测试 | 手动验证（见构建指南 §3.2） | - | ✅ 需要 |
+
+### CI 状态
+
+项目配置了 GitHub Actions，每次 push/PR 自动执行编译和单元测试。
 
 ### 发布项目
 
 ```bash
-dotnet publish -c Release
+.\build.ps1 publish
+# 或
+dotnet publish src/Plugins/SectionGenerator/MetroToolKits.SectionGenerator.Plugin/ -c Release -o ./publish/SectionGenerator
 ```
 
 ### 依赖库
