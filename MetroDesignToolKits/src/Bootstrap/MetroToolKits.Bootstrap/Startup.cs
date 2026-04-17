@@ -46,7 +46,7 @@ public static class Startup
             // 4. 注册服务
             var services = new ServiceCollection();
             services.AddSingleton(_loggerFactory);
-            services.AddSingleton(_userLogger);
+            // UserLogger 同时作为 IUserLogger 接口注册，供所有依赖 IUserLogger 的用例解析
             services.AddSingleton<MetroToolKits.Foundation.Core.Logging.IUserLogger>(_userLogger);
             services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
 
