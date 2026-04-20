@@ -2,7 +2,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MetroToolKits.Bootstrap.Logging;
-using System.Reflection;
 
 namespace MetroToolKits.Bootstrap;
 
@@ -14,20 +13,12 @@ public static class Startup
     private static IServiceProvider? _serviceProvider;
     private static ILoggerFactory? _loggerFactory;
     private static UserLogger? _userLogger;
+    private static CommandRegistry? _commandRegistry;
     private static bool _initialized;
-    private static readonly HashSet<string> _requestedPluginKeys = new(StringComparer.OrdinalIgnoreCase);
 
-    public static void Initialize(params Assembly[] additionalPluginAssemblies)
+    public static void Initialize()
     {
-        var additionalKeys = additionalPluginAssemblies
-            .Where(static assembly => assembly != null)
-            .Select(GetAssemblyKey)
-            .ToArray();
-
-        var requiresReload = !_initialized
-                             || additionalKeys.Any(key => !_requestedPluginKeys.Contains(key));
-
-        if (!requiresReload) return;
+        if (_initialized) return;
 
         try
         {
@@ -62,24 +53,18 @@ public static class Startup
             // 5. 加载插件
             var pluginLoader = new PluginLoader(services);
             pluginLoader.LoadPlugins(assemblyDir);
-            foreach (var assembly in additionalPluginAssemblies)
-                pluginLoader.LoadPlugin(assembly);
 
             _serviceProvider = services.BuildServiceProvider();
 
             // 6. 注册命令
-            var commandRegistry = new CommandRegistry(_serviceProvider);
+            _commandRegistry = new CommandRegistry(_serviceProvider);
             foreach (var plugin in pluginLoader.Plugins)
-                plugin.RegisterCommands(commandRegistry);
+                plugin.RegisterCommands(_commandRegistry);
 
             sw.Stop();
             logger.LogDebug("DI 容器初始化完成，耗时 {ElapsedMs}ms", sw.ElapsedMilliseconds);
             logger.LogInformation("MetroToolKits Bootstrap 已加载，共 {PluginCount} 个插件",
                 pluginLoader.Plugins.Count);
-
-            _requestedPluginKeys.Clear();
-            foreach (var key in additionalKeys)
-                _requestedPluginKeys.Add(key);
 
             _initialized = true;
         }
@@ -138,8 +123,31 @@ public static class Startup
     private static string GetAbsolutePath(string path, string baseDir)
         => Path.IsPathRooted(path) ? path : Path.Combine(baseDir, path);
 
-    private static string GetAssemblyKey(Assembly assembly)
-        => string.IsNullOrWhiteSpace(assembly.Location)
-            ? assembly.FullName ?? assembly.GetName().Name ?? Guid.NewGuid().ToString("N")
-            : Path.GetFullPath(assembly.Location);
+    public static bool ExecuteRegisteredCommand(string commandName, string methodName, out string? errorMessage)
+    {
+        errorMessage = null;
+
+        if (_commandRegistry == null || _serviceProvider == null)
+        {
+            errorMessage = "Bootstrap 尚未初始化。";
+            return false;
+        }
+
+        var command = _commandRegistry.GetCommandInstance(commandName);
+        if (command == null)
+        {
+            errorMessage = $"未找到命令 {commandName} 的注册实现。";
+            return false;
+        }
+
+        var method = command.GetType().GetMethod(methodName, Type.EmptyTypes);
+        if (method == null)
+        {
+            errorMessage = $"命令 {commandName} 缺少可调用方法 {methodName}。";
+            return false;
+        }
+
+        method.Invoke(command, null);
+        return true;
+    }
 }

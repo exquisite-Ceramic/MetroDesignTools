@@ -8,7 +8,7 @@
 
 ## 当前状态
 
-**🚧 内部可用（beta）** — 阶段六已完成，阶段七已补齐文档、回归测试与宿主烟测，剩余 GUI/交互场景待人工验收
+**🚧 内部可用（beta）** — 阶段六已完成，阶段七已补齐文档、回归测试与宿主烟测，阶段八已形成可分发 beta 发布包；剩余 GUI/交互场景待人工验收
 
 ---
 
@@ -23,7 +23,7 @@
 | 阶段五 | 变更检测与更新（FloorGeometryHasher、XData 快照、CheckSectionUpdates） | ✅ |
 | 阶段六 | 双向定位与辅助功能 | ✅ |
 | 阶段七 | 集成测试与文档完善 | 🚧 宿主烟测已通过，GUI/交互验收待完成 |
-| 阶段八 | 打包与发布 | ⏳ 未开始 |
+| 阶段八 | 打包与发布 | ✅ 已完成（v1.1.0-beta 本地发布包与 Git tag） |
 
 ---
 
@@ -80,7 +80,7 @@ dotnet build MetroToolKits.sln → 0 错误，~8 警告（AutoCAD DLL 版本兼�
 
 当前工作区（2026-04-20）：
 
-> 已在本机完成 `MetroToolKits.SectionGenerator.Plugin.csproj` 编译，结果为 `0 错误`、仅保留 AutoCAD 版本冲突告警；同时通过 AutoCAD 2025 `accoreconsole.exe` 完成 `SectionSelfTest` 宿主烟测。
+> 已在本机完成 `MetroToolKits.SectionGenerator.Plugin.csproj` 编译与发布，结果为 `0 错误`、仅保留 AutoCAD 版本冲突告警；同时通过 AutoCAD 2025 `accoreconsole.exe` 完成 `SectionSelfTest` 宿主烟测。
 
 > `dotnet test` 仍受本机代理与测试依赖环境影响，尚未在本机重新完成刷新。
 
@@ -90,4 +90,4 @@ dotnet build MetroToolKits.sln → 0 错误，~8 警告（AutoCAD DLL 版本兼�
 
 1. 在 `acad.exe` 中执行 [阶段七-验收记录.md](./阶段七-验收记录.md) 里剩余的 GUI/交互验收项
 2. 修复当前环境的 NuGet 代理/网络问题后，重新执行 build/test 并刷新测试统计
-3. 完成阶段八打包发布，打 Git tag `v1.1.0`
+3. 基于 `v1.1.0-beta` 发布包继续推进正式版验收与版本升级

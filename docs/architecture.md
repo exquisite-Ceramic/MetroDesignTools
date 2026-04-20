@@ -2,7 +2,7 @@
 
 **版本**: v1.1.0-beta  
 **状态**: 当前权威架构文档  
-**更新日期**: 2026-04-16
+**更新日期**: 2026-04-20
 
 ---
 
@@ -16,13 +16,13 @@
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                  MetroToolKits.Bootstrap.dll                     │
-│         插件加载器 / DI 容器 / 日志系统 / 命令注册               │
+│   插件加载器 / DI 容器 / 日志系统 / AutoCAD 命令桥接             │
 └─────────────────────────────────────────────────────────────────┘
                                │ 扫描 MetroToolKits.*.Plugin.dll
                                ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │              MetroToolKits.SectionGenerator.Plugin.dll           │
-│         命令入口 / WPF 对话框 / 命令行交互                        │
+│         命令实现 / WPF 对话框 / 命令行交互                        │
 └─────────────────────────────────────────────────────────────────┘
           │ 调用                              │ 调用
           ▼                                   ▼
@@ -77,8 +77,9 @@
 - 通过反射查找 `IPlugin` 实现类，调用 `ConfigureServices` 和 `RegisterCommands`
 
 ### 命令注册
-- AutoCAD 命令通过 `[CommandMethod]` 特性在程序集加载时自动注册
-- `CommandRegistry` 用于工具箱面板查询命令元数据，不参与实际注册
+- AutoCAD 命令通过 `BootstrapCommandBridge` 上的 `[CommandMethod]` 特性注册到 `MetroToolKits.Bootstrap.dll`
+- `BootstrapCommandBridge` 只做宿主入口和异常兜底，真正的命令实现仍从插件注册到 `CommandRegistry`
+- `CommandRegistry` 同时承担命令元数据查询和 DI 分发，不再要求插件程序集自己暴露 AutoCAD 命令入口
 
 ### 版本管理
 - 统一版本源：`Directory.Build.props`（当前 `1.1.0-beta`）

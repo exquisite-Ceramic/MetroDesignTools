@@ -101,6 +101,7 @@ public class SectionGeneratorPlugin : IPlugin
         registry.RegisterCommand<ShowToolboxCommand>("ShowToolbox");
         registry.RegisterCommand<ConvertRegionElementsCommand>("ConvertRegion");
         registry.RegisterCommand<RevertElementConversionCommand>("RevertConversion");
+        registry.RegisterCommand<RevertElementConversionCommand>("RevertAllConversions");
         registry.RegisterCommand<SectionGeneratorSelfTestCommand>("SectionSelfTest");
         registry.RegisterCommand<OpenLayerMappingCommand>("LayerMapping");
     }

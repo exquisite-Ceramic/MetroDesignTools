@@ -1,27 +1,28 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    使用 accoreconsole 对 SectionGenerator 做最小宿主烟测。
+    Run a minimal SectionGenerator host smoke test with accoreconsole.
 
 .DESCRIPTION
-    该脚本会将插件输出复制到纯 ASCII 临时目录，随后通过 accoreconsole：
-    1. NETLOAD MetroToolKits.SectionGenerator.Plugin.dll
-    2. 执行 SectionSelfTest
-    3. 检查日志中是否包含 SECTION_SELF_TEST:OK
+    The script copies plugin output into an ASCII-only temp folder and then:
+    1. NETLOAD MetroToolKits.Bootstrap.dll
+    2. Run SectionSelfTest
+    3. Check the log for SECTION_SELF_TEST:OK
 
-    用于验证 AutoCAD 宿主入口、Bootstrap 初始化、DI 注册和关键服务解析是否正常。
+    This validates the AutoCAD host entry, Bootstrap initialization,
+    command bridging, DI registration, and key service resolution.
 
 .PARAMETER AcadConsolePath
-    accoreconsole.exe 路径。
+    Path to accoreconsole.exe.
 
 .PARAMETER DwgPath
-    用于启动宿主的 DWG 文件路径。
+    DWG path used to start the host.
 
 .PARAMETER Configuration
-    编译配置，默认 Debug。
+    Build configuration. Default is Debug.
 
 .PARAMETER WorkingDirectory
-    临时宿主测试目录，默认位于仓库外的 E:\MetroToolKitsHostTest。
+    Temporary host test directory. Default is E:\MetroToolKitsHostTest.
 #>
 
 param(
@@ -31,6 +32,26 @@ param(
     [string]$Configuration = "Debug",
     [string]$WorkingDirectory = "E:\MetroToolKitsHostTest"
 )
+
+if ($PSVersionTable.PSEdition -ne "Core") {
+    $pwsh = Get-Command pwsh -ErrorAction SilentlyContinue
+    if (-not $pwsh) {
+        throw "PowerShell 7 (pwsh) is required to run host-smoke-test.ps1."
+    }
+
+    $forwardArgs = @(
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", $PSCommandPath,
+        "-AcadConsolePath", $AcadConsolePath,
+        "-DwgPath", $DwgPath,
+        "-Configuration", $Configuration,
+        "-WorkingDirectory", $WorkingDirectory
+    )
+
+    & $pwsh.Source @forwardArgs
+    exit $LASTEXITCODE
+}
 
 $ErrorActionPreference = "Stop"
 
@@ -44,18 +65,18 @@ function Write-Step([string]$message) {
 }
 
 if (-not (Test-Path $AcadConsolePath)) {
-    throw "未找到 accoreconsole.exe: $AcadConsolePath"
+    throw "accoreconsole.exe was not found: $AcadConsolePath"
 }
 
 if (-not (Test-Path $DwgPath)) {
-    throw "未找到 DWG 文件: $DwgPath"
+    throw "DWG file was not found: $DwgPath"
 }
 
 if (-not (Test-Path $pluginOutput)) {
-    throw "未找到插件输出目录: $pluginOutput`n请先执行 dotnet build。"
+    throw "Plugin output folder was not found: $pluginOutput`nRun dotnet build first."
 }
 
-Write-Step "准备宿主测试目录"
+Write-Step "Preparing host test directory"
 if (Test-Path $WorkingDirectory) {
     Remove-Item -LiteralPath $WorkingDirectory -Recurse -Force
 }
@@ -65,18 +86,18 @@ Copy-Item -Path (Join-Path $pluginOutput "*") -Destination $WorkingDirectory -Re
 
 @'
 (setvar "SECURELOAD" 0)
-(command "_.NETLOAD" "E:/MetroToolKitsHostTest/MetroToolKits.SectionGenerator.Plugin.dll")
+(command "_.NETLOAD" "E:/MetroToolKitsHostTest/MetroToolKits.Bootstrap.dll")
 SectionSelfTest
 (princ)
 '@ | Set-Content -LiteralPath $scriptPath -Encoding ASCII
 
-Write-Step "执行 accoreconsole 宿主烟测"
+Write-Step "Running accoreconsole host smoke test"
 & $AcadConsolePath /i $DwgPath /s $scriptPath *> $logPath
 if ($LASTEXITCODE -ne 0) {
-    throw "accoreconsole 执行失败，退出码: $LASTEXITCODE"
+    throw "accoreconsole failed with exit code: $LASTEXITCODE"
 }
 
-Write-Step "检查自检结果"
+Write-Step "Checking self-test result"
 function Test-BytePattern([byte[]]$Haystack, [byte[]]$Needle) {
     for ($i = 0; $i -le $Haystack.Length - $Needle.Length; $i++) {
         $matched = $true
@@ -100,8 +121,8 @@ $okUtf16 = [System.Text.Encoding]::Unicode.GetBytes("SECTION_SELF_TEST:OK")
 $okAscii = [System.Text.Encoding]::ASCII.GetBytes("SECTION_SELF_TEST:OK")
 
 if ((Test-BytePattern $logBytes $okUtf16) -or (Test-BytePattern $logBytes $okAscii)) {
-    Write-Host "宿主烟测通过：SectionSelfTest 返回 OK" -ForegroundColor Green
+    Write-Host "Host smoke test passed: SectionSelfTest returned OK" -ForegroundColor Green
     return
 }
 
-throw "宿主烟测失败：日志中未找到 SECTION_SELF_TEST:OK。日志位置: $logPath"
+throw "Host smoke test failed: SECTION_SELF_TEST:OK was not found in the log. Log: $logPath"

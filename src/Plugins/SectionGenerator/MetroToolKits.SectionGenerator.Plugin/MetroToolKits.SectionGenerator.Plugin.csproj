@@ -39,16 +39,25 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="..\Resources\SectionGeneratorConfig.json">
+    <Content Include="..\Resources\SectionGeneratorConfig.json">
+      <Link>SectionGeneratorConfig.json</Link>
+      <TargetPath>SectionGeneratorConfig.json</TargetPath>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
     <None Update="Resources\ElementTypes.json">
+      <TargetPath>ElementTypes.json</TargetPath>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
   </ItemGroup>
 
-  <Target Name="CopyMicrosoftExtensionsRuntimeAssemblies" AfterTargets="Build">
+  <Target Name="CopyMicrosoftExtensionsRuntimeAssembliesToBuildOutput" AfterTargets="Build">
     <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$programFiles = [Environment]::GetFolderPath('ProgramFiles'); $root = Join-Path $programFiles 'dotnet\\shared\\Microsoft.AspNetCore.App'; $latest = Get-ChildItem -Path $root -Directory | Where-Object { $_.Name -like '8.0.*' } | Sort-Object Name -Descending | Select-Object -First 1; if (-not $latest) { throw '未找到 Microsoft.AspNetCore.App 8.0.* 共享运行时目录。'; }; Copy-Item -Path (Join-Path $latest.FullName 'Microsoft.Extensions*.dll') -Destination '$(TargetDir)' -Force&quot;" />
+  </Target>
+
+  <Target Name="CopyMicrosoftExtensionsRuntimeAssembliesToPublishOutput" AfterTargets="Publish">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$programFiles = [Environment]::GetFolderPath('ProgramFiles'); $root = Join-Path $programFiles 'dotnet\\shared\\Microsoft.AspNetCore.App'; $latest = Get-ChildItem -Path $root -Directory | Where-Object { $_.Name -like '8.0.*' } | Sort-Object Name -Descending | Select-Object -First 1; if (-not $latest) { throw '未找到 Microsoft.AspNetCore.App 8.0.* 共享运行时目录。'; }; Copy-Item -Path (Join-Path $latest.FullName 'Microsoft.Extensions*.dll') -Destination '$(PublishDir)' -Force&quot;" />
   </Target>
 
 </Project>

@@ -1,8 +1,19 @@
 {
-  "BottomSlabThickness": 800.0,
-  "TopSlabThickness": 600.0,
-  "FinishThickness": 120.0,
-  "HasSlope": true,
-  "SlopeValue": 0.002,
-  "FloorHeight": 5200.0
+  "GlobalSlopeEnabled": true,
+  "GlobalSlopeValue": 0.002,
+  "GlobalSlopeTarget": "StructuralSlab",
+  "Floors": [
+    {
+      "Name": "F1",
+      "Height": 5200.0,
+      "FinishThickness": 120.0,
+      "BottomSlabThickness": 800.0,
+      "TopSlabThickness": 600.0,
+      "HasSlope": true,
+      "SlopeValue": 0.002,
+      "SlopeTarget": "StructuralSlab",
+      "AlignmentSourcePoints": [],
+      "AlignmentTargetPoints": []
+    }
+  ]
 }
