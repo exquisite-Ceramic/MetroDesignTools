@@ -8,7 +8,7 @@
 
 ## 当前状态
 
-**🚧 内部可用（beta）** — 阶段六已完成，阶段七文档与回归测试已补齐，待宿主环境完成最终集成验收
+**🚧 内部可用（beta）** — 阶段六已完成，阶段七已补齐文档、回归测试与宿主烟测，剩余 GUI/交互场景待人工验收
 
 ---
 
@@ -22,7 +22,7 @@
 | 阶段四 | 多楼层管理与对齐（MultiFloorSectionComposer、FloorConfig UI） | ✅ |
 | 阶段五 | 变更检测与更新（FloorGeometryHasher、XData 快照、CheckSectionUpdates） | ✅ |
 | 阶段六 | 双向定位与辅助功能 | ✅ |
-| 阶段七 | 集成测试与文档完善 | 🚧 文档/清单已完成，宿主验证待执行 |
+| 阶段七 | 集成测试与文档完善 | 🚧 宿主烟测已通过，GUI/交互验收待完成 |
 | 阶段八 | 打包与发布 | ⏳ 未开始 |
 
 ---
@@ -52,7 +52,7 @@
 | `MetroToolKits.Tests.SectionGenerator.Core` | 51 / 51 ✅ |
 | **合计** | **100 / 100 ✅** |
 
-> 注：以上为阶段五基线验证结果；阶段六至阶段七已新增 4 个回归测试，待在可恢复 NuGet 依赖的环境中重新执行并更新统计。
+> 注：以上为阶段五基线验证结果；阶段六至阶段七已新增 4 个回归测试。当前机器的 `dotnet test` 仍受 NuGet/测试依赖环境影响，尚未刷新最新统计。
 
 ---
 
@@ -80,12 +80,14 @@ dotnet build MetroToolKits.sln → 0 错误，~8 警告（AutoCAD DLL 版本兼�
 
 当前工作区（2026-04-20）：
 
-> 受本机代理配置影响，NuGet 请求被转发到 `127.0.0.1:6984`，依赖还原失败，阶段六代码尚未在当前环境重新完成 `build/test` 验证。
+> 已在本机完成 `MetroToolKits.SectionGenerator.Plugin.csproj` 编译，结果为 `0 错误`、仅保留 AutoCAD 版本冲突告警；同时通过 AutoCAD 2025 `accoreconsole.exe` 完成 `SectionSelfTest` 宿主烟测。
+
+> `dotnet test` 仍受本机代理与测试依赖环境影响，尚未在本机重新完成刷新。
 
 ---
 
 ## 下一步
 
-1. 修复当前环境的 NuGet 代理/网络问题后，重新执行 build/test
-2. 在具备 AutoCAD 宿主的机器上执行 [阶段七-验收记录.md](./阶段七-验收记录.md) 中的集成测试清单
+1. 在 `acad.exe` 中执行 [阶段七-验收记录.md](./阶段七-验收记录.md) 里剩余的 GUI/交互验收项
+2. 修复当前环境的 NuGet 代理/网络问题后，重新执行 build/test 并刷新测试统计
 3. 完成阶段八打包发布，打 Git tag `v1.1.0`

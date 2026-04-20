@@ -43,7 +43,7 @@ AutoCAD .NET 插件工具集，当前包含 **SectionGenerator**（建筑剖面�
 ```
 NETLOAD
 ```
-选择 `MetroToolKits.Bootstrap.dll`，所有命令自动可用。
+选择 `MetroToolKits.SectionGenerator.Plugin.dll`，插件会自动带起 `Bootstrap` 并注册命令。
 
 ### 推荐使用流程
 
@@ -73,9 +73,7 @@ NETLOAD
 ## 依赖
 
 - AutoCAD .NET API（`acdbmgd.dll` / `acmgd.dll` / `accoremgd.dll`）— 不随仓库分发，见 [build/References/README.md](./build/References/README.md)
-- Newtonsoft.Json 13.0.3
-- Microsoft.Extensions.DependencyInjection 8.0.0
-- Microsoft.Extensions.Logging 8.0.0
+- .NET 8 共享运行时中的 `Microsoft.Extensions.*` 程序集（构建后自动复制到插件输出目录）
 
 ---
 

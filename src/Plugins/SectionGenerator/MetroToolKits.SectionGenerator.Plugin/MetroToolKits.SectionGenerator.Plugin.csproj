@@ -48,7 +48,7 @@
   </ItemGroup>
 
   <Target Name="CopyMicrosoftExtensionsRuntimeAssemblies" AfterTargets="Build">
-    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$root = Join-Path ${env:ProgramFiles} 'dotnet\\shared\\Microsoft.AspNetCore.App'; $latest = Get-ChildItem -Path $root -Directory | Where-Object { $_.Name -like '8.0.*' } | Sort-Object Name -Descending | Select-Object -First 1; if (-not $latest) { throw '未找到 Microsoft.AspNetCore.App 8.0.* 共享运行时目录。'; }; Copy-Item -Path (Join-Path $latest.FullName 'Microsoft.Extensions*.dll') -Destination '$(TargetDir)' -Force&quot;" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$programFiles = [Environment]::GetFolderPath('ProgramFiles'); $root = Join-Path $programFiles 'dotnet\\shared\\Microsoft.AspNetCore.App'; $latest = Get-ChildItem -Path $root -Directory | Where-Object { $_.Name -like '8.0.*' } | Sort-Object Name -Descending | Select-Object -First 1; if (-not $latest) { throw '未找到 Microsoft.AspNetCore.App 8.0.* 共享运行时目录。'; }; Copy-Item -Path (Join-Path $latest.FullName 'Microsoft.Extensions*.dll') -Destination '$(TargetDir)' -Force&quot;" />
   </Target>
 
 </Project>
