@@ -1,0 +1,10 @@
+.dotnet-cli/
+**/bin/
+**/obj/
+*.log
+*.tmp
+*.user
+*.suo
+.vs/
+.idea/
+.vscode/

@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>MetroToolKits.SectionGenerator.Plugin</RootNamespace>
+    <AssemblyName>MetroToolKits.SectionGenerator.Plugin</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="acdbmgd">
+      <HintPath>..\..\..\..\build\References\acdbmgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="acmgd">
+      <HintPath>..\..\..\..\build\References\acmgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="accoremgd">
+      <HintPath>..\..\..\..\build\References\accoremgd.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Bootstrap\MetroToolKits.Bootstrap\MetroToolKits.Bootstrap.csproj" />
+    <ProjectReference Include="..\..\..\Shared\MetroToolKits.Foundation.Core\MetroToolKits.Foundation.Core.csproj" />
+    <ProjectReference Include="..\..\..\Shared\MetroToolKits.Foundation.Cad\MetroToolKits.Foundation.Cad.csproj" />
+    <ProjectReference Include="..\..\..\Shared\MetroToolKits.Foundation.Building\MetroToolKits.Foundation.Building.csproj" />
+    <ProjectReference Include="..\MetroToolKits.SectionGenerator.Core\MetroToolKits.SectionGenerator.Core.csproj" />
+    <ProjectReference Include="..\MetroToolKits.SectionGenerator.App\MetroToolKits.SectionGenerator.App.csproj" />
+    <ProjectReference Include="..\MetroToolKits.SectionGenerator.Infrastructure\MetroToolKits.SectionGenerator.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="..\Resources\SectionGeneratorConfig.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\ElementTypes.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <Target Name="CopyMicrosoftExtensionsRuntimeAssemblies" AfterTargets="Build">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$root = Join-Path ${env:ProgramFiles} 'dotnet\\shared\\Microsoft.AspNetCore.App'; $latest = Get-ChildItem -Path $root -Directory | Where-Object { $_.Name -like '8.0.*' } | Sort-Object Name -Descending | Select-Object -First 1; if (-not $latest) { throw '未找到 Microsoft.AspNetCore.App 8.0.* 共享运行时目录。'; }; Copy-Item -Path (Join-Path $latest.FullName 'Microsoft.Extensions*.dll') -Destination '$(TargetDir)' -Force&quot;" />
+  </Target>
+
+</Project>

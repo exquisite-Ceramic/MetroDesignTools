@@ -1,0 +1,374 @@
+# MetroToolKits 技术架构与实现规划文档
+
+**版本**：v1.0  
+**更新日期**：2026-04-16  
+**适用产品**：MetroToolKits CAD 工具集
+
+---
+
+## 1. 项目概述
+
+MetroToolKits 是一个基于 AutoCAD .NET API 开发的模块化、插件化 CAD 辅助设计工具集。项目采用 **整洁架构（Clean Architecture）** 与 **依赖倒置原则**，将业务逻辑与基础设施（AutoCAD API、文件系统）彻底解耦，确保核心算法可独立测试、可跨版本迁移。
+
+当前核心插件为 **SectionGenerator**，提供从平面图自动生成建筑剖面图、多楼层对齐、构件智能识别与转换、变更检测与批量更新等功能。
+
+---
+
+## 2. 总体架构设计
+
+### 2.1 架构全景图
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     AutoCAD 宿主进程                             │
+└─────────────────────────────────────────────────────────────────┘
+                               │ NETLOAD
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                  MetroToolKits.Bootstrap.dll                     │
+│                (插件加载器 / DI 容器 / 命令注册)                   │
+└─────────────────────────────────────────────────────────────────┘
+                               │ 扫描加载
+          ┌────────────────────┼────────────────────┐
+          ▼                    ▼                    ▼
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│ SectionGenerator │  │ 其他功能插件     │  │ Extras.Commands │
+│   .Plugin.dll    │  │   .Plugin.dll    │  │     .dll        │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+          │                    │                    │
+          └────────────────────┼────────────────────┘
+                               │ 依赖
+                               ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     共享基础设施层 (Shared)                       │
+│  ┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐ │
+│  │ Foundation.Core  │ │  Foundation.Cad  │ │Foundation.Building│ │
+│  │  (纯算法/几何)   │ │ (CAD API 封装)   │ │  (构件领域模型)  │ │
+│  └──────────────────┘ └──────────────────┘ └──────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 2.2 核心设计原则
+
+| 原则 | 说明 |
+|:---|:---|
+| **关注点分离** | 表示、应用、领域、基础设施职责清晰分离 |
+| **依赖倒置** | 上层依赖接口，下层实现接口，禁止跨层直接依赖具体类 |
+| **领域纯净** | Core 层不引用任何 AutoCAD API 或第三方框架 |
+| **显式依赖** | 通过构造函数注入，避免 Service Locator 反模式 |
+| **可测试性** | Core 层算法可脱离 AutoCAD 进行单元测试 |
+| **插件化拔插** | 通过 `IPlugin` 接口动态发现与加载功能模块 |
+
+---
+
+## 3. 项目物理结构
+
+```
+MetroToolKits/
+├── MetroToolKits.sln
+├── build/                                    # 编译时引用（不发布）
+│   └── References/
+│       ├── accoremgd.dll
+│       ├── acdbmgd.dll
+│       └── acmgd.dll
+│
+├── src/
+│   ├── Shared/                               # 跨工具共享代码
+│   │   ├── MetroToolKits.Foundation.Core/          # 纯数学/几何算法
+│   │   ├── MetroToolKits.Foundation.Cad/           # AutoCAD API 封装
+│   │   └── MetroToolKits.Foundation.Building/      # 建筑构件领域模型
+│   │
+│   ├── Bootstrap/                            # 插件加载器
+│   │   └── MetroToolKits.Bootstrap/
+│   │
+│   ├── Plugins/                              # 功能插件
+│   │   ├── SectionGenerator/
+│   │   │   ├── MetroToolKits.SectionGenerator.Core/         # 领域算法
+│   │   │   ├── MetroToolKits.SectionGenerator.App/          # 用例编排
+│   │   │   ├── MetroToolKits.SectionGenerator.Infrastructure/ # 配置/备份
+│   │   │   ├── MetroToolKits.SectionGenerator.Plugin/       # 命令/UI
+│   │   │   └── Resources/
+│   │   │       ├── SectionGeneratorConfig.json
+│   │   │       └── ElementTypes.json
+│   │   └── Extras/                           # 小脚本收容所
+│   │
+│   └── Tests/                                # 测试项目
+│       ├── MetroToolKits.Foundation.Core.Tests/
+│       └── MetroToolKits.SectionGenerator.Core.Tests/
+│
+└── README.md
+```
+
+---
+
+## 4. 分层架构详解（以 SectionGenerator 为例）
+
+### 4.1 层级关系与依赖方向
+
+```
+Plugin (表示层)
+    │ 依赖
+    ▼
+App (应用层)
+    │ 依赖接口
+    ▼
+┌───────────────┐     ┌───────────────┐
+│ Core (领域层) │     │Infrastructure │
+│  无外部依赖   │     │ (基础设施层) │
+└───────────────┘     └───────────────┘
+           ▲                   ▲
+           └───────┬───────────┘
+                   │ 依赖
+           ┌───────▼───────────┐
+           │ Foundation.*      │
+           │ (共享通用层)      │
+           └───────────────────┘
+```
+
+### 4.2 各层职责定义
+
+| 层级 | 项目 | 职责 | 依赖规则 |
+|:---|:---|:---|:---|
+| **表示层** | `SectionGenerator.Plugin` | AutoCAD 命令入口、对话框、命令行引导交互、结果渲染 | 依赖 `App` 层接口、`Foundation.Cad` |
+| **应用层** | `SectionGenerator.App` | 用例编排（生成剖面、更新剖面、变更检测）、事务边界控制 | 依赖 `Core` 层、基础设施层接口 |
+| **领域层** | `SectionGenerator.Core` | 剖面生成核心算法、多楼层对齐变换、构件关系计算 | 仅依赖 `Foundation.Core` 和 `Foundation.Building` |
+| **基础设施层** | `SectionGenerator.Infrastructure` | JSON 配置读写、构件指纹快照存储、转换备份与恢复 | 实现 `App` 层定义的接口 |
+| **共享通用层** | `Foundation.*` | 纯几何计算、AutoCAD API 封装、建筑构件基类与接口 | 无上层依赖 |
+
+### 4.3 层间通信机制
+
+所有跨层调用通过 **接口抽象 + 依赖注入** 实现。`Bootstrap` 在启动时扫描所有 `IPlugin` 实现，向 DI 容器注册服务，并动态注册 AutoCAD 命令。
+
+```csharp
+public interface IPlugin
+{
+    string Name { get; }
+    string Version { get; }
+    void ConfigureServices(IServiceCollection services);
+    void RegisterCommands(ICommandRegistry registry);
+}
+```
+
+---
+
+## 5. 构件体系设计
+
+### 5.1 设计目标
+
+- **可扩展性**：新增构件类型或属性无需重新编译核心代码。
+- **领域纯粹**：构件模型不依赖 AutoCAD API，仅描述几何与业务语义。
+- **统一识别**：提供标准接口从 CAD 图元转换为领域构件。
+
+### 5.2 构件类型定义方式（配置驱动）
+
+构件元数据通过 JSON 配置文件 `ElementTypes.json` 定义，支持运行时动态加载：
+
+```json
+{
+  "ElementTypes": [
+    {
+      "Name": "StructuralWall",
+      "DisplayName": "结构墙",
+      "Shortcut": "S",
+      "DefaultLayerName": "MK_结构墙",
+      "Properties": [
+        { "Name": "Thickness", "Type": "double", "DefaultValue": 200 },
+        { "Name": "Height", "Type": "double", "DefaultValue": 3000 }
+      ]
+    },
+    {
+      "Name": "Slab",
+      "DisplayName": "楼板",
+      "Shortcut": "F",
+      "DefaultLayerName": "MK_楼板",
+      "Properties": [
+        { "Name": "Thickness", "Type": "double", "DefaultValue": 120 },
+        { "Name": "HasSlope", "Type": "bool", "DefaultValue": false },
+        { "Name": "SlopeValue", "Type": "double", "DefaultValue": 0.0 }
+      ]
+    }
+    // ... 其他构件类型
+  ]
+}
+```
+
+### 5.3 构件领域模型（位于 `Foundation.Building`）
+
+```csharp
+public abstract class BuildingElement
+{
+    public string ElementType { get; set; }                 // 对应配置中的 Name
+    public ObjectId CadEntityId { get; set; }              // 关联的 AutoCAD 实体
+    public Dictionary<string, object> Properties { get; set; } // 动态属性值
+    
+    // 抽象方法，由子类实现具体几何行为
+    public abstract BoundingBox3d GetBoundingBox();
+    public abstract SectionGeometryResult GetSectionGeometry(Line3d sectionLine);
+    public abstract string ComputeGeometryHash();
+}
+
+// 具体子类示例
+public class Wall : BuildingElement { /* ... */ }
+public class Slab : BuildingElement { /* ... */ }
+public class Column : BuildingElement { /* ... */ }
+```
+
+### 5.4 扩展新构件类型
+
+- **仅增加属性**：修改 `ElementTypes.json` 即可，无需改代码。
+- **新增构件种类**：创建新的 `BuildingElement` 子类，并在工厂映射中注册。已有子类无需修改，符合开闭原则。
+
+---
+
+## 6. 构件识别与转换模块
+
+提供两种互补的交互模式，将原始 CAD 图元转化为具有语义的标准化构件。
+
+### 6.1 模式一：全图映射模式（图形化窗口）
+
+- **命令**：`LayerMappingManager`
+- **界面**：可停靠对话框，显示当前图纸所有图层，用户通过拖拽或右键菜单建立“图层→构件类型”映射规则。
+- **应用**：点击 **[应用映射]** 后，工具批量将符合规则的图元转换到标准图层（如 `MK_结构墙`）。
+- **特点**：适用于图层规范明确的项目，一次配置可重复使用，支持映射规则导入/导出。
+
+### 6.2 模式二：区域引导模式（命令行逐层交互）
+
+- **命令**：`ConvertRegionElements`
+- **流程**：
+  1. 选择范围（全局或框选区域）。
+  2. 工具提取区域内所有图层，**逐个高亮预览**该图层下的图元。
+  3. 用户输入构件类型快捷字母（如 `S` 结构墙）或空格跳过。
+  4. 按 `ESC` 可安全退出，不保留任何更改。
+  5. 所有图层处理完毕后，询问是否应用转换。
+- **特点**：适合局部区域图层混乱的临时转换，无需预先配置规则。
+
+### 6.3 备份与恢复机制
+
+无论哪种模式，转换前均自动将图元的原始图层、颜色、线型等信息序列化存入当前 DWG 的扩展字典。用户可通过命令 `RevertElementConversion` 一键恢复到转换前状态。
+
+---
+
+## 7. 多楼层管理与对齐
+
+### 7.1 楼层配置结构
+
+楼层信息存储在 `SectionGeneratorConfig.json` 中，支持每层独立配置：
+
+```json
+{
+  "Floors": [
+    {
+      "Name": "F1",
+      "Height": 5200.0,
+      "FinishThickness": 120.0,
+      "BottomSlabThickness": 800.0,
+      "TopSlabThickness": 600.0,
+      "AlignmentPoints": {
+        "Source": [ {"X":0,"Y":0}, {"X":1000,"Y":0}, {"X":0,"Y":1000} ],
+        "Target": [ {"X":0,"Y":0}, {"X":1000,"Y":0}, {"X":0,"Y":1000} ]
+      }
+    }
+    // ... 更多楼层
+  ]
+}
+```
+
+### 7.2 空间对齐方案
+
+用户为每层指定 **三个对应点**（例如轴网交点），系统自动计算仿射变换矩阵（平移+旋转+缩放），将该层所有构件坐标统一到参考坐标系中。Z 轴方向按层高逐层累加，实现多层剖面的垂直堆叠。
+
+---
+
+## 8. 剖面生成核心算法
+
+### 8.1 输入与输出
+
+- **输入**：剖切线（世界坐标直线）、楼层列表（含对齐变换、构件列表）、配置参数。
+- **输出**：剖面几何数据（剖切面域、投影线、标注信息），最终渲染为 AutoCAD 块参照。
+
+### 8.2 算法流程
+
+1. 对每层构件应用该层的对齐变换，将所有构件统一到全局坐标系。
+2. 遍历每个构件，调用其 `GetSectionGeometry(sectionLine)` 方法：
+   - 若构件与剖切线相交 → 生成剖切面域。
+   - 若构件在剖切线后方且可见 → 生成投影线。
+3. 按楼层标高累加 Z 坐标，垂直堆叠所有面域与投影线。
+4. 添加标注：层高标注、坡度标注、标高符号（绝对或相对）。
+5. 组装为 AutoCAD 块定义并插入模型空间。
+
+### 8.3 坡度处理
+
+配置中的 `SlopeTarget` 字段决定坡度作用对象：
+- `"StructuralSlab"`：结构板随坡度倾斜。
+- `"FinishOnly"`：仅建筑面层找坡，结构板保持水平。
+
+坡度计算逻辑内置于 `Slab` 类的 `GetSectionGeometry` 方法中。
+
+---
+
+## 9. 变更检测与剖面更新
+
+### 9.1 检测原理：楼层级几何指纹
+
+为避免依赖不稳定的实体 Handle，采用 **楼层整体几何指纹** 方案：
+
+- 剖面生成时，计算每个楼层所有参与构件的 **几何特征哈希**（基于构件类型、关键几何点/尺寸），存入剖面块的扩展字典。
+- 后续执行 `CheckSectionUpdates` 时，重新计算当前楼层几何指纹并与历史快照比对。
+- 任何构件的增删、移动、拉伸、修改均会导致楼层指纹变化。
+
+### 9.2 交互界面
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  剖面更新检查                                                    │
+├─────────────────────────────────────────────────────────────────┤
+│  剖面名称                 | 状态          | 受影响楼层            │
+│  ─────────────────────────────────────────────────────────────  │
+│  ☑ 主楼剖面-1              | ⚠️ 需更新     | F2, F3               │
+│  ☐ 核心筒剖面-2            | ✅ 最新       | -                    │
+│                                                                  │
+│  [ 更新选中剖面 ]  [ 全部更新 ]  [ 关闭 ]                        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+用户可勾选需要更新的剖面，系统将自动使用原剖切线及配置参数重新生成，并替换旧剖面块。
+
+### 9.3 单剖面更新
+
+命令 `UpdateSection` 允许用户直接选择一个剖面块，立即重新生成，无需进入检测对话框。
+
+---
+
+## 10. 剖面结果的组织形式
+
+剖面生成结果存储为 **单个 AutoCAD 块参照（BlockReference）**，具有以下特点：
+
+- **整体性**：便于移动、复制、删除。
+- **元数据承载**：块参照的扩展字典存储剖面 ID、生成时间、楼层指纹快照、源构件 Handle 列表等。
+- **可追溯性**：块内关键实体（如墙轮廓线）附加 XData，记录其来源平面构件的 Handle，支持“剖面→平面”反向定位。
+- **封装性**：不建议用户手动编辑块内几何；若需修改，应通过重新生成剖面实现。
+
+---
+
+## 11. 扩展性设计总结
+
+| 扩展场景 | 实现方式 | 是否需要修改代码 | 对现有功能影响 |
+|:---|:---|:---:|:---:|
+| 新增构件属性（如下沉深度） | 修改 `ElementTypes.json`，`BuildingElement` 子类读取动态属性 | ❌ 否 | 无 |
+| 新增构件类型（如下沉楼板） | 新增 `BuildingElement` 子类，注册到工厂映射 | ✅ 是（新增文件） | 无（上层依赖抽象） |
+| 修改剖面算法细节 | 修改 `SectionGenerator.Core` 中对应类 | ✅ 是 | 仅影响该算法本身 |
+| 增加新的交互命令 | 在 `Plugin` 层新增命令类，向 DI 注册 | ✅ 是（新增文件） | 无 |
+| 更换配置存储方式（JSON→XML） | 新增 `IXXXRepository` 实现，修改 DI 注册 | ✅ 是 | 无（接口不变） |
+
+---
+
+## 12. 后续扩展路径
+
+1. **门窗表自动生成插件**：复用 `Foundation.Building` 中的构件模型，开发 `DoorWindowSchedule` 插件。
+2. **材料统计与导出**：基于构件属性实现数量提取与 Excel 导出。
+3. **批量剖面生成**：支持一次选择多条剖切线，批量生成剖面图。
+4. **与外部参照协同**：支持从外部参照图纸中识别构件并生成剖面。
+
+---
+
+**文档状态**：已评审通过，可作为开发实施与团队协作基准。

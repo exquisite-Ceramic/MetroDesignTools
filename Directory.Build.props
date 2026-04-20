@@ -1,0 +1,16 @@
+<Project>
+  <PropertyGroup>
+    <!-- 统一版本号 - 所有项目从此处继承 -->
+    <VersionPrefix>1.1.0</VersionPrefix>
+    <VersionSuffix>beta</VersionSuffix>
+    <!-- 完整版本：1.1.0-beta -->
+    <Version>$(VersionPrefix)-$(VersionSuffix)</Version>
+    <AssemblyVersion>$(VersionPrefix).0</AssemblyVersion>
+    <FileVersion>$(VersionPrefix).0</FileVersion>
+
+    <!-- 通用元数据 -->
+    <Company>MetroDesignTools</Company>
+    <Product>MetroToolKits</Product>
+    <Copyright>Copyright © 2026 MetroDesignTools</Copyright>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,74 @@
+[
+  {
+    "TypeId": "Wall",
+    "TypeName": "结构墙",
+    "ShortcutKey": "W",
+    "TargetLayerPrefix": "MK_结构墙",
+    "LayerColorIndex": 1,
+    "LinetypeName": "Continuous",
+    "IsEnabled": true
+  },
+  {
+    "TypeId": "Column",
+    "TypeName": "结构柱",
+    "ShortcutKey": "C",
+    "TargetLayerPrefix": "MK_结构柱",
+    "LayerColorIndex": 2,
+    "LinetypeName": "Continuous",
+    "IsEnabled": true
+  },
+  {
+    "TypeId": "Slab",
+    "TypeName": "楼板",
+    "ShortcutKey": "S",
+    "TargetLayerPrefix": "MK_楼板",
+    "LayerColorIndex": 3,
+    "LinetypeName": "Continuous",
+    "IsEnabled": true
+  },
+  {
+    "TypeId": "Door",
+    "TypeName": "门",
+    "ShortcutKey": "D",
+    "TargetLayerPrefix": "MK_门",
+    "LayerColorIndex": 4,
+    "LinetypeName": "Continuous",
+    "IsEnabled": true
+  },
+  {
+    "TypeId": "Window",
+    "TypeName": "窗",
+    "ShortcutKey": "N",
+    "TargetLayerPrefix": "MK_窗",
+    "LayerColorIndex": 5,
+    "LinetypeName": "Continuous",
+    "IsEnabled": true
+  },
+  {
+    "TypeId": "Stair",
+    "TypeName": "楼梯",
+    "ShortcutKey": "T",
+    "TargetLayerPrefix": "MK_楼梯",
+    "LayerColorIndex": 6,
+    "LinetypeName": "Continuous",
+    "IsEnabled": true
+  },
+  {
+    "TypeId": "Beam",
+    "TypeName": "梁",
+    "ShortcutKey": "B",
+    "TargetLayerPrefix": "MK_梁",
+    "LayerColorIndex": 7,
+    "LinetypeName": "Continuous",
+    "IsEnabled": true
+  },
+  {
+    "TypeId": "Opening",
+    "TypeName": "洞口",
+    "ShortcutKey": "O",
+    "TargetLayerPrefix": "MK_洞口",
+    "LayerColorIndex": 8,
+    "LinetypeName": "Continuous",
+    "IsEnabled": true
+  }
+]
