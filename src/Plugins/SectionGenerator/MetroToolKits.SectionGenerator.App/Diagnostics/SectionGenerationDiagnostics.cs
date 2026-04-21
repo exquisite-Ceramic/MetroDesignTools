@@ -9,6 +9,11 @@ public static class SectionGenerationErrorCodes
 {
     public const string InvalidSectionLine = "SectionGenerator.InputValidation.InvalidSectionLine";
     public const string FloorConfigMissing = "SectionGenerator.FloorConfigLoad.ConfigMissing";
+    public const string AlignmentBaseFloorMissing = "SectionGenerator.FloorConfigLoad.AlignmentBaseFloorMissing";
+    public const string AlignmentBaseFloorInvalid = "SectionGenerator.FloorConfigLoad.AlignmentBaseFloorInvalid";
+    public const string AlignmentPointsMissing = "SectionGenerator.FloorConfigLoad.AlignmentPointsMissing";
+    public const string AlignmentPointsInvalid = "SectionGenerator.FloorConfigLoad.AlignmentPointsInvalid";
+    public const string AlignmentMigrationConflict = "SectionGenerator.FloorConfigLoad.AlignmentMigrationConflict";
     public const string NoRecognizedElements = "SectionGenerator.ElementRecognition.NoRecognizedElements";
     public const string UnsupportedEntityType = "SectionGenerator.ElementRecognition.UnsupportedEntityType";
     public const string ConversionFailed = "SectionGenerator.ElementRecognition.ConversionFailed";
@@ -38,6 +43,26 @@ public static class SectionGenerationFailures
         Stage = PipelineStage.ElementRecognition,
         Module = "GenerateSectionUseCase",
         UserMessage = "未识别到任何可生成剖面的构件",
+        TechnicalMessage = technicalMessage
+    };
+
+    public static OperationFailure AlignmentBaseFloorMissing(string technicalMessage) => new()
+    {
+        Code = SectionGenerationErrorCodes.AlignmentBaseFloorMissing,
+        Category = FailureCategory.UserInput,
+        Stage = PipelineStage.FloorConfigLoad,
+        Module = "FloorAlignmentResolver",
+        UserMessage = "多楼层模式下必须先配置基准层",
+        TechnicalMessage = technicalMessage
+    };
+
+    public static OperationFailure AlignmentBaseFloorInvalid(string technicalMessage) => new()
+    {
+        Code = SectionGenerationErrorCodes.AlignmentBaseFloorInvalid,
+        Category = FailureCategory.UserInput,
+        Stage = PipelineStage.FloorConfigLoad,
+        Module = "FloorAlignmentResolver",
+        UserMessage = "基准层配置无效，请检查基准层名称和对齐点",
         TechnicalMessage = technicalMessage
     };
 
@@ -95,6 +120,53 @@ public static class SectionGenerationDiagnosticFactory
         Module = "GenerateSectionUseCase",
         Message = "未找到楼层配置文件，已回退到默认单层配置",
         Suggestion = "如需多楼层剖面，请先执行 FloorConfig 配置楼层。"
+    };
+
+    public static OperationDiagnostic AlignmentPointsMissing(string floorName, bool isBaseFloor = false) => new()
+    {
+        Level = DiagnosticLevel.Warning,
+        Code = isBaseFloor
+            ? SectionGenerationErrorCodes.AlignmentBaseFloorInvalid
+            : SectionGenerationErrorCodes.AlignmentPointsMissing,
+        Stage = PipelineStage.FloorConfigLoad,
+        Module = "FloorAlignmentResolver",
+        Message = isBaseFloor
+            ? $"基准层 {floorName} 缺少对齐点"
+            : $"楼层 {floorName} 缺少对齐点，已跳过该楼层",
+        Suggestion = isBaseFloor
+            ? "请在 FloorConfig 中为基准层拾取 3 个有效对齐点。"
+            : "请在 FloorConfig 中为该楼层补齐与基准层对应的 3 个对齐点。",
+        Metadata = CreateMetadata(("floor", floorName))
+    };
+
+    public static OperationDiagnostic AlignmentPointsInvalid(string floorName, string reason, bool isBaseFloor = false) => new()
+    {
+        Level = DiagnosticLevel.Warning,
+        Code = isBaseFloor
+            ? SectionGenerationErrorCodes.AlignmentBaseFloorInvalid
+            : SectionGenerationErrorCodes.AlignmentPointsInvalid,
+        Stage = PipelineStage.FloorConfigLoad,
+        Module = "FloorAlignmentResolver",
+        Message = isBaseFloor
+            ? $"基准层 {floorName} 的对齐点无效: {reason}"
+            : $"楼层 {floorName} 的对齐点无效，已跳过该楼层: {reason}",
+        Suggestion = "请重新拾取原点、X 方向点、Y 方向点，确保三点不重复且不共线。",
+        Metadata = CreateMetadata(
+            ("floor", floorName),
+            ("reason", reason))
+    };
+
+    public static OperationDiagnostic AlignmentMigrationConflict(string floorName, string reason) => new()
+    {
+        Level = DiagnosticLevel.Warning,
+        Code = SectionGenerationErrorCodes.AlignmentMigrationConflict,
+        Stage = PipelineStage.FloorConfigLoad,
+        Module = "JsonFloorConfigRepository",
+        Message = $"楼层 {floorName} 的旧版对齐数据与全局基准不一致，已清空本层对齐点待人工确认",
+        Suggestion = "请打开 FloorConfig，重新确认该楼层的 3 个对齐点后再保存。",
+        Metadata = CreateMetadata(
+            ("floor", floorName),
+            ("reason", reason))
     };
 
     public static OperationDiagnostic NoRecognizedElements(string module, string message, string? floorName = null) => new()

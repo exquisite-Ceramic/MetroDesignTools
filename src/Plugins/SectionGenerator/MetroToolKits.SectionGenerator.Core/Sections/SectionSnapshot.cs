@@ -49,5 +49,7 @@ public sealed class SectionCheckResult
     public string BlockHandle        { get; set; } = string.Empty;
     public SectionUpdateStatus Status { get; set; }
     public List<string> OutdatedFloors { get; set; } = new();
+    public List<string> SkippedFloors { get; set; } = new();
+    public string? WarningMessage { get; set; }
     public SectionSnapshot? Snapshot { get; set; }
 }

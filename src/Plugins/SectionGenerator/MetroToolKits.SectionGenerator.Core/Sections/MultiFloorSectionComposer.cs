@@ -19,12 +19,12 @@ public sealed class MultiFloorSectionComposer
     /// <summary>
     /// 生成多楼层剖面数据
     /// </summary>
-    /// <param name="sectionLine">剖切线（平面坐标）</param>
+    /// <param name="alignments">每层已解析的剖切线结果</param>
     /// <param name="viewDirection">视图方向</param>
     /// <param name="floorElements">每层的构件列表，key = 楼层名称</param>
     /// <param name="floors">楼层配置列表（按楼层顺序）</param>
     public MultiFloorSectionData Generate(
-        Line3D sectionLine,
+        IReadOnlyDictionary<string, FloorAlignmentResult> alignments,
         Vector3D viewDirection,
         IReadOnlyDictionary<string, IReadOnlyList<BuildingElement>> floorElements,
         IReadOnlyList<FloorConfig> floors)
@@ -34,25 +34,24 @@ public sealed class MultiFloorSectionComposer
 
         foreach (var floor in floors)
         {
-            // 1. 获取该层构件（若无则用空列表）
-            var elements = floorElements.TryGetValue(floor.Name, out var list)
-                ? list
-                : Array.Empty<BuildingElement>();
+            if (alignments.TryGetValue(floor.Name, out var alignment) &&
+                alignment.CanParticipate &&
+                alignment.SectionLine.HasValue)
+            {
+                var elements = floorElements.TryGetValue(floor.Name, out var list)
+                    ? list
+                    : Array.Empty<BuildingElement>();
 
-            // 2. 计算对齐变换（若配置了三点对齐）
-            var alignedSectionLine = FloorSectionLineTransformer.ApplyAlignment(sectionLine, floor);
+                var floorData = _singleFloorComposer.Generate(
+                    alignment.SectionLine.Value,
+                    viewDirection,
+                    elements,
+                    floor,
+                    baseElevation: cumulativeElevation);
 
-            // 3. 生成单层剖面数据（传入累计标高）
-            var floorData = _singleFloorComposer.Generate(
-                alignedSectionLine,
-                viewDirection,
-                elements,
-                floor,
-                baseElevation: cumulativeElevation);
+                floorDataList.Add(floorData);
+            }
 
-            floorDataList.Add(floorData);
-
-            // 4. 累加标高（底板厚 + 层高 + 顶板厚）
             cumulativeElevation += floor.BottomSlabThickness + floor.Height + floor.TopSlabThickness;
         }
 

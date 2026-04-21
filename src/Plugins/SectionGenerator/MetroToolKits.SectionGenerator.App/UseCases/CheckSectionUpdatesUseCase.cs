@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using MetroToolKits.Foundation.Core.Diagnostics;
+using MetroToolKits.SectionGenerator.App.Diagnostics;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
@@ -15,6 +17,7 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
     private readonly IElementRecognizer _elementRecognizer;
     private readonly IFloorConfigRepository _configRepo;
     private readonly FloorGeometryHasher _hasher;
+    private readonly FloorAlignmentResolver _alignmentResolver;
     private readonly ILogger<CheckSectionUpdatesUseCase> _logger;
 
     public CheckSectionUpdatesUseCase(
@@ -30,19 +33,22 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
         _elementRecognizer = elementRecognizer;
         _configRepo        = configRepo;
         _hasher            = hasher;
+        _alignmentResolver = new FloorAlignmentResolver();
         _logger            = logger;
     }
 
-    public IReadOnlyList<SectionCheckResult> Execute()
+    public CheckSectionUpdatesResult Execute()
     {
         var sw = Stopwatch.StartNew();
         _logger.LogInformation("执行变更检测命令");
+        var diagnostics = new List<OperationDiagnostic>();
 
         var handles = _snapshotRepo.FindAllSectionBlockHandles();
         _logger.LogDebug("扫描剖面块，共 {Count} 个", handles.Count);
 
         var results = new List<SectionCheckResult>();
         var config  = _configRepo.Load();
+        diagnostics.AddRange(config.RuntimeDiagnostics);
 
         foreach (var handle in handles)
         {
@@ -61,18 +67,49 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
 
             // 重新计算当前哈希，与快照比对
             var outdatedFloors = new List<string>();
+            var skippedFloors = new List<string>();
             var currentSourceLine = ResolveSectionLine(snapshot);
+            var alignmentResolution = _alignmentResolver.Resolve(currentSourceLine, config);
+            if (alignmentResolution.FatalIssue != null)
+            {
+                return BuildFailedResult(
+                    MapAlignmentFailure(alignmentResolution.FatalIssue),
+                    diagnostics,
+                    sw);
+            }
+
+            var currentParticipatingFloors = new HashSet<string>(
+                alignmentResolution.Floors.Values
+                    .Where(alignment => alignment.CanParticipate)
+                    .Select(alignment => alignment.FloorName),
+                StringComparer.OrdinalIgnoreCase);
             foreach (var floorSnap in snapshot.FloorSnapshots)
             {
                 var floor = config.Floors.FirstOrDefault(f => f.Name == floorSnap.FloorName);
-                if (floor == null) continue;
+                if (floor == null)
+                {
+                    outdatedFloors.Add(floorSnap.FloorName);
+                    continue;
+                }
 
-                var alignedSectionLine = FloorSectionLineTransformer.ApplyAlignment(
-                    currentSourceLine,
-                    floor);
+                if (!alignmentResolution.Floors.TryGetValue(floor.Name, out var alignment))
+                {
+                    outdatedFloors.Add(floor.Name);
+                    continue;
+                }
 
+                if (alignment.Issue != null)
+                {
+                    diagnostics.Add(MapAlignmentDiagnostic(alignment));
+                }
+
+                if (!alignment.CanParticipate || !alignment.SectionLine.HasValue)
+                {
+                    skippedFloors.Add(floor.Name);
+                    continue;
+                }
                 var elements = _elementRecognizer.RecognizeElements(
-                    alignedSectionLine,
+                    alignment.SectionLine.Value,
                     snapshot.ViewDepth).Elements;
 
                 var currentHash = _hasher.ComputeHash(elements);
@@ -82,6 +119,21 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
 
                 if (currentHash != floorSnap.GeometryHash)
                     outdatedFloors.Add(floorSnap.FloorName);
+            }
+
+            var snapshotFloors = new HashSet<string>(
+                snapshot.FloorSnapshots.Select(f => f.FloorName),
+                StringComparer.OrdinalIgnoreCase);
+            if (!snapshotFloors.SetEquals(currentParticipatingFloors))
+            {
+                foreach (var floorName in snapshotFloors.Union(currentParticipatingFloors))
+                {
+                    if (!snapshotFloors.Contains(floorName) || !currentParticipatingFloors.Contains(floorName))
+                    {
+                        if (!outdatedFloors.Contains(floorName, StringComparer.OrdinalIgnoreCase))
+                            outdatedFloors.Add(floorName);
+                    }
+                }
             }
 
             var status = outdatedFloors.Count > 0
@@ -94,6 +146,10 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
                 BlockName      = snapshot.BlockName,
                 Status         = status,
                 OutdatedFloors = outdatedFloors,
+                SkippedFloors  = skippedFloors,
+                WarningMessage = skippedFloors.Count > 0
+                    ? $"部分楼层未参与检查: {string.Join(", ", skippedFloors)}"
+                    : null,
                 Snapshot       = snapshot
             });
         }
@@ -103,7 +159,17 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
         _logger.LogInformation("变更检测完成，共 {Total} 个剖面，{Outdated} 个需要更新，耗时 {ElapsedMs}ms",
             results.Count, outdatedCount, sw.ElapsedMilliseconds);
 
-        return results;
+        var finalStatus = diagnostics.Any(d => d.Level == DiagnosticLevel.Warning || d.Level == DiagnosticLevel.Error) ||
+                          results.Any(r => r.SkippedFloors.Count > 0)
+            ? OperationStatus.PartialSuccess
+            : OperationStatus.Success;
+
+        return new CheckSectionUpdatesResult
+        {
+            Status = finalStatus,
+            Diagnostics = diagnostics,
+            Items = results
+        };
     }
 
     private Foundation.Core.Geometry.Line3D ResolveSectionLine(SectionSnapshot snapshot)
@@ -118,5 +184,54 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
             snapshot.BlockName);
 
         return new Foundation.Core.Geometry.Line3D(snapshot.CutLineStart, snapshot.CutLineEnd);
+    }
+
+    private CheckSectionUpdatesResult BuildFailedResult(
+        OperationFailure failure,
+        IReadOnlyList<OperationDiagnostic> diagnostics,
+        Stopwatch sw)
+    {
+        sw.Stop();
+        _logger.LogError(
+            failure.InnerException,
+            "变更检测失败，Code={Code}，Stage={Stage}，Module={Module}，耗时: {ElapsedMs}ms",
+            failure.Code,
+            failure.Stage,
+            failure.Module,
+            sw.ElapsedMilliseconds);
+
+        return new CheckSectionUpdatesResult
+        {
+            Status = OperationStatus.Failed,
+            Failure = failure,
+            FailedStage = failure.Stage,
+            Diagnostics = diagnostics
+        };
+    }
+
+    private static OperationFailure MapAlignmentFailure(FloorAlignmentIssue issue)
+    {
+        return issue.Kind switch
+        {
+            FloorAlignmentIssueKind.AlignmentBaseFloorMissing =>
+                SectionGenerationFailures.AlignmentBaseFloorMissing(issue.Message),
+            _ => SectionGenerationFailures.AlignmentBaseFloorInvalid(issue.Message)
+        };
+    }
+
+    private static OperationDiagnostic MapAlignmentDiagnostic(FloorAlignmentResult alignment)
+    {
+        return alignment.Issue?.Kind switch
+        {
+            FloorAlignmentIssueKind.AlignmentPointsMissing =>
+                SectionGenerationDiagnosticFactory.AlignmentPointsMissing(alignment.FloorName),
+            FloorAlignmentIssueKind.AlignmentPointsInvalid =>
+                SectionGenerationDiagnosticFactory.AlignmentPointsInvalid(
+                    alignment.FloorName,
+                    alignment.Issue!.Message),
+            _ => SectionGenerationDiagnosticFactory.AlignmentPointsInvalid(
+                alignment.FloorName,
+                alignment.Issue?.Message ?? "未知对齐配置问题")
+        };
     }
 }

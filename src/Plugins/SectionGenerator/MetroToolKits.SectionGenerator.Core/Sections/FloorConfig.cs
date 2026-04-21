@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
 
 namespace MetroToolKits.SectionGenerator.Core.Sections;
@@ -16,11 +18,8 @@ public sealed class FloorConfig
     public double SlopeValue { get; set; }
     public string SlopeTarget { get; set; } = "StructuralSlab";
 
-    /// <summary>对齐源点（平面坐标系三点）</summary>
-    public List<Point3D> AlignmentSourcePoints { get; set; } = new();
-
-    /// <summary>对齐目标点（剖面坐标系三点）</summary>
-    public List<Point3D> AlignmentTargetPoints { get; set; } = new();
+    /// <summary>当前楼层对齐点（原点、X 方向点、Y 方向点）</summary>
+    public List<Point3D> AlignmentPoints { get; set; } = new();
 }
 
 /// <summary>
@@ -31,5 +30,10 @@ public sealed class SectionConfig
     public bool GlobalSlopeEnabled { get; set; }
     public double GlobalSlopeValue { get; set; } = 0.002;
     public string GlobalSlopeTarget { get; set; } = "StructuralSlab";
+    public string AlignmentBaseFloorName { get; set; } = string.Empty;
     public List<FloorConfig> Floors { get; set; } = new();
+
+    /// <summary>读取仓储时附带的运行期诊断，不参与持久化。</summary>
+    [JsonIgnore]
+    public List<OperationDiagnostic> RuntimeDiagnostics { get; set; } = new();
 }

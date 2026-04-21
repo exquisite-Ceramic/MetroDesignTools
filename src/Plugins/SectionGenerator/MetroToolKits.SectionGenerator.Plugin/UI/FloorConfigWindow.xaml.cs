@@ -27,6 +27,7 @@ public partial class FloorConfigWindow : Window
         _logger = logger;
 
         FloorListBox.ItemsSource = _floors;
+        BaseFloorComboBox.ItemsSource = _floors;
         LoadConfig();
     }
 
@@ -40,6 +41,13 @@ public partial class FloorConfigWindow : Window
         GlobalSlopeCheck.IsChecked     = _config.GlobalSlopeEnabled;
         GlobalSlopeValueBox.Text       = (_config.GlobalSlopeValue * 100).ToString("F2");
         GlobalSlopeTargetBox.SelectedIndex = _config.GlobalSlopeTarget == "FinishLayer" ? 1 : 0;
+        BaseFloorComboBox.SelectedItem = _floors.FirstOrDefault(f =>
+            string.Equals(f.Name, _config.AlignmentBaseFloorName, StringComparison.OrdinalIgnoreCase));
+
+        if (BaseFloorComboBox.SelectedItem == null && _floors.Count == 1)
+        {
+            BaseFloorComboBox.SelectedItem = _floors[0];
+        }
 
         _logger.LogDebug("楼层配置窗口加载，楼层数: {Count}", _floors.Count);
     }
@@ -72,6 +80,10 @@ public partial class FloorConfigWindow : Window
             FinishThickness     = 120
         };
         _floors.Add(newFloor);
+        if (_floors.Count == 1)
+        {
+            BaseFloorComboBox.SelectedItem = newFloor;
+        }
         FloorListBox.SelectedItem = newFloor;
         _logger.LogInformation("添加楼层: {FloorName}", newFloor.Name);
     }
@@ -81,6 +93,11 @@ public partial class FloorConfigWindow : Window
         if (_currentFloor == null) return;
         var name = _currentFloor.Name;
         _floors.Remove(_currentFloor);
+        if (BaseFloorComboBox.SelectedItem is FloorConfig selectedBase &&
+            string.Equals(selectedBase.Name, name, StringComparison.OrdinalIgnoreCase))
+        {
+            BaseFloorComboBox.SelectedItem = _floors.FirstOrDefault();
+        }
         _currentFloor = null;
         EditPanel.IsEnabled = false;
         _logger.LogInformation("删除楼层: {FloorName}", name);
@@ -113,9 +130,13 @@ public partial class FloorConfigWindow : Window
         SlopeValueBox.Text = (floor.SlopeValue * 100).ToString("F2");
         SlopeValueBox.IsEnabled = floor.HasSlope;
 
-        var srcCount = floor.AlignmentSourcePoints.Count;
-        AlignmentStatus.Text = srcCount >= 3 ? "已设置（3点）" : "未设置";
-        AlignmentStatus.Foreground = srcCount >= 3
+        var pointCount = floor.AlignmentPoints.Count;
+        AlignmentLabel.Content = BaseFloorComboBox.SelectedItem is FloorConfig baseFloor &&
+                                 string.Equals(baseFloor.Name, floor.Name, StringComparison.OrdinalIgnoreCase)
+            ? "基准点:"
+            : "本层对齐点:";
+        AlignmentStatus.Text = pointCount >= 3 ? "已设置（3点）" : "未设置";
+        AlignmentStatus.Foreground = pointCount >= 3
             ? System.Windows.Media.Brushes.Green
             : System.Windows.Media.Brushes.Gray;
     }
@@ -136,6 +157,14 @@ public partial class FloorConfigWindow : Window
     private void SlopeCheck_Changed(object sender, RoutedEventArgs e)
         => SlopeValueBox.IsEnabled = SlopeCheck.IsChecked == true;
 
+    private void BaseFloorComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_currentFloor != null)
+        {
+            BindFloorToUI(_currentFloor);
+        }
+    }
+
     // ── 对齐点拾取 ────────────────────────────────────────────────────────────
 
     private void PickAlignment_Click(object sender, RoutedEventArgs e)
@@ -152,8 +181,7 @@ public partial class FloorConfigWindow : Window
     private void ClearAlignment_Click(object sender, RoutedEventArgs e)
     {
         if (_currentFloor == null) return;
-        _currentFloor.AlignmentSourcePoints.Clear();
-        _currentFloor.AlignmentTargetPoints.Clear();
+        _currentFloor.AlignmentPoints.Clear();
         AlignmentStatus.Text = "未设置";
         AlignmentStatus.Foreground = System.Windows.Media.Brushes.Gray;
         _logger.LogInformation("清除楼层 {FloorName} 对齐点", _currentFloor.Name);
@@ -171,6 +199,13 @@ public partial class FloorConfigWindow : Window
             _config.GlobalSlopeValue = gsv / 100.0;
         _config.GlobalSlopeTarget = (GlobalSlopeTargetBox.SelectedItem as ComboBoxItem)?.Tag?.ToString()
                                     ?? "StructuralSlab";
+        _config.AlignmentBaseFloorName = (BaseFloorComboBox.SelectedItem as FloorConfig)?.Name ?? string.Empty;
+
+        if (!ValidateBeforeSave(out var validationMessage))
+        {
+            MessageBox.Show(validationMessage, "配置无效", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
 
         _logger.LogInformation("楼层配置编辑完成，待命令层保存，楼层数: {Count}", _config.Floors.Count);
 
@@ -183,5 +218,29 @@ public partial class FloorConfigWindow : Window
         _logger.LogDebug("楼层配置窗口取消");
         DialogResult = false;
         Close();
+    }
+
+    private bool ValidateBeforeSave(out string message)
+    {
+        if (_config.Floors.Count <= 1)
+        {
+            message = string.Empty;
+            return true;
+        }
+
+        if (BaseFloorComboBox.SelectedItem is not FloorConfig baseFloor)
+        {
+            message = "多楼层模式下必须选择基准层。";
+            return false;
+        }
+
+        if (!FloorSectionLineTransformer.TryValidateAlignmentPoints(baseFloor.AlignmentPoints, out var baseError))
+        {
+            message = $"基准层 {baseFloor.Name} 的对齐点无效: {baseError}";
+            return false;
+        }
+
+        message = string.Empty;
+        return true;
     }
 }

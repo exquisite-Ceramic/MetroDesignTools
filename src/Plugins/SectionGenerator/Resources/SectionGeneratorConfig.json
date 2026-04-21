@@ -2,6 +2,7 @@
   "GlobalSlopeEnabled": true,
   "GlobalSlopeValue": 0.002,
   "GlobalSlopeTarget": "StructuralSlab",
+  "AlignmentBaseFloorName": "F1",
   "Floors": [
     {
       "Name": "F1",
@@ -12,8 +13,7 @@
       "HasSlope": true,
       "SlopeValue": 0.002,
       "SlopeTarget": "StructuralSlab",
-      "AlignmentSourcePoints": [],
-      "AlignmentTargetPoints": []
+      "AlignmentPoints": []
     }
   ]
 }

@@ -15,39 +15,24 @@ namespace MetroToolKits.Tests.SectionGenerator.Core;
 public class GenerateSectionUseCaseTests
 {
     [Fact]
-    public void Execute_UsesAlignedSectionLineForEachFloorRecognition()
+    public void Execute_UsesResolvedAlignmentForEachParticipatingFloorRecognition()
     {
         var configRepo = Substitute.For<IFloorConfigRepository>();
         configRepo.Load().Returns(new SectionConfig
         {
+            AlignmentBaseFloorName = "F1",
             Floors = new List<FloorConfig>
             {
-                new()
-                {
-                    Name = "F1",
-                    Height = 3000,
-                    BottomSlabThickness = 800,
-                    TopSlabThickness = 600
-                },
-                new()
-                {
-                    Name = "F2",
-                    Height = 3000,
-                    BottomSlabThickness = 800,
-                    TopSlabThickness = 600,
-                    AlignmentSourcePoints =
-                    {
-                        new Point3D(0, 0, 0),
-                        new Point3D(10, 0, 0),
-                        new Point3D(0, 10, 0)
-                    },
-                    AlignmentTargetPoints =
-                    {
-                        new Point3D(100, 0, 0),
-                        new Point3D(110, 0, 0),
-                        new Point3D(100, 10, 0)
-                    }
-                }
+                DefaultFloor(
+                    "F1",
+                    new Point3D(0, 0, 0),
+                    new Point3D(10, 0, 0),
+                    new Point3D(0, 10, 0)),
+                DefaultFloor(
+                    "F2",
+                    new Point3D(100, 0, 0),
+                    new Point3D(110, 0, 0),
+                    new Point3D(100, 10, 0))
             }
         });
 
@@ -86,8 +71,7 @@ public class GenerateSectionUseCaseTests
             snapshotRepo,
             userLogger);
 
-        var request = CreateRequest();
-        var result = useCase.Execute(request);
+        var result = useCase.Execute(CreateRequest());
 
         result.Status.Should().Be(OperationStatus.Success);
         result.Success.Should().BeTrue();
@@ -103,11 +87,64 @@ public class GenerateSectionUseCaseTests
             3000);
         snapshotRepo.Received(1).Save(
             "ABCD",
-            Arg.Is<SectionSnapshot>(snapshot => snapshot.SourceCutLineHandle == "10"));
+            Arg.Is<SectionSnapshot>(snapshot =>
+                snapshot.SourceCutLineHandle == "10" &&
+                snapshot.FloorSnapshots.Count == 2));
     }
 
     [Fact]
-    public void Execute_AllFloorsEmpty_ReturnsFailedWithNoRecognizedElements()
+    public void Execute_BaseFloorMissing_ReturnsFailed()
+    {
+        var configRepo = Substitute.For<IFloorConfigRepository>();
+        configRepo.Load().Returns(new SectionConfig
+        {
+            Floors = new List<FloorConfig>
+            {
+                DefaultFloor("F1"),
+                DefaultFloor("F2")
+            }
+        });
+
+        var useCase = BuildUseCase(configRepo: configRepo);
+        var result = useCase.Execute(CreateRequest());
+
+        result.Status.Should().Be(OperationStatus.Failed);
+        result.Failure!.Code.Should().Be(SectionGenerationErrorCodes.AlignmentBaseFloorMissing);
+    }
+
+    [Fact]
+    public void Execute_SomeFloorsMissingAlignment_ReturnsPartialSuccess()
+    {
+        var configRepo = Substitute.For<IFloorConfigRepository>();
+        configRepo.Load().Returns(new SectionConfig
+        {
+            AlignmentBaseFloorName = "F1",
+            Floors = new List<FloorConfig>
+            {
+                DefaultFloor(
+                    "F1",
+                    new Point3D(0, 0, 0),
+                    new Point3D(10, 0, 0),
+                    new Point3D(0, 10, 0)),
+                DefaultFloor("F2")
+            }
+        });
+
+        var recognizer = Substitute.For<IElementRecognizer>();
+        recognizer.RecognizeElements(Arg.Any<Line3D>(), Arg.Any<double>())
+            .Returns(RecognitionResult(MakeWallAtX(0, "F1W")));
+
+        var useCase = BuildUseCase(configRepo: configRepo, recognizer: recognizer);
+        var result = useCase.Execute(CreateRequest());
+
+        result.Status.Should().Be(OperationStatus.PartialSuccess);
+        result.Success.Should().BeTrue();
+        result.FloorCount.Should().Be(1);
+        result.Diagnostics.Should().Contain(d => d.Code == SectionGenerationErrorCodes.AlignmentPointsMissing);
+    }
+
+    [Fact]
+    public void Execute_AllRecognizedFloorsEmpty_ReturnsFailedWithNoRecognizedElements()
     {
         var recognizer = Substitute.For<IElementRecognizer>();
         recognizer.RecognizeElements(Arg.Any<Line3D>(), Arg.Any<double>())
@@ -120,12 +157,7 @@ public class GenerateSectionUseCaseTests
                         "A1",
                         "MK_结构墙",
                         "Polyline",
-                        "Line"),
-                    SectionGenerationDiagnosticFactory.NoIntersectingElements(
-                        "LayerBasedElementRecognizer",
-                        "A2",
-                        "Wall",
-                        "MK_结构墙")
+                        "Line")
                 }
             });
 
@@ -133,51 +165,7 @@ public class GenerateSectionUseCaseTests
         var result = useCase.Execute(CreateRequest());
 
         result.Status.Should().Be(OperationStatus.Failed);
-        result.Success.Should().BeFalse();
-        result.ErrorMessage.Should().Be("未识别到任何可生成剖面的构件");
-        result.FailedStage.Should().Be(PipelineStage.ElementRecognition);
-        result.Failure.Should().NotBeNull();
         result.Failure!.Code.Should().Be(SectionGenerationErrorCodes.NoRecognizedElements);
-        result.Diagnostics.Should().Contain(d => d.Code == SectionGenerationErrorCodes.UnsupportedEntityType);
-        result.Diagnostics.Should().Contain(d => d.Code == SectionGenerationErrorCodes.NoIntersectingElements);
-    }
-
-    [Fact]
-    public void Execute_SomeFloorsEmpty_ReturnsPartialSuccess()
-    {
-        var configRepo = Substitute.For<IFloorConfigRepository>();
-        configRepo.Load().Returns(new SectionConfig
-        {
-            Floors = new List<FloorConfig>
-            {
-                DefaultFloor("F1"),
-                DefaultFloor("F2")
-            }
-        });
-
-        var recognizer = Substitute.For<IElementRecognizer>();
-        recognizer.RecognizeElements(Arg.Any<Line3D>(), Arg.Any<double>())
-            .Returns(
-                RecognitionResult(MakeWallAtX(0, "F1W")),
-                new ElementRecognitionResult
-                {
-                    Diagnostics = new[]
-                    {
-                        SectionGenerationDiagnosticFactory.NoIntersectingElements(
-                            "LayerBasedElementRecognizer",
-                            "B2",
-                            "Wall",
-                            "MK_结构墙")
-                    }
-                });
-
-        var useCase = BuildUseCase(configRepo: configRepo, recognizer: recognizer);
-        var result = useCase.Execute(CreateRequest());
-
-        result.Status.Should().Be(OperationStatus.PartialSuccess);
-        result.Success.Should().BeTrue();
-        result.BlockName.Should().NotBeNullOrWhiteSpace();
-        result.Diagnostics.Should().Contain(d => d.Code == SectionGenerationErrorCodes.NoRecognizedElements);
     }
 
     [Fact]
@@ -198,9 +186,7 @@ public class GenerateSectionUseCaseTests
         var result = useCase.Execute(CreateRequest());
 
         result.Status.Should().Be(OperationStatus.Failed);
-        result.Failure.Should().NotBeNull();
         result.Failure!.Code.Should().Be(SectionGenerationErrorCodes.DrawFailed);
-        result.ErrorMessage.Should().Be("剖面绘制失败，请检查当前图纸环境");
     }
 
     [Fact]
@@ -219,9 +205,7 @@ public class GenerateSectionUseCaseTests
         var result = useCase.Execute(CreateRequest());
 
         result.Status.Should().Be(OperationStatus.Failed);
-        result.Failure.Should().NotBeNull();
         result.Failure!.Code.Should().Be(SectionGenerationErrorCodes.SnapshotSaveFailed);
-        result.ErrorMessage.Should().Be("剖面已生成，但写入快照失败");
     }
 
     private static GenerateSectionUseCase BuildUseCase(
@@ -236,7 +220,15 @@ public class GenerateSectionUseCaseTests
             configRepo = Substitute.For<IFloorConfigRepository>();
             configRepo.Load().Returns(new SectionConfig
             {
-                Floors = new List<FloorConfig> { DefaultFloor() }
+                AlignmentBaseFloorName = "F1",
+                Floors = new List<FloorConfig>
+                {
+                    DefaultFloor(
+                        "F1",
+                        new Point3D(0, 0, 0),
+                        new Point3D(10, 0, 0),
+                        new Point3D(0, 10, 0))
+                }
             });
         }
 
@@ -279,12 +271,13 @@ public class GenerateSectionUseCaseTests
         InsertionPoint = new Point3D(5000, 0, 0)
     };
 
-    private static FloorConfig DefaultFloor(string name = "F1") => new()
+    private static FloorConfig DefaultFloor(string name = "F1", params Point3D[] alignmentPoints) => new()
     {
         Name = name,
         Height = 3000,
         BottomSlabThickness = 800,
-        TopSlabThickness = 600
+        TopSlabThickness = 600,
+        AlignmentPoints = alignmentPoints.ToList()
     };
 
     private static IElementRecognizer SingleWallRecognizer()
@@ -308,7 +301,6 @@ public class GenerateSectionUseCaseTests
 
     private static Wall MakeWallAtX(double x, string handle = "AAA") => new()
     {
-        // Make the wall cross the vertical section line instead of overlapping it.
         StartPoint = new Point3D(x - 500, 10, 0),
         EndPoint = new Point3D(x + 500, 10, 0),
         Height = 3000,

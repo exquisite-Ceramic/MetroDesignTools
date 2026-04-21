@@ -85,7 +85,7 @@
 
                         <Separator Grid.Row="7" Grid.ColumnSpan="2" Margin="0,8"/>
 
-                        <Label Grid.Row="8" Grid.Column="0" Content="对齐点:" VerticalAlignment="Top"/>
+                        <Label Grid.Row="8" Grid.Column="0" x:Name="AlignmentLabel" Content="对齐点:" VerticalAlignment="Top"/>
                         <StackPanel Grid.Row="8" Grid.Column="1" Margin="0,2">
                             <TextBlock x:Name="AlignmentStatus" Text="未设置" Foreground="Gray" Margin="0,0,0,4"/>
                             <Button Content="拾取对齐点..." Height="26" Click="PickAlignment_Click"/>
@@ -104,6 +104,8 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <CheckBox Grid.Column="0" x:Name="GlobalSlopeCheck" Content="全局坡度"
@@ -116,6 +118,10 @@
                     <ComboBoxItem Content="结构楼板" Tag="StructuralSlab" IsSelected="True"/>
                     <ComboBoxItem Content="装修面层" Tag="FinishLayer"/>
                 </ComboBox>
+                <Label Grid.Column="5" Content="基准层:" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                <ComboBox Grid.Column="6" x:Name="BaseFloorComboBox" Margin="4,0" Width="120"
+                          DisplayMemberPath="Name"
+                          SelectionChanged="BaseFloorComboBox_SelectionChanged"/>
             </Grid>
         </GroupBox>
 

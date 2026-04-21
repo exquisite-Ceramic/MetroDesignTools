@@ -2,6 +2,7 @@ using MetroToolKits.Foundation.Core.Logging;
 using System.Collections.ObjectModel;
 using System.Windows;
 using Microsoft.Extensions.Logging;
+using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
@@ -19,6 +20,7 @@ public partial class SectionUpdateDialog : Window
     private readonly ObservableCollection<SectionResultViewModel> _items = new();
 
     public SectionUpdateDialog(
+        CheckSectionUpdatesResult initialResult,
         ICheckSectionUpdatesUseCase checkUseCase,
         IUpdateSectionUseCase updateUseCase,
         ILogger<SectionUpdateDialog> logger,
@@ -31,22 +33,13 @@ public partial class SectionUpdateDialog : Window
         _userLogger    = userLogger;
 
         ResultGrid.ItemsSource = _items;
-        RunCheck();
+        ApplyResult(initialResult);
     }
 
     private void RunCheck()
     {
         _userLogger.CheckingUpdates();
-        _items.Clear();
-
-        var results = _checkUseCase.Execute();
-
-        foreach (var r in results)
-            _items.Add(new SectionResultViewModel(r));
-
-        var outdated = results.Count(r => r.Status == SectionUpdateStatus.Outdated);
-        SummaryText.Text = $"共 {results.Count} 个剖面，其中 {outdated} 个需要更新";
-        _userLogger.CheckResult(results.Count, outdated);
+        ApplyResult(_checkUseCase.Execute());
     }
 
     private void Refresh_Click(object sender, RoutedEventArgs e) => RunCheck();
@@ -117,6 +110,34 @@ public partial class SectionUpdateDialog : Window
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void ApplyResult(CheckSectionUpdatesResult result)
+    {
+        _items.Clear();
+
+        if (result.Status == OperationStatus.Failed)
+        {
+            SummaryText.Text = $"检测失败: {result.Failure?.UserMessage ?? "未知错误"}";
+            MessageBox.Show(
+                result.Failure?.UserMessage ?? "变更检测失败",
+                "变更检测失败",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        foreach (var item in result.Items)
+        {
+            _items.Add(new SectionResultViewModel(item));
+        }
+
+        var outdated = result.Items.Count(r => r.Status == SectionUpdateStatus.Outdated);
+        var partial = result.Items.Count(r => r.SkippedFloors.Count > 0);
+        SummaryText.Text = result.Status == OperationStatus.PartialSuccess
+            ? $"共 {result.Items.Count} 个剖面，其中 {outdated} 个需要更新，{partial} 个为部分检查"
+            : $"共 {result.Items.Count} 个剖面，其中 {outdated} 个需要更新";
+        _userLogger.CheckResult(result.Items.Count, outdated);
+    }
 }
 
 /// <summary>
@@ -132,7 +153,9 @@ public sealed class SectionResultViewModel
         IsSelected = result.Status == SectionUpdateStatus.Outdated;
         StatusText = result.Status switch
         {
+            SectionUpdateStatus.UpToDate when result.SkippedFloors.Count > 0 => "△ 部分检查",
             SectionUpdateStatus.UpToDate => "✓ 最新",
+            SectionUpdateStatus.Outdated when result.SkippedFloors.Count > 0 => "⚠ 需更新（部分检查）",
             SectionUpdateStatus.Outdated => "⚠ 需更新",
             _                            => "? 未知"
         };
@@ -147,5 +170,8 @@ public sealed class SectionResultViewModel
         _result.OutdatedFloors.Count > 0
             ? string.Join(", ", _result.OutdatedFloors)
             : "-";
+    public string SkippedFloorsText =>
+        _result.SkippedFloors.Count > 0
+            ? string.Join(", ", _result.SkippedFloors)
+            : "-";
 }
-

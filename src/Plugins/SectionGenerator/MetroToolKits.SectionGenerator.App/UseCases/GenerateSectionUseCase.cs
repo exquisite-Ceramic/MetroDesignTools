@@ -21,6 +21,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
     private readonly IDrawingService _drawingService;
     private readonly ISectionSnapshotRepository _snapshotRepo;
     private readonly FloorGeometryHasher _hasher;
+    private readonly FloorAlignmentResolver _alignmentResolver;
     private readonly ILogger<GenerateSectionUseCase> _logger;
     private readonly IUserLogger _userLogger;
 
@@ -40,6 +41,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
         _drawingService = drawingService;
         _snapshotRepo   = snapshotRepo;
         _hasher         = hasher;
+        _alignmentResolver = new FloorAlignmentResolver();
         _logger         = logger;
         _userLogger     = userLogger;
     }
@@ -52,7 +54,15 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
 
         try
         {
-            var config = _configRepo.Load();
+            var config = request.FloorConfig == null
+                ? _configRepo.Load()
+                : new SectionConfig
+                {
+                    AlignmentBaseFloorName = request.FloorConfig.Name,
+                    Floors = new List<FloorConfig> { request.FloorConfig }
+                };
+
+            diagnostics.AddRange(config.RuntimeDiagnostics);
             var floors = config.Floors;
 
             if (floors.Count == 0)
@@ -73,20 +83,45 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
             _logger.LogInformation("执行 GenSection 命令，楼层数: {FloorCount}，剖切线长度: {Length:F2}",
                 floors.Count, sectionLine.Length);
 
+            var alignmentResolution = _alignmentResolver.Resolve(sectionLine, config);
+            if (alignmentResolution.FatalIssue != null)
+            {
+                return BuildFailedResult(
+                    MapAlignmentFailure(alignmentResolution.FatalIssue),
+                    diagnostics,
+                    sw);
+            }
+
             // 逐层识别构件，同时输出进度
             var floorElements = new Dictionary<string, IReadOnlyList<BuildingElement>>();
+            var participatingFloors = new List<FloorConfig>();
             currentStage = PipelineStage.ElementRecognition;
             var totalRecognizedCount = 0;
             for (int i = 0; i < floors.Count; i++)
             {
                 var floor = floors[i];
+                if (!alignmentResolution.Floors.TryGetValue(floor.Name, out var alignment))
+                    continue;
+
+                if (alignment.Issue != null)
+                {
+                    diagnostics.Add(MapAlignmentDiagnostic(alignment));
+                }
+
+                if (!alignment.CanParticipate || !alignment.SectionLine.HasValue)
+                {
+                    _logger.LogWarning("楼层 {FloorName} 因对齐配置问题未参与剖面生成", floor.Name);
+                    _userLogger.FloorSkipped(floor.Name, alignment.Issue?.Message ?? "楼层未参与剖面生成");
+                    continue;
+                }
+
+                participatingFloors.Add(floor);
                 if (floors.Count > 1)
                     _userLogger.SectionProgress(floor.Name, i + 1, floors.Count);
                 else
                     _userLogger.SectionGenerating(floor.Name);
 
-                var alignedSectionLine = FloorSectionLineTransformer.ApplyAlignment(sectionLine, floor);
-                var recognition = _elementRecognizer.RecognizeElements(alignedSectionLine, request.ViewDepth);
+                var recognition = _elementRecognizer.RecognizeElements(alignment.SectionLine.Value, request.ViewDepth);
                 floorElements[floor.Name] = recognition.Elements;
                 totalRecognizedCount += recognition.Elements.Count;
                 diagnostics.AddRange(AddFloorContext(floor.Name, recognition.Diagnostics));
@@ -116,6 +151,14 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
                 }
             }
 
+            if (participatingFloors.Count == 0)
+            {
+                return BuildFailedResult(
+                    SectionGenerationFailures.NoRecognizedElements("楼层对齐解析后没有任何楼层可以参与剖面生成。"),
+                    diagnostics,
+                    sw);
+            }
+
             if (totalRecognizedCount == 0)
             {
                 return BuildFailedResult(
@@ -127,7 +170,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
             // 多楼层堆叠计算
             currentStage = PipelineStage.SectionComposition;
             var composeSw = Stopwatch.StartNew();
-            var multiData = _multiComposer.Generate(sectionLine, viewDirection, floorElements, floors);
+            var multiData = _multiComposer.Generate(alignmentResolution.Floors, viewDirection, floorElements, floors);
             composeSw.Stop();
             _logger.LogDebug("多楼层剖切计算耗时 {ElapsedMs}ms，总高度: {TotalHeight:F2}",
                 composeSw.ElapsedMilliseconds, multiData.TotalHeight);
@@ -144,11 +187,11 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
             // 绘制块
             currentStage = PipelineStage.DrawingOutput;
             var drawResult = _drawingService.DrawMultiFloorSectionBlock(
-                multiData, request.InsertionPoint, floors);
+                multiData, request.InsertionPoint, participatingFloors);
 
             // 写入快照（含各楼层哈希）
             currentStage = PipelineStage.SnapshotPersist;
-            var snapshot = BuildSnapshot(drawResult.BlockName, request, floors, floorElements, multiData);
+            var snapshot = BuildSnapshot(drawResult.BlockName, request, participatingFloors, floorElements, multiData);
             _snapshotRepo.Save(drawResult.BlockHandle, snapshot);
             _logger.LogDebug("写入剖面快照，楼层哈希: {Hashes}",
                 string.Join(", ", snapshot.FloorSnapshots.Select(f => $"{f.FloorName}:{f.GeometryHash}")));
@@ -167,7 +210,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
                 Diagnostics = diagnostics,
                 BlockName   = drawResult.BlockName,
                 BlockHandle = drawResult.BlockHandle,
-                FloorCount  = floors.Count,
+                FloorCount  = participatingFloors.Count,
                 TotalHeight = multiData.TotalHeight,
                 GeometryData = multiData.Floors.Count == 1 ? multiData.Floors[0] : null
             };
@@ -212,7 +255,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
         string blockName,
         GenerateSectionRequest request,
         IReadOnlyList<FloorConfig> floors,
-        Dictionary<string, IReadOnlyList<BuildingElement>> floorElements,
+        IReadOnlyDictionary<string, IReadOnlyList<BuildingElement>> floorElements,
         MultiFloorSectionData multiData)
     {
         var floorSnapshots = floors.Select(f =>
@@ -289,5 +332,33 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
         }
 
         return $"识别阶段未产出可用构件。UnsupportedEntityType={unsupportedTypeCount}, NoIntersectingElements={noIntersectionCount}, ConversionFailed={conversionFailedCount}";
+    }
+
+    private static OperationFailure MapAlignmentFailure(FloorAlignmentIssue issue)
+    {
+        return issue.Kind switch
+        {
+            FloorAlignmentIssueKind.AlignmentBaseFloorMissing =>
+                SectionGenerationFailures.AlignmentBaseFloorMissing(issue.Message),
+            _ => SectionGenerationFailures.AlignmentBaseFloorInvalid(issue.Message)
+        };
+    }
+
+    private static OperationDiagnostic MapAlignmentDiagnostic(FloorAlignmentResult alignment)
+    {
+        return alignment.Issue?.Kind switch
+        {
+            FloorAlignmentIssueKind.AlignmentPointsMissing =>
+                SectionGenerationDiagnosticFactory.AlignmentPointsMissing(alignment.FloorName),
+            FloorAlignmentIssueKind.AlignmentPointsInvalid =>
+                SectionGenerationDiagnosticFactory.AlignmentPointsInvalid(
+                    alignment.FloorName,
+                    alignment.Issue!.Message,
+                    alignment.IsBaseFloor),
+            _ => SectionGenerationDiagnosticFactory.AlignmentPointsInvalid(
+                alignment.FloorName,
+                alignment.Issue?.Message ?? "未知对齐配置问题",
+                alignment.IsBaseFloor)
+        };
     }
 }

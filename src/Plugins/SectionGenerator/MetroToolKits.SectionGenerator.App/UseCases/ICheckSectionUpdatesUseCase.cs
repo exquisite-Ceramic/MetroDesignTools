@@ -1,3 +1,4 @@
+using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
 namespace MetroToolKits.SectionGenerator.App.UseCases;
@@ -7,5 +8,10 @@ namespace MetroToolKits.SectionGenerator.App.UseCases;
 /// </summary>
 public interface ICheckSectionUpdatesUseCase
 {
-    IReadOnlyList<SectionCheckResult> Execute();
+    CheckSectionUpdatesResult Execute();
+}
+
+public sealed class CheckSectionUpdatesResult : OperationResult
+{
+    public IReadOnlyList<SectionCheckResult> Items { get; init; } = Array.Empty<SectionCheckResult>();
 }

@@ -49,7 +49,7 @@ public sealed class FloorConfigCommand
 
             if (window.Tag is ("PickAlignment", FloorConfig floor))
             {
-                PickAlignmentPoints(floor);
+                PickAlignmentPoints(config, floor);
                 continue;
             }
 
@@ -65,20 +65,21 @@ public sealed class FloorConfigCommand
         _logger.LogDebug("楼层配置命令结束");
     }
 
-    private void PickAlignmentPoints(FloorConfig floor)
+    private void PickAlignmentPoints(SectionConfig config, FloorConfig floor)
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
         if (doc == null) return;
         var ed = doc.Editor;
+        var isBaseFloor = string.Equals(config.AlignmentBaseFloorName, floor.Name, StringComparison.OrdinalIgnoreCase);
 
         ed.WriteMessage($"\n=== 拾取楼层 [{floor.Name}] 对齐点 ===");
         _logger.LogDebug("开始拾取楼层 {FloorName} 对齐点", floor.Name);
 
-        var srcPoints = new List<Point3D>();
-        var dstPoints = new List<Point3D>();
+        ed.WriteMessage(isBaseFloor
+            ? "\n请在基准层平面依次拾取 3 个基准点（原点、X方向点、Y方向点）:"
+            : $"\n请在楼层 [{floor.Name}] 平面依次拾取与基准层对应的 3 个点（原点、X方向点、Y方向点）:");
 
-        // 拾取源坐标系三点（平面图中）
-        ed.WriteMessage("\n请在平面图中依次拾取 3 个基准点（原点、X方向点、Y方向点）:");
+        var points = new List<Point3D>();
         for (int i = 0; i < 3; i++)
         {
             var labels = new[] { "原点", "X方向点", "Y方向点" };
@@ -89,26 +90,17 @@ public sealed class FloorConfigCommand
                 _userLogger.CommandCancelled("FloorConfig-PickAlignment");
                 return;
             }
-            srcPoints.Add(new Point3D(result.Value.X, result.Value.Y, result.Value.Z));
+            points.Add(new Point3D(result.Value.X, result.Value.Y, result.Value.Z));
         }
 
-        // 拾取目标坐标系三点（剖面图中）
-        ed.WriteMessage("\n请在剖面图中依次拾取对应的 3 个基准点:");
-        for (int i = 0; i < 3; i++)
+        if (!FloorSectionLineTransformer.TryValidateAlignmentPoints(points, out var error))
         {
-            var labels = new[] { "原点", "X方向点", "Y方向点" };
-            var result = ed.GetPoint(new PromptPointOptions($"\n  [{i + 1}/3] 拾取{labels[i]}: "));
-            if (result.Status != PromptStatus.OK)
-            {
-                ed.WriteMessage("\n已取消拾取。");
-                _userLogger.CommandCancelled("FloorConfig-PickAlignment");
-                return;
-            }
-            dstPoints.Add(new Point3D(result.Value.X, result.Value.Y, result.Value.Z));
+            ed.WriteMessage($"\n对齐点无效，请重新拾取: {error}");
+            _logger.LogWarning("楼层 {FloorName} 对齐点校验失败: {Error}", floor.Name, error);
+            return;
         }
 
-        floor.AlignmentSourcePoints = srcPoints;
-        floor.AlignmentTargetPoints = dstPoints;
+        floor.AlignmentPoints = points;
 
         _userLogger.AlignmentPointsSet(floor.Name);
         _logger.LogInformation("楼层 {FloorName} 对齐点已设置", floor.Name);

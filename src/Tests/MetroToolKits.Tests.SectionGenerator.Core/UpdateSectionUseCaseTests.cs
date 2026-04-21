@@ -98,4 +98,53 @@ public class UpdateSectionUseCaseTests
         generateUseCase.DidNotReceive().Execute(Arg.Any<GenerateSectionRequest>());
         eraseService.DidNotReceive().EraseBlock(Arg.Any<string>());
     }
+
+    [Fact]
+    public void Execute_WhenGenerateReturnsFailure_DoesNotEraseOldBlock()
+    {
+        var snapshot = new SectionSnapshot
+        {
+            BlockName = "MK_剖面_F1",
+            SourceCutLineHandle = "71",
+            InsertionPoint = new Point3D(100, 200, 0),
+            ViewDepth = 3000
+        };
+
+        var resolvedLine = new Line3D(new Point3D(50, 0, 0), new Point3D(50, 20, 0));
+
+        var snapshotRepo = Substitute.For<ISectionSnapshotRepository>();
+        snapshotRepo.Load("85").Returns(snapshot);
+
+        var lineResolver = Substitute.For<ISectionLineResolver>();
+        lineResolver.ResolveCurrentLine("71").Returns(resolvedLine);
+
+        var generateUseCase = Substitute.For<IGenerateSectionUseCase>();
+        generateUseCase.Execute(Arg.Any<GenerateSectionRequest>())
+            .Returns(new GenerateSectionResult
+            {
+                Status = Foundation.Core.Diagnostics.OperationStatus.Failed,
+                Failure = new Foundation.Core.Diagnostics.OperationFailure
+                {
+                    Code = "SectionGenerator.FloorConfigLoad.AlignmentBaseFloorInvalid",
+                    UserMessage = "基准层配置无效"
+                }
+            });
+
+        var eraseService = Substitute.For<IBlockEraseService>();
+        var userLogger = Substitute.For<IUserLogger>();
+
+        var useCase = new UpdateSectionUseCase(
+            snapshotRepo,
+            lineResolver,
+            generateUseCase,
+            eraseService,
+            NullLogger<UpdateSectionUseCase>.Instance,
+            userLogger);
+
+        var result = useCase.Execute(new UpdateSectionRequest { BlockHandle = "85" });
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("基准层配置无效");
+        eraseService.DidNotReceive().EraseBlock(Arg.Any<string>());
+    }
 }

@@ -101,9 +101,7 @@ public sealed class SectionGeneratorHostAcceptanceCommand
 
             var currentConfig = _floorConfigRepository.Load();
             var currentFloor = currentConfig.Floors.Single(floor => floor.Name == persistedSnapshot.FloorSnapshots[0].FloorName);
-            var currentSectionLine = FloorSectionLineTransformer.ApplyAlignment(
-                new Line3D(fixture.CutLineStart, fixture.CutLineEnd),
-                currentFloor);
+            var currentSectionLine = new Line3D(fixture.CutLineStart, fixture.CutLineEnd);
             var currentHash = _floorGeometryHasher.ComputeHash(
                 _elementRecognizer.RecognizeElements(currentSectionLine, 3000).Elements);
             WriteMessage(
@@ -192,6 +190,7 @@ public sealed class SectionGeneratorHostAcceptanceCommand
 
     private static SectionConfig BuildAcceptanceConfig() => new()
     {
+        AlignmentBaseFloorName = "F1",
         Floors = new List<FloorConfig>
         {
             new()
@@ -275,13 +274,16 @@ public sealed class SectionGeneratorHostAcceptanceCommand
         throw new InvalidOperationException("No source-aware section entity was found in the generated block.");
     }
 
-    private static SectionCheckResult FindCheckResult(string blockHandle, IReadOnlyList<SectionCheckResult> results)
+    private static SectionCheckResult FindCheckResult(string blockHandle, CheckSectionUpdatesResult result)
     {
-        var result = results.FirstOrDefault(item =>
-            string.Equals(item.BlockHandle, blockHandle, StringComparison.OrdinalIgnoreCase));
+        Ensure(result.Status != Foundation.Core.Diagnostics.OperationStatus.Failed,
+            $"CheckSectionUpdates failed: {result.Failure?.UserMessage ?? "Unknown failure"}");
 
-        Ensure(result != null, $"CheckSectionUpdates did not return block {blockHandle}.");
-        return result!;
+        var item = result.Items.FirstOrDefault(checkItem =>
+            string.Equals(checkItem.BlockHandle, blockHandle, StringComparison.OrdinalIgnoreCase));
+
+        Ensure(item != null, $"CheckSectionUpdates did not return block {blockHandle}.");
+        return item!;
     }
 
     private static string DescribeGenerateFailure(GenerateSectionResult result)

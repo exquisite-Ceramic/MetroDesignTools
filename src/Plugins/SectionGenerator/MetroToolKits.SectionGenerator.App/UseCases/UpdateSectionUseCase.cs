@@ -93,6 +93,14 @@ public sealed class UpdateSectionUseCase : IUpdateSectionUseCase
                 return new UpdateSectionResult { Success = false, ErrorMessage = genResult.ErrorMessage };
             }
 
+            if (genResult.Status == Foundation.Core.Diagnostics.OperationStatus.PartialSuccess)
+            {
+                _logger.LogWarning(
+                    "剖面块 {BlockName} 更新时存在 {DiagnosticCount} 条告警",
+                    snapshot.BlockName,
+                    genResult.Diagnostics.Count);
+            }
+
             // 3. 删除旧块
             _blockEraseService.EraseBlock(request.BlockHandle);
 

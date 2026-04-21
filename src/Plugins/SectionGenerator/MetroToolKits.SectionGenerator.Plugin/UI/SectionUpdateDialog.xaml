@@ -29,8 +29,9 @@
             <DataGrid.Columns>
                 <DataGridCheckBoxColumn Header="" Width="30" Binding="{Binding IsSelected}"/>
                 <DataGridTextColumn Header="剖面名称" Width="*" Binding="{Binding BlockName}"/>
-                <DataGridTextColumn Header="状态" Width="80" Binding="{Binding StatusText}"/>
+                <DataGridTextColumn Header="状态" Width="120" Binding="{Binding StatusText}"/>
                 <DataGridTextColumn Header="受影响楼层" Width="150" Binding="{Binding OutdatedFloorsText}"/>
+                <DataGridTextColumn Header="跳过楼层" Width="150" Binding="{Binding SkippedFloorsText}"/>
             </DataGrid.Columns>
         </DataGrid>
 

@@ -77,6 +77,52 @@ public class Transform3DTests
         AssertPointApprox(t.Transform(new Point3D(1, 0, 0)), new Point3D(6, 5, 0));
     }
 
+    [Fact]
+    public void AlignPoints_NonZeroSourceOrigin_UsesSourceBasisCorrectly()
+    {
+        var srcO = new Point3D(10, 10, 0);
+        var srcX = new Point3D(20, 10, 0);
+        var srcY = new Point3D(10, 20, 0);
+        var dstO = new Point3D(100, 200, 0);
+        var dstX = new Point3D(110, 200, 0);
+        var dstY = new Point3D(100, 210, 0);
+
+        var t = Transform3D.AlignPoints(srcO, srcX, srcY, dstO, dstX, dstY);
+
+        AssertPointApprox(t.Transform(srcO), dstO);
+        AssertPointApprox(t.Transform(new Point3D(15, 10, 0)), new Point3D(105, 200, 0));
+    }
+
+    [Fact]
+    public void AlignPoints_RotationMapping_RotatesCorrectly()
+    {
+        var srcO = Point3D.Origin;
+        var srcX = new Point3D(1, 0, 0);
+        var srcY = new Point3D(0, 1, 0);
+        var dstO = Point3D.Origin;
+        var dstX = new Point3D(0, 1, 0);
+        var dstY = new Point3D(-1, 0, 0);
+
+        var t = Transform3D.AlignPoints(srcO, srcX, srcY, dstO, dstX, dstY);
+
+        AssertPointApprox(t.Transform(new Point3D(2, 0, 0)), new Point3D(0, 2, 0));
+        AssertPointApprox(t.Transform(new Point3D(0, 3, 0)), new Point3D(-3, 0, 0));
+    }
+
+    [Fact]
+    public void AlignPoints_CollinearPoints_ThrowsArgumentException()
+    {
+        var act = () => Transform3D.AlignPoints(
+            Point3D.Origin,
+            new Point3D(1, 0, 0),
+            new Point3D(2, 0, 0),
+            Point3D.Origin,
+            new Point3D(1, 0, 0),
+            new Point3D(0, 1, 0));
+
+        act.Should().Throw<ArgumentException>();
+    }
+
     // ── Multiply ──────────────────────────────────────────────────────────────
 
     [Fact]

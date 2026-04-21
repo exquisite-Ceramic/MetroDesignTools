@@ -52,24 +52,40 @@ public sealed class Transform3D
     public static Transform3D AlignPoints(Point3D srcOrigin, Point3D srcX, Point3D srcY,
         Point3D dstOrigin, Point3D dstX, Point3D dstY)
     {
-        // 计算源坐标系
-        var srcXAxis = new Vector3D(srcX.X - srcOrigin.X, srcX.Y - srcOrigin.Y, srcX.Z - srcOrigin.Z).Normalized;
-        var srcYAxis = new Vector3D(srcY.X - srcOrigin.X, srcY.Y - srcOrigin.Y, srcY.Z - srcOrigin.Z).Normalized;
-        var srcZAxis = Vector3D.Cross(srcXAxis, srcYAxis).Normalized;
+        var (srcXAxis, srcYAxis, srcZAxis) = BuildBasis(srcOrigin, srcX, srcY);
+        var (dstXAxis, dstYAxis, dstZAxis) = BuildBasis(dstOrigin, dstX, dstY);
 
-        // 计算目标坐标系
-        var dstXAxis = new Vector3D(dstX.X - dstOrigin.X, dstX.Y - dstOrigin.Y, dstX.Z - dstOrigin.Z).Normalized;
-        var dstYAxis = new Vector3D(dstY.X - dstOrigin.X, dstY.Y - dstOrigin.Y, dstY.Z - dstOrigin.Z).Normalized;
-        var dstZAxis = Vector3D.Cross(dstXAxis, dstYAxis).Normalized;
+        var srcBasis = new[,]
+        {
+            { srcXAxis.X, srcYAxis.X, srcZAxis.X },
+            { srcXAxis.Y, srcYAxis.Y, srcZAxis.Y },
+            { srcXAxis.Z, srcYAxis.Z, srcZAxis.Z }
+        };
 
-        // 构建变换矩阵
+        var dstBasis = new[,]
+        {
+            { dstXAxis.X, dstYAxis.X, dstZAxis.X },
+            { dstXAxis.Y, dstYAxis.Y, dstZAxis.Y },
+            { dstXAxis.Z, dstYAxis.Z, dstZAxis.Z }
+        };
+
+        var srcBasisInverse = Transpose(srcBasis);
+        var rotation = Multiply3x3(dstBasis, srcBasisInverse);
+        var srcOriginVector = new[] { srcOrigin.X, srcOrigin.Y, srcOrigin.Z };
+        var rotatedSourceOrigin = Multiply3x3Vector(rotation, srcOriginVector);
+
         var t = new Transform3D();
-        t._matrix[0, 0] = dstXAxis.X; t._matrix[0, 1] = dstYAxis.X; t._matrix[0, 2] = dstZAxis.X;
-        t._matrix[1, 0] = dstXAxis.Y; t._matrix[1, 1] = dstYAxis.Y; t._matrix[1, 2] = dstZAxis.Y;
-        t._matrix[2, 0] = dstXAxis.Z; t._matrix[2, 1] = dstYAxis.Z; t._matrix[2, 2] = dstZAxis.Z;
-        t._matrix[0, 3] = dstOrigin.X;
-        t._matrix[1, 3] = dstOrigin.Y;
-        t._matrix[2, 3] = dstOrigin.Z;
+        for (int row = 0; row < 3; row++)
+        {
+            for (int col = 0; col < 3; col++)
+            {
+                t._matrix[row, col] = rotation[row, col];
+            }
+        }
+
+        t._matrix[0, 3] = dstOrigin.X - rotatedSourceOrigin[0];
+        t._matrix[1, 3] = dstOrigin.Y - rotatedSourceOrigin[1];
+        t._matrix[2, 3] = dstOrigin.Z - rotatedSourceOrigin[2];
 
         return t;
     }
@@ -112,6 +128,85 @@ public sealed class Transform3D
                 result._matrix[i, j] = sum;
             }
         }
+        return result;
+    }
+
+    private static (Vector3D XAxis, Vector3D YAxis, Vector3D ZAxis) BuildBasis(
+        Point3D origin,
+        Point3D xPoint,
+        Point3D yPoint)
+    {
+        const double tolerance = 1e-9;
+
+        var xVector = new Vector3D(
+            xPoint.X - origin.X,
+            xPoint.Y - origin.Y,
+            xPoint.Z - origin.Z);
+
+        var rawYVector = new Vector3D(
+            yPoint.X - origin.X,
+            yPoint.Y - origin.Y,
+            yPoint.Z - origin.Z);
+
+        if (xVector.Length <= tolerance || rawYVector.Length <= tolerance)
+            throw new ArgumentException("对齐点无效：原点到方向点的距离必须大于 0。");
+
+        var xAxis = xVector.Normalized;
+        var zAxis = Vector3D.Cross(xAxis, rawYVector);
+        if (zAxis.Length <= tolerance)
+            throw new ArgumentException("对齐点无效：三点不能共线。");
+
+        zAxis = zAxis.Normalized;
+        var yAxis = Vector3D.Cross(zAxis, xAxis).Normalized;
+
+        return (xAxis, yAxis, zAxis);
+    }
+
+    private static double[,] Transpose(double[,] matrix)
+    {
+        var result = new double[3, 3];
+        for (int row = 0; row < 3; row++)
+        {
+            for (int col = 0; col < 3; col++)
+            {
+                result[row, col] = matrix[col, row];
+            }
+        }
+
+        return result;
+    }
+
+    private static double[,] Multiply3x3(double[,] left, double[,] right)
+    {
+        var result = new double[3, 3];
+        for (int row = 0; row < 3; row++)
+        {
+            for (int col = 0; col < 3; col++)
+            {
+                double sum = 0;
+                for (int k = 0; k < 3; k++)
+                {
+                    sum += left[row, k] * right[k, col];
+                }
+
+                result[row, col] = sum;
+            }
+        }
+
+        return result;
+    }
+
+    private static double[] Multiply3x3Vector(double[,] matrix, double[] vector)
+    {
+        var result = new double[3];
+        for (int row = 0; row < 3; row++)
+        {
+            result[row] =
+                matrix[row, 0] * vector[0] +
+                matrix[row, 1] * vector[1] +
+                matrix[row, 2] * vector[2];
+        }
+
         return result;
     }
 }
