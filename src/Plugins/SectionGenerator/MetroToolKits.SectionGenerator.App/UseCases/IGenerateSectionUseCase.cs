@@ -1,4 +1,5 @@
 using MetroToolKits.Foundation.Core.Geometry;
+using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
 namespace MetroToolKits.SectionGenerator.App.UseCases;
@@ -30,13 +31,14 @@ public sealed class GenerateSectionRequest
 /// 剖面生成结果
 /// </summary>
 public sealed class GenerateSectionResult
+    : OperationResult
 {
-    public bool    Success      { get; set; }
+    public bool Success => Status != OperationStatus.Failed;
     public string? BlockName    { get; set; }
     public string? BlockHandle  { get; set; }
-    public string? ErrorMessage { get; set; }
     public int     FloorCount   { get; set; }
     public double  TotalHeight  { get; set; }
+    public string? ErrorMessage => Failure?.UserMessage;
 
     /// <summary>兼容旧代码（单层）</summary>
     public SectionGeometryData? GeometryData { get; set; }

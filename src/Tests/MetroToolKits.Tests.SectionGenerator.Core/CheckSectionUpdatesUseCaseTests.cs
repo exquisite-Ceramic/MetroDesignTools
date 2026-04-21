@@ -82,7 +82,7 @@ public class CheckSectionUpdatesUseCaseTests
 
         var recognizer = Substitute.For<IElementRecognizer>();
         recognizer.RecognizeElements(Arg.Any<Line3D>(), Arg.Any<double>())
-            .Returns(elements);
+            .Returns(new ElementRecognitionResult { Elements = elements });
 
         var configRepo = Substitute.For<IFloorConfigRepository>();
         configRepo.Load().Returns(new SectionConfig
@@ -123,7 +123,7 @@ public class CheckSectionUpdatesUseCaseTests
 
         var recognizer = Substitute.For<IElementRecognizer>();
         recognizer.RecognizeElements(Arg.Any<Line3D>(), Arg.Any<double>())
-            .Returns(newElements);
+            .Returns(new ElementRecognitionResult { Elements = newElements });
 
         var configRepo = Substitute.For<IFloorConfigRepository>();
         configRepo.Load().Returns(new SectionConfig
@@ -207,7 +207,7 @@ public class CheckSectionUpdatesUseCaseTests
 
         var recognizer = Substitute.For<IElementRecognizer>();
         recognizer.RecognizeElements(Arg.Any<Line3D>(), Arg.Any<double>())
-            .Returns(Array.Empty<BuildingElement>());
+            .Returns(new ElementRecognitionResult());
 
         var configRepo = Substitute.For<IFloorConfigRepository>();
         configRepo.Load().Returns(new SectionConfig
@@ -246,22 +246,74 @@ public class CheckSectionUpdatesUseCaseTests
             3000);
     }
 
+    [Fact]
+    public void Execute_PrefersResolvedCurrentSourceLine_WhenCutLineHandleCanBeResolved()
+    {
+        var expectedLine = new Line3D(new Point3D(50, 0, 0), new Point3D(50, 20, 0));
+        var elements = new[] { MakeWall() };
+        var hash = new FloorGeometryHasher().ComputeHash(elements);
+
+        var snapshot = new SectionSnapshot
+        {
+            BlockName = "MK_剖面_F1",
+            SourceCutLineHandle = "71",
+            CutLineStart = new Point3D(0, 0, 0),
+            CutLineEnd = new Point3D(0, 20, 0),
+            ViewDepth = 3000,
+            FloorSnapshots = new List<FloorSnapshot>
+            {
+                new() { FloorName = "F1", GeometryHash = hash, ElementCount = 1 }
+            }
+        };
+
+        var snapshotRepo = Substitute.For<ISectionSnapshotRepository>();
+        snapshotRepo.FindAllSectionBlockHandles().Returns(new[] { "H1" });
+        snapshotRepo.Load("H1").Returns(snapshot);
+
+        var lineResolver = Substitute.For<ISectionLineResolver>();
+        lineResolver.ResolveCurrentLine("71").Returns(expectedLine);
+
+        var recognizer = Substitute.For<IElementRecognizer>();
+        recognizer.RecognizeElements(
+                Arg.Is<Line3D>(line => line.Start.Equals(expectedLine.Start) && line.End.Equals(expectedLine.End)),
+                3000)
+            .Returns(new ElementRecognitionResult { Elements = elements });
+
+        var configRepo = Substitute.For<IFloorConfigRepository>();
+        configRepo.Load().Returns(new SectionConfig
+        {
+            Floors = new List<FloorConfig> { DefaultFloor("F1") }
+        });
+
+        var useCase = BuildUseCase(snapshotRepo, recognizer, configRepo, lineResolver);
+        var results = useCase.Execute();
+
+        results.Should().HaveCount(1);
+        results[0].Status.Should().Be(SectionUpdateStatus.UpToDate);
+        recognizer.Received(1).RecognizeElements(
+            Arg.Is<Line3D>(line => line.Start.Equals(expectedLine.Start) && line.End.Equals(expectedLine.End)),
+            3000);
+    }
+
     // ── 辅助 ──────────────────────────────────────────────────────────────────
 
     private static CheckSectionUpdatesUseCase BuildUseCase(
         ISectionSnapshotRepository? snapshotRepo = null,
         IElementRecognizer? recognizer = null,
-        IFloorConfigRepository? configRepo = null)
+        IFloorConfigRepository? configRepo = null,
+        ISectionLineResolver? lineResolver = null)
     {
         snapshotRepo ??= Substitute.For<ISectionSnapshotRepository>();
         recognizer   ??= Substitute.For<IElementRecognizer>();
         configRepo   ??= Substitute.For<IFloorConfigRepository>();
+        lineResolver ??= Substitute.For<ISectionLineResolver>();
 
         if (configRepo.Load() == null!)
             configRepo.Load().Returns(new SectionConfig());
 
         return new CheckSectionUpdatesUseCase(
             snapshotRepo,
+            lineResolver,
             recognizer,
             configRepo,
             new FloorGeometryHasher(),

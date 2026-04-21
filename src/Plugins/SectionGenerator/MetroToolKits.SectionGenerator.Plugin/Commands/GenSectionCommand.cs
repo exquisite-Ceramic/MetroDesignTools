@@ -3,7 +3,10 @@ using System.Diagnostics;
 using Autodesk.AutoCAD.EditorInput;
 using Microsoft.Extensions.Logging;
 using MetroToolKits.Bootstrap;
+using MetroToolKits.Bootstrap.Logging;
+using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
+using MetroToolKits.SectionGenerator.App.Diagnostics;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 
@@ -18,15 +21,18 @@ public sealed class GenSectionCommand
     private readonly IGenerateSectionUseCase _useCase;
     private readonly ILogger<GenSectionCommand> _logger;
     private readonly IUserLogger _userLogger;
+    private readonly OperationFeedbackPresenter _feedbackPresenter;
 
     public GenSectionCommand(
         IGenerateSectionUseCase useCase,
         ILogger<GenSectionCommand> logger,
-        IUserLogger userLogger)
+        IUserLogger userLogger,
+        OperationFeedbackPresenter feedbackPresenter)
     {
-        _useCase    = useCase;
-        _logger     = logger;
+        _useCase = useCase;
+        _logger = logger;
         _userLogger = userLogger;
+        _feedbackPresenter = feedbackPresenter;
     }
 
     public void Execute()
@@ -56,7 +62,10 @@ public sealed class GenSectionCommand
             var ent = tr.GetObject(lineResult.ObjectId, Autodesk.AutoCAD.DatabaseServices.OpenMode.ForRead);
             if (ent is not Autodesk.AutoCAD.DatabaseServices.Line cadLine)
             {
-                _userLogger.CommandFailed("GenSection", "请选择直线实体");
+                _feedbackPresenter.PresentFailure(
+                    "GenSection",
+                    SectionGenerationFailures.InvalidSectionLine(
+                        $"所选对象类型为 {ent?.GetType().Name ?? "Unknown"}。"));
                 tr.Abort();
                 return;
             }
@@ -99,16 +108,42 @@ public sealed class GenSectionCommand
 
         sw.Stop();
 
-        if (result.Success)
+        if (result.Status == OperationStatus.Failed)
         {
-            _userLogger.SectionCreated(result.BlockName!, result.FloorCount, sw.ElapsedMilliseconds);
-            _logger.LogInformation("剖面生成完成，块名称: {BlockName}，楼层数: {FloorCount}，耗时: {ElapsedMs}ms",
-                result.BlockName, result.FloorCount, sw.ElapsedMilliseconds);
+            var hasIntersectionWarning = result.Diagnostics.Any(d =>
+                d.Code == SectionGenerationErrorCodes.NoIntersectingElements);
+
+            _feedbackPresenter.PresentFailure(
+                "GenSection",
+                result.Failure!,
+                result.Diagnostics,
+                useSectionLineInvalid: hasIntersectionWarning);
+
+            return;
+        }
+
+        _userLogger.SectionCreated(result.BlockName!, result.FloorCount, sw.ElapsedMilliseconds);
+
+        if (result.Status == OperationStatus.PartialSuccess)
+        {
+            var warningCount = result.Diagnostics.Count(d =>
+                d.Level == DiagnosticLevel.Warning || d.Level == DiagnosticLevel.Error);
+
+            _feedbackPresenter.PresentPartialSuccess(
+                "GenSection",
+                $"剖面已生成，但存在 {warningCount} 条告警，详见日志",
+                result.Diagnostics);
         }
         else
         {
-            _userLogger.CommandFailed("GenSection", "剖面生成失败，请检查构件识别结果", result.ErrorMessage);
-            _logger.LogError("GenSection 失败: {Error}", result.ErrorMessage);
+            _feedbackPresenter.LogDiagnostics("GenSection", result.Diagnostics);
         }
+
+        _logger.LogInformation(
+            "剖面生成完成，状态: {Status}，块名称: {BlockName}，楼层数: {FloorCount}，耗时: {ElapsedMs}ms",
+            result.Status,
+            result.BlockName,
+            result.FloorCount,
+            sw.ElapsedMilliseconds);
     }
 }

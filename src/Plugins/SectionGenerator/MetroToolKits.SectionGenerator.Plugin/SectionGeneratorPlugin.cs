@@ -58,6 +58,7 @@ public class SectionGeneratorPlugin : IPlugin
 
         // 构件识别器
         services.AddSingleton<IElementRecognizer, LayerBasedElementRecognizer>();
+        services.AddSingleton<ISectionLineResolver, CadSectionLineResolver>();
 
         // Core 层
         services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.SectionComposer>();
@@ -96,6 +97,7 @@ public class SectionGeneratorPlugin : IPlugin
         services.AddTransient<ConvertRegionElementsCommand>();
         services.AddTransient<RevertElementConversionCommand>();
         services.AddTransient<SectionGeneratorSelfTestCommand>();
+        services.AddTransient<SectionGeneratorHostAcceptanceCommand>();
         services.AddTransient<OpenLayerMappingCommand>();
     }
 

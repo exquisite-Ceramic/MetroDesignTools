@@ -1,7 +1,9 @@
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Geometry;
+using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.App.Abstractions;
+using MetroToolKits.SectionGenerator.App.Diagnostics;
 using MetroToolKits.SectionGenerator.Core.Sections;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 
@@ -33,56 +35,68 @@ public sealed class CadDrawingService : IDrawingService
     public DrawSectionBlockResult DrawMultiFloorSectionBlock(MultiFloorSectionData multiData, Point3D insertionPoint,
         IReadOnlyList<FloorConfig> floors)
     {
-        var doc = Application.DocumentManager.MdiActiveDocument
-            ?? throw new InvalidOperationException("无活动文档");
+        var doc = Application.DocumentManager.MdiActiveDocument;
+        if (doc == null)
+            throw CreateInfrastructureException("无活动文档，无法输出剖面块。");
 
-        var db        = doc.Database;
-        var blockName = $"MK_剖面_{string.Join("_", floors.Select(f => f.Name))}_{DateTime.Now:yyyyMMddTHHmmss}";
-
-        using var lockDoc = doc.LockDocument();
-        using var tr      = db.TransactionManager.StartTransaction();
-
-        EnsureLayers(tr, db);
-        EnsureRegApp(tr, db, SectionSnapshotAppName);
-        EnsureRegApp(tr, db, SectionSourceRefAppName);
-
-        var bt       = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForWrite);
-        var blockDef = new BlockTableRecord { Name = blockName, Origin = Point3d.Origin };
-        bt.Add(blockDef);
-        tr.AddNewlyCreatedDBObject(blockDef, true);
-
-        foreach (var floorData in multiData.Floors)
+        try
         {
-            foreach (var element in floorData.Elements)
-            {
-                foreach (var line in element.CutLines)
-                    AddSourceAwareLine(blockDef, tr, line, "MK_剖切线", LineWeight.LineWeight050, element);
+            var db        = doc.Database;
 
-                foreach (var line in element.SightLines)
-                    AddSourceAwareLine(blockDef, tr, line, "MK_看线", LineWeight.LineWeight025, element);
+            using var lockDoc = doc.LockDocument();
+            using var tr      = db.TransactionManager.StartTransaction();
+
+            EnsureLayers(tr, db);
+            EnsureRegApp(tr, db, SectionSnapshotAppName);
+            EnsureRegApp(tr, db, SectionSourceRefAppName);
+
+            var bt       = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForWrite);
+            var blockName = GenerateUniqueBlockName(bt, floors);
+            var blockDef = new BlockTableRecord { Name = blockName, Origin = Point3d.Origin };
+            bt.Add(blockDef);
+            tr.AddNewlyCreatedDBObject(blockDef, true);
+
+            foreach (var floorData in multiData.Floors)
+            {
+                foreach (var element in floorData.Elements)
+                {
+                    foreach (var line in element.CutLines)
+                        AddSourceAwareLine(blockDef, tr, line, "MK_剖切线", LineWeight.LineWeight050, element);
+
+                    foreach (var line in element.SightLines)
+                        AddSourceAwareLine(blockDef, tr, line, "MK_看线", LineWeight.LineWeight025, element);
+                }
+
+                foreach (var line in floorData.SlabLines)
+                    AddLine(blockDef, tr, line, "MK_剖切线", LineWeight.LineWeight050);
             }
 
-            foreach (var line in floorData.SlabLines)
-                AddLine(blockDef, tr, line, "MK_剖切线", LineWeight.LineWeight050);
+            DrawFloorAnnotations(blockDef, tr, multiData, floors);
+
+            var ms       = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
+            var blockRef = new BlockReference(
+                new Point3d(insertionPoint.X, insertionPoint.Y, insertionPoint.Z),
+                blockDef.ObjectId);
+            ms.AppendEntity(blockRef);
+            tr.AddNewlyCreatedDBObject(blockRef, true);
+
+            AttachSnapshotXData(blockRef, tr, multiData, db);
+
+            tr.Commit();
+            return new DrawSectionBlockResult
+            {
+                BlockName = blockName,
+                BlockHandle = blockRef.Handle.ToString()
+            };
         }
-
-        DrawFloorAnnotations(blockDef, tr, multiData, floors);
-
-        var ms       = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
-        var blockRef = new BlockReference(
-            new Point3d(insertionPoint.X, insertionPoint.Y, insertionPoint.Z),
-            blockDef.ObjectId);
-        ms.AppendEntity(blockRef);
-        tr.AddNewlyCreatedDBObject(blockRef, true);
-
-        AttachSnapshotXData(blockRef, tr, multiData, db);
-
-        tr.Commit();
-        return new DrawSectionBlockResult
+        catch (InfrastructureException)
         {
-            BlockName = blockName,
-            BlockHandle = blockRef.Handle.ToString()
-        };
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw CreateInfrastructureException($"剖面绘制失败: {ex.Message}", ex);
+        }
     }
 
     // ── 标注 ──────────────────────────────────────────────────────────────────
@@ -145,6 +159,22 @@ public sealed class CadDrawingService : IDrawingService
             lt.Add(layer);
             tr.AddNewlyCreatedDBObject(layer, true);
         }
+    }
+
+    private static string GenerateUniqueBlockName(BlockTable blockTable, IReadOnlyList<FloorConfig> floors)
+    {
+        var floorPart = string.Join("_", floors.Select(f => f.Name));
+        var baseName = $"MK_剖面_{floorPart}_{DateTime.Now:yyyyMMddTHHmmssfff}";
+        var candidate = baseName;
+        var suffix = 1;
+
+        while (blockTable.Has(candidate))
+        {
+            candidate = $"{baseName}_{suffix}";
+            suffix++;
+        }
+
+        return candidate;
     }
 
     private static void AddLine(BlockTableRecord btr, Transaction tr,
@@ -210,5 +240,10 @@ public sealed class CadDrawingService : IDrawingService
         var rec = new RegAppTableRecord { Name = appName };
         rat.Add(rec);
         tr.AddNewlyCreatedDBObject(rec, true);
+    }
+
+    private static InfrastructureException CreateInfrastructureException(string technicalMessage, Exception? innerException = null)
+    {
+        return new InfrastructureException(SectionGenerationFailures.DrawFailed(technicalMessage, innerException));
     }
 }

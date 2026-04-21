@@ -17,4 +17,5 @@ public static class SectionGeneratorCommandNames
     public const string RevertAllConversions = "RevertAllConversions";
     public const string LayerMapping = "LayerMapping";
     public const string SectionSelfTest = "SectionSelfTest";
+    public const string SectionHostAcceptance = "SectionHostAcceptance";
 }

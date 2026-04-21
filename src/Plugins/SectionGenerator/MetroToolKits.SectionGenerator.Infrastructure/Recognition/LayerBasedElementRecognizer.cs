@@ -1,7 +1,9 @@
 using Autodesk.AutoCAD.DatabaseServices;
 using Microsoft.Extensions.Logging;
+using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.App.Abstractions;
+using MetroToolKits.SectionGenerator.App.Diagnostics;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 using BuildingColumn = MetroToolKits.Foundation.Building.Elements.Column;
 using BuildingWall   = MetroToolKits.Foundation.Building.Elements.Wall;
@@ -29,41 +31,97 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
         _logger = logger;
     }
 
-    public IReadOnlyList<BuildingElement> RecognizeElements(Line3D sectionLine, double viewDepth)
+    public ElementRecognitionResult RecognizeElements(Line3D sectionLine, double viewDepth)
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
-        if (doc == null) return Array.Empty<BuildingElement>();
+        if (doc == null)
+            throw CreateInfrastructureException("无活动文档，无法执行构件识别。");
 
-        var db = doc.Database;
-        var result = new List<BuildingElement>();
-        var viewDirection = ComputeViewDirection(sectionLine);
-
-        using var tr = db.TransactionManager.StartTransaction();
-        var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-        var btr = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
-
-        int scannedCount = 0;
-        foreach (var objId in btr)
+        try
         {
-            scannedCount++;
-            if (tr.GetObject(objId, OpenMode.ForRead) is not Entity entity) continue;
+            var db = doc.Database;
+            var elements = new List<BuildingElement>();
+            var diagnostics = new List<OperationDiagnostic>();
+            var viewDirection = ComputeViewDirection(sectionLine);
+            var matchedLayerCount = 0;
+            var intersectingElementCount = 0;
 
-            var elementType = GetElementTypeFromLayer(entity.Layer);
-            if (elementType == null) continue;
+            _logger.LogDebug("当前识别器暂未使用 viewDepth 过滤，收到视图深度 {ViewDepth}", viewDepth);
 
-            var element = ConvertToElement(entity, elementType);
-            if (element == null) continue;
-            if (!IntersectsSection(element, sectionLine, viewDirection)) continue;
+            using var tr = db.TransactionManager.StartTransaction();
+            var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+            var btr = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
 
-            result.Add(element);
-            _logger.LogTrace("识别构件: Handle={Handle}, Type={Type}, Layer={Layer}",
-                entity.Handle, elementType, entity.Layer);
+            var scannedCount = 0;
+            foreach (var objId in btr)
+            {
+                scannedCount++;
+                if (tr.GetObject(objId, OpenMode.ForRead) is not Entity entity) continue;
+
+                var elementType = GetElementTypeFromLayer(entity.Layer);
+                if (elementType == null) continue;
+
+                matchedLayerCount++;
+                var element = ConvertToElement(entity, elementType, diagnostics);
+                if (element == null) continue;
+
+                bool intersectsSection;
+                try
+                {
+                    intersectsSection = IntersectsSection(element, sectionLine, viewDirection);
+                }
+                catch (Exception ex)
+                {
+                    diagnostics.Add(SectionGenerationDiagnosticFactory.ConversionFailed(
+                        nameof(LayerBasedElementRecognizer),
+                        entity.Handle.ToString(),
+                        elementType,
+                        $"剖切求交失败: {ex.Message}"));
+                    continue;
+                }
+
+                if (!intersectsSection)
+                {
+                    diagnostics.Add(SectionGenerationDiagnosticFactory.NoIntersectingElements(
+                        nameof(LayerBasedElementRecognizer),
+                        entity.Handle.ToString(),
+                        elementType,
+                        entity.Layer));
+                    continue;
+                }
+
+                intersectingElementCount++;
+                elements.Add(element);
+                _logger.LogTrace("识别构件: Handle={Handle}, Type={Type}, Layer={Layer}",
+                    entity.Handle, elementType, entity.Layer);
+            }
+
+            tr.Commit();
+            _logger.LogDebug(
+                "扫描 {ScannedCount} 个实体，在剖切线附近识别到 {ElementCount} 个构件，命中支持图层 {MatchedLayerCount} 个，视图深度 {ViewDepth}",
+                scannedCount,
+                elements.Count,
+                matchedLayerCount,
+                viewDepth);
+
+            return new ElementRecognitionResult
+            {
+                Elements = elements,
+                Diagnostics = diagnostics,
+                ScannedEntityCount = scannedCount,
+                MatchedLayerCount = matchedLayerCount,
+                IntersectingElementCount = intersectingElementCount
+            };
         }
-
-        tr.Commit();
-        _logger.LogDebug("扫描 {ScannedCount} 个实体，在剖切线附近识别到 {ElementCount} 个构件，视图深度 {ViewDepth}",
-            scannedCount, result.Count, viewDepth);
-        return result;
+        catch (InfrastructureException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "构件识别失败");
+            throw CreateInfrastructureException($"构件识别过程中发生异常: {ex.Message}", ex);
+        }
     }
 
     private static string? GetElementTypeFromLayer(string layerName)
@@ -74,19 +132,42 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
         return null;
     }
 
-    private static BuildingElement? ConvertToElement(Entity entity, string elementType)
+    private static BuildingElement? ConvertToElement(
+        Entity entity,
+        string elementType,
+        ICollection<OperationDiagnostic> diagnostics)
     {
         try
         {
-            return elementType switch
+            BuildingElement? converted = elementType switch
             {
                 "Wall"   => ConvertToWall(entity),
                 "Column" => ConvertToColumn(entity),
                 "Slab"   => ConvertToSlab(entity),
                 _        => null
             };
+
+            if (converted != null)
+                return converted;
+
+            diagnostics.Add(SectionGenerationDiagnosticFactory.UnsupportedEntityType(
+                nameof(LayerBasedElementRecognizer),
+                entity.Handle.ToString(),
+                entity.Layer,
+                entity.GetType().Name,
+                GetExpectedEntityTypeName(elementType)));
+
+            return null;
         }
-        catch { return null; }
+        catch (Exception ex)
+        {
+            diagnostics.Add(SectionGenerationDiagnosticFactory.ConversionFailed(
+                nameof(LayerBasedElementRecognizer),
+                entity.Handle.ToString(),
+                elementType,
+                ex.Message));
+            return null;
+        }
     }
 
     private static bool IntersectsSection(BuildingElement element, Line3D sectionLine, Vector3D viewDirection)
@@ -98,6 +179,17 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
     {
         var direction = sectionLine.Direction.Normalized;
         return new Vector3D(-direction.Y, direction.X, 0);
+    }
+
+    private static string GetExpectedEntityTypeName(string elementType)
+    {
+        return elementType switch
+        {
+            "Wall" => nameof(Line),
+            "Column" => nameof(Circle),
+            "Slab" => nameof(Polyline),
+            _ => "Unknown"
+        };
     }
 
     private static BuildingWall? ConvertToWall(Entity entity)
@@ -147,5 +239,19 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
             Thickness    = 200,
             TopElevation = 0
         };
+    }
+
+    private static InfrastructureException CreateInfrastructureException(string technicalMessage, Exception? innerException = null)
+    {
+        return new InfrastructureException(new OperationFailure
+        {
+            Code = SectionGenerationErrorCodes.Unexpected,
+            Category = FailureCategory.Infrastructure,
+            Stage = PipelineStage.ElementRecognition,
+            Module = nameof(LayerBasedElementRecognizer),
+            UserMessage = "构件识别失败，请检查当前图纸环境",
+            TechnicalMessage = technicalMessage,
+            InnerException = innerException
+        });
     }
 }

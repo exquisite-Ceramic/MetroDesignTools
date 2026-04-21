@@ -1,8 +1,10 @@
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Runtime;
 using Microsoft.Extensions.Logging;
+using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.App.Abstractions;
+using MetroToolKits.SectionGenerator.App.Diagnostics;
 using MetroToolKits.SectionGenerator.Core.Sections;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 using System.Text.Json;
@@ -31,7 +33,8 @@ public sealed class XDataSnapshotRepository : ISectionSnapshotRepository
     public void Save(string blockHandle, SectionSnapshot snapshot)
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
-        if (doc == null) return;
+        if (doc == null)
+            throw CreateInfrastructureException("无活动文档，无法写入剖面快照。");
 
         var db = doc.Database;
         using var lockDoc = doc.LockDocument();
@@ -45,8 +48,7 @@ public sealed class XDataSnapshotRepository : ISectionSnapshotRepository
             if (objId == ObjectId.Null)
             {
                 _logger.LogWarning("找不到块句柄 {Handle}", blockHandle);
-                tr.Abort();
-                return;
+                throw CreateInfrastructureException($"未找到块句柄 {blockHandle}，无法写入快照。");
             }
 
             var blockRef = (BlockReference)tr.GetObject(objId, OpenMode.ForWrite);
@@ -64,6 +66,7 @@ public sealed class XDataSnapshotRepository : ISectionSnapshotRepository
         {
             tr.Abort();
             _logger.LogError(ex, "写入快照失败，块句柄: {Handle}", blockHandle);
+            throw CreateInfrastructureException($"写入快照失败: {ex.Message}", ex);
         }
     }
 
@@ -151,4 +154,7 @@ public sealed class XDataSnapshotRepository : ISectionSnapshotRepository
         rat.Add(rec);
         tr.AddNewlyCreatedDBObject(rec, true);
     }
+
+    private static InfrastructureException CreateInfrastructureException(string technicalMessage, SystemException? innerException = null)
+        => new(SectionGenerationFailures.SnapshotSaveFailed(technicalMessage, innerException));
 }

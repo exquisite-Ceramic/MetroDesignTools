@@ -58,6 +58,10 @@ public sealed class BootstrapCommandBridge
     public void SectionSelfTest()
         => Execute(SectionGeneratorCommandNames.SectionSelfTest);
 
+    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.SectionHostAcceptance)]
+    public void SectionHostAcceptance()
+        => Execute(SectionGeneratorCommandNames.SectionHostAcceptance);
+
     private static void Execute(string commandName)
     {
         try

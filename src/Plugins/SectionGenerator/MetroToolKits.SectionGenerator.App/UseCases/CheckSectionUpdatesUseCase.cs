@@ -11,6 +11,7 @@ namespace MetroToolKits.SectionGenerator.App.UseCases;
 public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
 {
     private readonly ISectionSnapshotRepository _snapshotRepo;
+    private readonly ISectionLineResolver _sectionLineResolver;
     private readonly IElementRecognizer _elementRecognizer;
     private readonly IFloorConfigRepository _configRepo;
     private readonly FloorGeometryHasher _hasher;
@@ -18,12 +19,14 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
 
     public CheckSectionUpdatesUseCase(
         ISectionSnapshotRepository snapshotRepo,
+        ISectionLineResolver sectionLineResolver,
         IElementRecognizer elementRecognizer,
         IFloorConfigRepository configRepo,
         FloorGeometryHasher hasher,
         ILogger<CheckSectionUpdatesUseCase> logger)
     {
         _snapshotRepo      = snapshotRepo;
+        _sectionLineResolver = sectionLineResolver;
         _elementRecognizer = elementRecognizer;
         _configRepo        = configRepo;
         _hasher            = hasher;
@@ -58,20 +61,19 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
 
             // 重新计算当前哈希，与快照比对
             var outdatedFloors = new List<string>();
+            var currentSourceLine = ResolveSectionLine(snapshot);
             foreach (var floorSnap in snapshot.FloorSnapshots)
             {
                 var floor = config.Floors.FirstOrDefault(f => f.Name == floorSnap.FloorName);
                 if (floor == null) continue;
 
                 var alignedSectionLine = FloorSectionLineTransformer.ApplyAlignment(
-                    new Foundation.Core.Geometry.Line3D(
-                        snapshot.CutLineStart,
-                        snapshot.CutLineEnd),
+                    currentSourceLine,
                     floor);
 
                 var elements = _elementRecognizer.RecognizeElements(
                     alignedSectionLine,
-                    snapshot.ViewDepth);
+                    snapshot.ViewDepth).Elements;
 
                 var currentHash = _hasher.ComputeHash(elements);
 
@@ -102,5 +104,19 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
             results.Count, outdatedCount, sw.ElapsedMilliseconds);
 
         return results;
+    }
+
+    private Foundation.Core.Geometry.Line3D ResolveSectionLine(SectionSnapshot snapshot)
+    {
+        var resolved = _sectionLineResolver.ResolveCurrentLine(snapshot.SourceCutLineHandle);
+        if (resolved.HasValue)
+            return resolved.Value;
+
+        _logger.LogWarning(
+            "无法解析源剖切线 {CutLineHandle}，回退到快照线坐标。Block={BlockName}",
+            snapshot.SourceCutLineHandle,
+            snapshot.BlockName);
+
+        return new Foundation.Core.Geometry.Line3D(snapshot.CutLineStart, snapshot.CutLineEnd);
     }
 }

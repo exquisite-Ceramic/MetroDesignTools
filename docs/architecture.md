@@ -29,7 +29,7 @@ AutoCAD 宿主
 
 | 层级 | 项目 | 职责 | 允许依赖 |
 |:---|:---|:---|:---|
-| **共享层** | `Foundation.Core` | 几何、公用值对象、`IUserLogger` | 无 |
+| **共享层** | `Foundation.Core` | 几何、公用值对象、`IUserLogger`、统一失败/诊断契约 | 无 |
 | | `Foundation.Cad` | 可复用的 AutoCAD 宿主访问能力（文档/事务/图层等） | `Foundation.Core` |
 | | `Foundation.Building` | 纯建筑构件模型与 `ElementTypeDefinition` | `Foundation.Core` |
 | **核心层** | `SectionGenerator.Core` | 剖面生成算法、多楼层叠加、楼层对齐、几何哈希 | `Foundation.Core`、`Foundation.Building` |
@@ -58,6 +58,7 @@ AutoCAD 宿主
   - `IElementConversionService`
   - `IFloorConfigRepository`
 - `App` 不引用 `Autodesk.AutoCAD.*`、`System.Windows.*`、`Bootstrap` 静态状态。
+- `App` 统一把底层异常包装结果映射为 `OperationResult`，并汇总 `Diagnostics`。
 
 ### 3. Foundation.Building 只保留纯模型
 
@@ -96,6 +97,14 @@ AutoCAD 宿主
 - 插件启动时会将模板复制到按包隔离的用户目录 `%LOCALAPPDATA%\MetroToolKits\Packages\<package-scope>\SectionGenerator\`，后续读写都在该目录完成。
 - `Bootstrap` 日志写入 `%LOCALAPPDATA%\MetroToolKits\Packages\<package-scope>\Bootstrap\logs\`。
 - 运行期不再把配置或日志写回安装目录，也不会让不同发布包共享同一份用户状态。
+
+### 8. 错误处理采用 Shared 契约 + 分层落地
+
+- `Foundation.Core` 提供统一的 `OperationStatus`、`OperationFailure`、`OperationDiagnostic`、`ToolkitException`。
+- `Plugin` 只负责输入前置校验和用户反馈，不直接推断业务失败原因。
+- `App` 负责聚合诊断、判定 `Success / PartialSuccess / Failed`，并把异常转换成稳定失败结果。
+- `Infrastructure` 必须包装 AutoCAD / IO 原生异常，不能把底层异常直接泄漏到命令层。
+- `GenSection` 当前采用 fail-fast 规则：若所有楼层都没有识别到可剖切构件，则直接返回失败，不再继续绘图。
 
 ---
 

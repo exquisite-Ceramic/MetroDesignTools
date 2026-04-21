@@ -27,14 +27,25 @@ internal sealed class FileLogger : ILogger
     {
         if (!IsEnabled(logLevel)) return;
 
-        var entry = new
+        var entry = new Dictionary<string, object?>
         {
-            time     = DateTime.Now.ToString("O"),
-            level    = logLevel.ToString().ToUpperInvariant(),
-            category = _categoryName,
-            msg      = formatter(state, exception),
-            exception = exception?.ToString()
+            ["time"] = DateTime.Now.ToString("O"),
+            ["level"] = logLevel.ToString().ToUpperInvariant(),
+            ["category"] = _categoryName,
+            ["msg"] = formatter(state, exception),
+            ["exception"] = exception?.ToString()
         };
+
+        if (state is IEnumerable<KeyValuePair<string, object?>> structuredState)
+        {
+            foreach (var pair in structuredState)
+            {
+                if (string.Equals(pair.Key, "{OriginalFormat}", StringComparison.Ordinal))
+                    continue;
+
+                entry[pair.Key] = pair.Value;
+            }
+        }
 
         _processor.Enqueue(JsonSerializer.Serialize(entry));
     }

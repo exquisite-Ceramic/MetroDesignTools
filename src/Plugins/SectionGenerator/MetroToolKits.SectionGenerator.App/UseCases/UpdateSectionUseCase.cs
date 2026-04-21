@@ -13,6 +13,7 @@ namespace MetroToolKits.SectionGenerator.App.UseCases;
 public sealed class UpdateSectionUseCase : IUpdateSectionUseCase
 {
     private readonly ISectionSnapshotRepository _snapshotRepo;
+    private readonly ISectionLineResolver _sectionLineResolver;
     private readonly IGenerateSectionUseCase _generateUseCase;
     private readonly IBlockEraseService _blockEraseService;
     private readonly ILogger<UpdateSectionUseCase> _logger;
@@ -20,12 +21,14 @@ public sealed class UpdateSectionUseCase : IUpdateSectionUseCase
 
     public UpdateSectionUseCase(
         ISectionSnapshotRepository snapshotRepo,
+        ISectionLineResolver sectionLineResolver,
         IGenerateSectionUseCase generateUseCase,
         IBlockEraseService blockEraseService,
         ILogger<UpdateSectionUseCase> logger,
         IUserLogger userLogger)
     {
         _snapshotRepo     = snapshotRepo;
+        _sectionLineResolver = sectionLineResolver;
         _generateUseCase  = generateUseCase;
         _blockEraseService = blockEraseService;
         _logger           = logger;
@@ -62,12 +65,24 @@ public sealed class UpdateSectionUseCase : IUpdateSectionUseCase
                 };
             }
 
+            var currentSectionLine = _sectionLineResolver.ResolveCurrentLine(snapshot.SourceCutLineHandle);
+            if (!currentSectionLine.HasValue)
+            {
+                _logger.LogWarning("剖面块 {BlockName} 的原始剖切线 {Handle} 已不存在或不再是直线", snapshot.BlockName, snapshot.SourceCutLineHandle);
+                _userLogger.SectionUpdateFailed(snapshot.BlockName, "原始剖切线已不存在，请手动重新生成");
+                return new UpdateSectionResult
+                {
+                    Success = false,
+                    ErrorMessage = "原始剖切线已不存在或不是直线"
+                };
+            }
+
             // 2. 重新生成（使用快照中记录的插入点）
             var genResult = _generateUseCase.Execute(new GenerateSectionRequest
             {
                 CutLineHandle  = snapshot.SourceCutLineHandle,
-                CutLineStart   = snapshot.CutLineStart,
-                CutLineEnd     = snapshot.CutLineEnd,
+                CutLineStart   = currentSectionLine.Value.Start,
+                CutLineEnd     = currentSectionLine.Value.End,
                 InsertionPoint = snapshot.InsertionPoint,
                 ViewDepth      = snapshot.ViewDepth
             });
