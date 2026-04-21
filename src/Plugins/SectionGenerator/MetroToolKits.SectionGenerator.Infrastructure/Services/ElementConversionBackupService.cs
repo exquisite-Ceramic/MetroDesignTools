@@ -1,6 +1,4 @@
-using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
-using Autodesk.AutoCAD.Runtime;
 
 namespace MetroToolKits.SectionGenerator.Infrastructure.Services;
 
@@ -20,133 +18,119 @@ public sealed class ElementConversionBackupService
     /// <summary>
     /// 备份实体原始属性
     /// </summary>
-    public void BackupEntity(Entity entity, string convertedType)
+    public void BackupEntity(Transaction tr, Entity entity, string convertedType)
     {
         var db = entity.Database;
-        using var tr = db.TransactionManager.StartTransaction();
-
-        try
+        if (db == null)
         {
-            // 获取或创建扩展字典
-            var dictId = GetOrCreateBackupDictionary(tr, db);
-            if (dictId == ObjectId.Null)
-            {
-                tr.Abort();
-                return;
-            }
-
-            var dict = (DBDictionary)tr.GetObject(dictId, OpenMode.ForWrite);
-
-            // 创建实体专属的扩展字典
-            var entityDictId = GetOrCreateEntityDictionary(tr, dict, entity.Handle.ToString());
-            if (entityDictId == ObjectId.Null)
-            {
-                tr.Abort();
-                return;
-            }
-
-            var entityDict = (DBDictionary)tr.GetObject(entityDictId, OpenMode.ForWrite);
-
-            // 存储原始属性
-            SetXrecordValue(tr, entityDict, OriginalLayerKey, entity.Layer);
-            SetXrecordValue(tr, entityDict, OriginalColorKey, entity.ColorIndex.ToString());
-            SetXrecordValue(tr, entityDict, OriginalLinetypeKey, entity.Linetype);
-            SetXrecordValue(tr, entityDict, OriginalLineweightKey, ((int)entity.LineWeight).ToString());
-            SetXrecordValue(tr, entityDict, ConvertedTypeKey, convertedType);
-            SetXrecordValue(tr, entityDict, ConvertedTimeKey, DateTime.Now.ToString("O"));
-
-            tr.Commit();
+            return;
         }
-        catch
+
+        // 获取或创建扩展字典
+        var dictId = GetOrCreateBackupDictionary(tr, db);
+        if (dictId == ObjectId.Null)
         {
-            tr.Abort();
+            return;
         }
+
+        var dict = (DBDictionary)tr.GetObject(dictId, OpenMode.ForWrite);
+
+        // 创建实体专属的扩展字典
+        var entityDictId = GetOrCreateEntityDictionary(tr, dict, entity.Handle.ToString());
+        if (entityDictId == ObjectId.Null)
+        {
+            return;
+        }
+
+        var entityDict = (DBDictionary)tr.GetObject(entityDictId, OpenMode.ForWrite);
+
+        // 存储原始属性
+        SetXrecordValue(tr, entityDict, OriginalLayerKey, entity.Layer);
+        SetXrecordValue(tr, entityDict, OriginalColorKey, entity.ColorIndex.ToString());
+        SetXrecordValue(tr, entityDict, OriginalLinetypeKey, entity.Linetype);
+        SetXrecordValue(tr, entityDict, OriginalLineweightKey, ((int)entity.LineWeight).ToString());
+        SetXrecordValue(tr, entityDict, ConvertedTypeKey, convertedType);
+        SetXrecordValue(tr, entityDict, ConvertedTimeKey, DateTime.Now.ToString("O"));
     }
 
     /// <summary>
     /// 恢复实体原始属性
     /// </summary>
-    public bool RestoreEntity(Entity entity)
+    public bool RestoreEntity(Transaction tr, Entity entity)
     {
         var db = entity.Database;
-        using var tr = db.TransactionManager.StartTransaction();
-
-        try
+        if (db == null)
         {
-            var dictId = GetBackupDictionary(tr, db);
-            if (dictId == ObjectId.Null) return false;
-
-            var dict = (DBDictionary)tr.GetObject(dictId, OpenMode.ForRead);
-            var handleStr = entity.Handle.ToString();
-
-            if (!dict.Contains(handleStr))
-            {
-                tr.Abort();
-                return false;
-            }
-
-            var entityDictId = dict.GetAt(handleStr);
-            var entityDict = (DBDictionary)tr.GetObject(entityDictId, OpenMode.ForRead);
-
-            // 读取并恢复原始属性
-            var layer = GetXrecordValue(tr, entityDict, OriginalLayerKey);
-            var colorStr = GetXrecordValue(tr, entityDict, OriginalColorKey);
-            var linetype = GetXrecordValue(tr, entityDict, OriginalLinetypeKey);
-            var lineweightStr = GetXrecordValue(tr, entityDict, OriginalLineweightKey);
-
-            entity.UpgradeOpen();
-            if (!string.IsNullOrEmpty(layer)) entity.Layer = layer;
-            if (int.TryParse(colorStr, out var colorIndex)) entity.ColorIndex = colorIndex;
-            if (!string.IsNullOrEmpty(linetype)) entity.Linetype = linetype;
-            if (int.TryParse(lineweightStr, out var lw)) entity.LineWeight = (LineWeight)lw;
-
-            // 删除备份记录
-            dict.UpgradeOpen();
-            dict.Remove(handleStr);
-
-            tr.Commit();
-            return true;
-        }
-        catch
-        {
-            tr.Abort();
             return false;
         }
+
+        var dictId = GetBackupDictionary(tr, db);
+        if (dictId == ObjectId.Null) return false;
+
+        var dict = (DBDictionary)tr.GetObject(dictId, OpenMode.ForRead);
+        var handleStr = entity.Handle.ToString();
+
+        if (!dict.Contains(handleStr))
+        {
+            return false;
+        }
+
+        var entityDictId = dict.GetAt(handleStr);
+        var entityDict = (DBDictionary)tr.GetObject(entityDictId, OpenMode.ForRead);
+
+        // 读取并恢复原始属性
+        var layer = GetXrecordValue(tr, entityDict, OriginalLayerKey);
+        var colorStr = GetXrecordValue(tr, entityDict, OriginalColorKey);
+        var linetype = GetXrecordValue(tr, entityDict, OriginalLinetypeKey);
+        var lineweightStr = GetXrecordValue(tr, entityDict, OriginalLineweightKey);
+
+        entity.UpgradeOpen();
+        if (!string.IsNullOrEmpty(layer)) entity.Layer = layer;
+        if (int.TryParse(colorStr, out var colorIndex)) entity.ColorIndex = colorIndex;
+        if (!string.IsNullOrEmpty(linetype)) entity.Linetype = linetype;
+        if (int.TryParse(lineweightStr, out var lw)) entity.LineWeight = (LineWeight)lw;
+
+        // 删除备份记录
+        dict.UpgradeOpen();
+        dict.Remove(handleStr);
+        return true;
     }
 
     /// <summary>
     /// 检查实体是否有备份
     /// </summary>
-    public bool HasBackup(Entity entity)
+    public bool HasBackup(Transaction tr, Entity entity)
     {
         var db = entity.Database;
-        using var tr = db.TransactionManager.StartTransaction();
+        if (db == null)
+        {
+            return false;
+        }
 
         var dictId = GetBackupDictionary(tr, db);
         if (dictId == ObjectId.Null)
         {
-            tr.Abort();
             return false;
         }
 
         var dict = (DBDictionary)tr.GetObject(dictId, OpenMode.ForRead);
-        var hasBackup = dict.Contains(entity.Handle.ToString());
-        tr.Abort();
-        return hasBackup;
+        return dict.Contains(entity.Handle.ToString());
     }
 
     /// <summary>
     /// 获取实体的转换类型
     /// </summary>
-    public string? GetConvertedType(Entity entity)
+    public string? GetConvertedType(Transaction tr, Entity entity)
     {
         var db = entity.Database;
-        using var tr = db.TransactionManager.StartTransaction();
+        if (db == null)
+        {
+            return null;
+        }
 
         var dictId = GetBackupDictionary(tr, db);
         if (dictId == ObjectId.Null)
         {
-            tr.Abort();
             return null;
         }
 
@@ -155,15 +139,12 @@ public sealed class ElementConversionBackupService
 
         if (!dict.Contains(handleStr))
         {
-            tr.Abort();
             return null;
         }
 
         var entityDictId = dict.GetAt(handleStr);
         var entityDict = (DBDictionary)tr.GetObject(entityDictId, OpenMode.ForRead);
-        var convertedType = GetXrecordValue(tr, entityDict, ConvertedTypeKey);
-        tr.Abort();
-        return convertedType;
+        return GetXrecordValue(tr, entityDict, ConvertedTypeKey);
     }
 
     private ObjectId GetOrCreateBackupDictionary(Transaction tr, Database db)

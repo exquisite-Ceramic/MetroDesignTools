@@ -12,7 +12,13 @@
 
 ## 获取方式
 
-从本机已安装的 AutoCAD 目录复制：
+推荐使用仓库脚本同步：
+
+```powershell
+.\build\sync-autocad-references.ps1 -AutoCADDir "C:\Program Files\Autodesk\AutoCAD 2025"
+```
+
+也可以从本机已安装的 AutoCAD 目录手动复制：
 
 ```
 C:\Program Files\Autodesk\AutoCAD <版本>\
@@ -22,7 +28,7 @@ C:\Program Files\Autodesk\AutoCAD <版本>\
 
 | AutoCAD 版本 | .NET 目标框架 | 兼容性 |
 |:---|:---|:---|
-| 2018 ~ 2024 | net8.0-windows | ✅ 兼容 |
+| 2018 ~ 2025 | net8.0-windows | ✅ 兼容 |
 
 ## 合规说明
 
@@ -32,4 +38,4 @@ C:\Program Files\Autodesk\AutoCAD <版本>\
 - **不得**在未获授权的环境中使用
 - 仅可在持有合法 AutoCAD 许可证的机器上用于编译本项目
 
-本仓库的 `.gitignore` 已将 `*.dll` 排除，此目录下的 DLL 文件**不会**被 git 追踪。
+本仓库的 `.gitignore` 已将 `build/References/*.dll` 排除，此目录下的 DLL 文件**不会**被 git 追踪。

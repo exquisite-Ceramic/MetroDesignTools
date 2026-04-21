@@ -2,7 +2,9 @@ using MetroToolKits.Foundation.Core.Logging;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using Autodesk.AutoCAD.EditorInput;
 using Microsoft.Extensions.Logging;
+using MetroToolKits.Bootstrap;
 using MetroToolKits.Foundation.Core.Geometry;
+using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Core.Sections;
 using MetroToolKits.SectionGenerator.Plugin.UI;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
@@ -12,18 +14,19 @@ namespace MetroToolKits.SectionGenerator.Plugin.Commands;
 /// <summary>
 /// 楼层配置管理命令
 /// </summary>
+[CommandBinding(SectionGeneratorCommandNames.FloorConfig)]
 public sealed class FloorConfigCommand
 {
-    private readonly IFloorConfigRepository _repo;
+    private readonly IFloorConfigUseCase _floorConfigUseCase;
     private readonly ILogger<FloorConfigCommand> _logger;
     private readonly IUserLogger _userLogger;
 
     public FloorConfigCommand(
-        IFloorConfigRepository repo,
+        IFloorConfigUseCase floorConfigUseCase,
         ILogger<FloorConfigCommand> logger,
         IUserLogger userLogger)
     {
-        _repo       = repo;
+        _floorConfigUseCase = floorConfigUseCase;
         _logger     = logger;
         _userLogger = userLogger;
     }
@@ -32,20 +35,28 @@ public sealed class FloorConfigCommand
     {
         _userLogger.CommandStarted("FloorConfig");
         _logger.LogInformation("打开楼层配置窗口");
+        var config = _floorConfigUseCase.Load();
+        _userLogger.FloorConfigLoaded(config.Floors.Count, config.Floors.Select(f => f.Name).ToArray());
 
         while (true)
         {
             var window = new FloorConfigWindow(
-                _repo,
-                Microsoft.Extensions.Logging.Abstractions.NullLogger<FloorConfigWindow>.Instance,
-                _userLogger);
+                config,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<FloorConfigWindow>.Instance);
 
             Application.ShowModalWindow(window);
+            config = window.CurrentConfig;
 
             if (window.Tag is ("PickAlignment", FloorConfig floor))
             {
                 PickAlignmentPoints(floor);
                 continue;
+            }
+
+            if (window.DialogResult == true)
+            {
+                _floorConfigUseCase.Save(config);
+                _userLogger.FloorConfigSaved(config.Floors.Count, config.Floors.Select(f => f.Name).ToArray());
             }
 
             break;

@@ -21,8 +21,10 @@ The release directory `publish/SectionGenerator/` should contain at least:
 Notes:
 
 - `MetroToolKits.Bootstrap.dll` is the only standard `NETLOAD` entry point.
-- `SectionGeneratorConfig.json` is the default floor configuration template. You can edit it directly or save it through `FloorConfig`.
-- `ElementTypes.json` is the default element type and shortcut mapping template.
+- `Microsoft.Extensions.*.dll` are copied from the current Release build output into the package.
+- `SectionGeneratorConfig.json` is the default floor configuration template copied to `%LOCALAPPDATA%\MetroToolKits\Packages\<package-scope>\SectionGenerator\` on first run.
+- `ElementTypes.json` is the default element type and shortcut mapping template copied to the same package-scoped user directory on first run.
+- Runtime logs are written under `%LOCALAPPDATA%\MetroToolKits\Packages\<package-scope>\Bootstrap\logs\`.
 
 ---
 
@@ -46,12 +48,12 @@ Expected result:
 
 ### Floor config
 
-- For a single-floor project, you can edit `SectionGeneratorConfig.json` directly.
+- The package JSON files are templates; runtime edits are stored under `%LOCALAPPDATA%\MetroToolKits\Packages\<package-scope>\SectionGenerator\`.
 - For multi-floor projects or alignment-point picking, prefer the `FloorConfig` command inside AutoCAD.
 
 ### Element types
 
-- `ElementTypes.json` can be edited to adjust type names, shortcut keys, and target layer prefixes.
+- Edit `%LOCALAPPDATA%\MetroToolKits\Packages\<package-scope>\SectionGenerator\ElementTypes.json` to adjust type names, shortcut keys, and target layer prefixes.
 - Reload the plugin after editing.
 
 ---

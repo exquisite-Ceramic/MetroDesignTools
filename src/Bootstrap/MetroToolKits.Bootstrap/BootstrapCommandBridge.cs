@@ -10,61 +10,61 @@ namespace MetroToolKits.Bootstrap;
 /// </summary>
 public sealed class BootstrapCommandBridge
 {
-    [Autodesk.AutoCAD.Runtime.CommandMethod("GenSection")]
+    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.GenSection)]
     public void GenSection()
-        => Execute("GenSection");
+        => Execute(SectionGeneratorCommandNames.GenSection);
 
-    [Autodesk.AutoCAD.Runtime.CommandMethod("FloorConfig")]
+    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.FloorConfig)]
     public void FloorConfig()
-        => Execute("FloorConfig");
+        => Execute(SectionGeneratorCommandNames.FloorConfig);
 
-    [Autodesk.AutoCAD.Runtime.CommandMethod("CheckSectionUpdates")]
+    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.CheckSectionUpdates)]
     public void CheckSectionUpdates()
-        => Execute("CheckSectionUpdates");
+        => Execute(SectionGeneratorCommandNames.CheckSectionUpdates);
 
-    [Autodesk.AutoCAD.Runtime.CommandMethod("UpdateSection")]
+    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.UpdateSection)]
     public void UpdateSection()
-        => Execute("UpdateSection");
+        => Execute(SectionGeneratorCommandNames.UpdateSection);
 
-    [Autodesk.AutoCAD.Runtime.CommandMethod("LocateSourceElement")]
+    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.LocateSourceElement)]
     public void LocateSourceElement()
-        => Execute("LocateSourceElement");
+        => Execute(SectionGeneratorCommandNames.LocateSourceElement);
 
-    [Autodesk.AutoCAD.Runtime.CommandMethod("FindRelatedSections")]
+    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.FindRelatedSections)]
     public void FindRelatedSections()
-        => Execute("FindRelatedSections");
+        => Execute(SectionGeneratorCommandNames.FindRelatedSections);
 
-    [Autodesk.AutoCAD.Runtime.CommandMethod("ShowToolbox")]
+    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.ShowToolbox)]
     public void ShowToolbox()
-        => Execute("ShowToolbox");
+        => Execute(SectionGeneratorCommandNames.ShowToolbox);
 
-    [Autodesk.AutoCAD.Runtime.CommandMethod("ConvertRegion")]
+    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.ConvertRegion)]
     public void ConvertRegion()
-        => Execute("ConvertRegion");
+        => Execute(SectionGeneratorCommandNames.ConvertRegion);
 
-    [Autodesk.AutoCAD.Runtime.CommandMethod("RevertConversion")]
+    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.RevertConversion)]
     public void RevertConversion()
-        => Execute("RevertConversion");
+        => Execute(SectionGeneratorCommandNames.RevertConversion);
 
-    [Autodesk.AutoCAD.Runtime.CommandMethod("RevertAllConversions")]
+    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.RevertAllConversions)]
     public void RevertAllConversions()
-        => Execute("RevertAllConversions", "RevertAll");
+        => Execute(SectionGeneratorCommandNames.RevertAllConversions);
 
-    [Autodesk.AutoCAD.Runtime.CommandMethod("LayerMapping")]
+    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.LayerMapping)]
     public void LayerMapping()
-        => Execute("LayerMapping");
+        => Execute(SectionGeneratorCommandNames.LayerMapping);
 
-    [Autodesk.AutoCAD.Runtime.CommandMethod("SectionSelfTest")]
+    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.SectionSelfTest)]
     public void SectionSelfTest()
-        => Execute("SectionSelfTest");
+        => Execute(SectionGeneratorCommandNames.SectionSelfTest);
 
-    private static void Execute(string commandName, string methodName = "Execute")
+    private static void Execute(string commandName)
     {
         try
         {
             Startup.Initialize();
 
-            if (!Startup.ExecuteRegisteredCommand(commandName, methodName, out var errorMessage))
+            if (!Startup.ExecuteRegisteredCommand(commandName, out var errorMessage))
             {
                 WriteMessage($"\n[MetroToolKits] {commandName} 执行失败：{errorMessage}");
             }

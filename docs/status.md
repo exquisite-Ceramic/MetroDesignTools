@@ -2,13 +2,13 @@
 
 **版本**: v1.1.0-beta  
 **状态**: 当前权威状态文档  
-**更新日期**: 2026-04-20
+**更新日期**: 2026-04-21
 
 ---
 
 ## 当前状态
 
-**🚧 内部可用（beta）** — 阶段六已完成，阶段七已补齐文档、回归测试与宿主烟测，阶段八已形成可分发 beta 发布包；剩余 GUI/交互场景待人工验收
+**🚧 内部可用（beta）** — 阶段六已完成，阶段七已补齐文档、回归测试与宿主烟测，阶段八已形成可分发 beta 发布包；本轮已补完架构纠偏，剩余 GUI/交互场景待人工验收
 
 ---
 
@@ -67,6 +67,9 @@
 | #7 | 统一版本号（Directory.Build.props） | ✅ |
 | #8 | 建立 build/test 流程（build.ps1 + CI） | ✅ |
 | #9 | 明确 AutoCAD DLL 分发策略 | ✅ |
+| #10 | 构件转换/恢复/图层映射收回 App 用例层 | ✅ |
+| #11 | FloorConfig 加载/保存收回 App 用例层 | ✅ |
+| #12 | 配置与日志迁移到按包隔离的用户目录 | ✅ |
 
 ---
 
@@ -78,9 +81,10 @@
 dotnet build MetroToolKits.sln → 0 错误，~8 警告（AutoCAD DLL 版本兼容性）
 ```
 
-当前工作区（2026-04-20）：
+当前工作区（2026-04-21）：
 
 > 已在本机完成 `MetroToolKits.SectionGenerator.Plugin.csproj` 编译与发布，结果为 `0 错误`、仅保留 AutoCAD 版本冲突告警；同时通过 AutoCAD 2025 `accoreconsole.exe` 完成 `SectionSelfTest` 宿主烟测。
+> 运行期配置和日志现已改为按发布包隔离的 `%LOCALAPPDATA%\MetroToolKits\Packages\<package-scope>\...` 用户目录，不再写安装目录，也不会让不同发布包共享同一份状态。
 
 > `dotnet test` 仍受本机代理与测试依赖环境影响，尚未在本机重新完成刷新。
 

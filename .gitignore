@@ -9,3 +9,4 @@
 .idea/
 .vscode/
 publish/
+build/References/*.dll

@@ -1,4 +1,5 @@
 using Autodesk.AutoCAD.EditorInput;
+using MetroToolKits.Bootstrap;
 using MetroToolKits.Foundation.Core.Logging;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.UseCases;
@@ -10,6 +11,7 @@ namespace MetroToolKits.SectionGenerator.Plugin.Commands;
 /// <summary>
 /// 剖面实体定位源构件命令
 /// </summary>
+[CommandBinding(SectionGeneratorCommandNames.LocateSourceElement)]
 public sealed class LocateSourceElementCommand
 {
     private readonly ILocateSourceElementUseCase _useCase;

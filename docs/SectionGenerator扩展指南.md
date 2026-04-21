@@ -14,7 +14,7 @@
 - `SectionGenerator.App`：用例编排、接口定义
 - `SectionGenerator.Infrastructure`：AutoCAD 访问、XData、JSON、识别器、绘图
 - `SectionGenerator.Plugin`：命令、WPF 窗口、命令行交互
-- `Bootstrap`：插件加载、DI、日志
+- `Bootstrap`：插件加载、DI、命令桥接、按包隔离的运行期日志目录
 
 不要把以下内容放进 `App/Core`：
 
@@ -94,7 +94,7 @@
 2. 如需外部能力，在 `App/Abstractions` 定义接口
 3. 在 `Infrastructure` 提供实现
 4. 在 `Plugin/Commands` 新建命令类，保留 AutoCAD/WPF 交互
-5. 在 `SectionGeneratorPlugin` 注册服务与命令
+5. 在 `SectionGeneratorPlugin` 注册服务，并在命令类上声明 `CommandBindingAttribute`
 6. 更新 README、状态文档和用户手册
 7. 增加单元测试或手动集成清单
 
@@ -151,6 +151,19 @@
 - 命令层只处理交互
 - 用例层只处理业务判断
 - AutoCAD 视图缩放和实体访问仍留在 `Infrastructure`
+
+### 5.3 配置窗口也要经 App 用例层
+
+相关接口：
+
+- `IFloorConfigUseCase`
+- `IFloorConfigRepository`
+
+原则：
+
+- `FloorConfigWindow` 只处理 WPF 编辑状态
+- `FloorConfigCommand` 只处理命令和拾点交互
+- 配置加载/保存必须经 `App` 用例，不让 UI 直连仓储
 
 ---
 

@@ -1,4 +1,3 @@
-using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace MetroToolKits.Bootstrap;
@@ -9,7 +8,7 @@ namespace MetroToolKits.Bootstrap;
 public class CommandRegistry : ICommandRegistry
 {
     private readonly IServiceProvider _serviceProvider;
-    private readonly Dictionary<string, Type> _commands = new();
+    private readonly Dictionary<string, CommandRegistration> _commands = new();
 
     public CommandRegistry(IServiceProvider serviceProvider)
     {
@@ -19,29 +18,53 @@ public class CommandRegistry : ICommandRegistry
     /// <summary>
     /// 注册命令
     /// </summary>
-    public void RegisterCommand<T>(string commandName) where T : class
+    public void RegisterCommand(Type commandType, string commandName, string methodName = "Execute")
     {
-        _commands[commandName.ToUpper()] = typeof(T);
+        _commands[commandName.ToUpperInvariant()] = new CommandRegistration(commandType, methodName);
+    }
+
+    /// <summary>
+    /// 注册命令
+    /// </summary>
+    public void RegisterCommand<T>(string commandName, string methodName = "Execute") where T : class
+    {
+        RegisterCommand(typeof(T), commandName, methodName);
+    }
+
+    /// <summary>
+    /// 获取命令注册信息
+    /// </summary>
+    public CommandRegistration? GetCommandRegistration(string commandName)
+    {
+        return _commands.TryGetValue(commandName.ToUpperInvariant(), out var command)
+            ? command
+            : null;
     }
 
     /// <summary>
     /// 获取命令实例
     /// </summary>
-    public object? GetCommandInstance(string commandName)
+    public object? GetCommandInstance(CommandRegistration registration)
     {
-        if (_commands.TryGetValue(commandName.ToUpper(), out var commandType))
+        if (registration == null)
         {
-            return _serviceProvider.GetService(commandType) 
-                ?? ActivatorUtilities.CreateInstance(_serviceProvider, commandType);
+            return null;
         }
-        return null;
+
+        return _serviceProvider.GetService(registration.CommandType)
+            ?? ActivatorUtilities.CreateInstance(_serviceProvider, registration.CommandType);
     }
 
     /// <summary>
     /// 获取所有已注册命令
     /// </summary>
-    public IReadOnlyDictionary<string, Type> Commands => _commands;
+    public IReadOnlyDictionary<string, CommandRegistration> Commands => _commands;
 }
+
+/// <summary>
+/// 命令注册项。
+/// </summary>
+public sealed record CommandRegistration(Type CommandType, string MethodName);
 
 /// <summary>
 /// 命令基类 - 所有插件命令应继承此类

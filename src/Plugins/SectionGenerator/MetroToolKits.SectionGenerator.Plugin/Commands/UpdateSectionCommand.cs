@@ -1,6 +1,7 @@
 using MetroToolKits.Foundation.Core.Logging;
 using Autodesk.AutoCAD.EditorInput;
 using Microsoft.Extensions.Logging;
+using MetroToolKits.Bootstrap;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 
@@ -9,6 +10,7 @@ namespace MetroToolKits.SectionGenerator.Plugin.Commands;
 /// <summary>
 /// 更新单个剖面命令
 /// </summary>
+[CommandBinding(SectionGeneratorCommandNames.UpdateSection)]
 public sealed class UpdateSectionCommand
 {
     private readonly IUpdateSectionUseCase _updateUseCase;

@@ -1,12 +1,8 @@
-using MetroToolKits.Foundation.Core.Logging;
-using MetroToolKits.SectionGenerator.App.Abstractions;
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Extensions.Logging;
-using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.Core.Sections;
-using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace MetroToolKits.SectionGenerator.Plugin.UI;
 
@@ -15,22 +11,20 @@ namespace MetroToolKits.SectionGenerator.Plugin.UI;
 /// </summary>
 public partial class FloorConfigWindow : Window
 {
-    private readonly IFloorConfigRepository _repo;
     private readonly ILogger<FloorConfigWindow> _logger;
-    private readonly IUserLogger _userLogger;
     private readonly ObservableCollection<FloorConfig> _floors = new();
     private SectionConfig _config = new();
     private FloorConfig? _currentFloor;
 
+    public SectionConfig CurrentConfig => _config;
+
     public FloorConfigWindow(
-        IFloorConfigRepository repo,
-        ILogger<FloorConfigWindow> logger,
-        IUserLogger userLogger)
+        SectionConfig config,
+        ILogger<FloorConfigWindow> logger)
     {
         InitializeComponent();
-        _repo       = repo;
-        _logger     = logger;
-        _userLogger = userLogger;
+        _config = config;
+        _logger = logger;
 
         FloorListBox.ItemsSource = _floors;
         LoadConfig();
@@ -40,7 +34,6 @@ public partial class FloorConfigWindow : Window
 
     private void LoadConfig()
     {
-        _config = _repo.Load();
         _floors.Clear();
         foreach (var f in _config.Floors) _floors.Add(f);
 
@@ -179,9 +172,7 @@ public partial class FloorConfigWindow : Window
         _config.GlobalSlopeTarget = (GlobalSlopeTargetBox.SelectedItem as ComboBoxItem)?.Tag?.ToString()
                                     ?? "StructuralSlab";
 
-        _repo.Save(_config);
-        _userLogger.FloorConfigSaved(_config.Floors.Count, _config.Floors.Select(f => f.Name).ToArray());
-        _logger.LogInformation("楼层配置已保存，楼层数: {Count}", _config.Floors.Count);
+        _logger.LogInformation("楼层配置编辑完成，待命令层保存，楼层数: {Count}", _config.Floors.Count);
 
         DialogResult = true;
         Close();
@@ -194,4 +185,3 @@ public partial class FloorConfigWindow : Window
         Close();
     }
 }
-

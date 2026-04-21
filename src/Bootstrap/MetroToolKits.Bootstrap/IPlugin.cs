@@ -33,5 +33,6 @@ public interface IPlugin
 /// </summary>
 public interface ICommandRegistry
 {
-    void RegisterCommand<T>(string commandName) where T : class;
+    void RegisterCommand(Type commandType, string commandName, string methodName = "Execute");
+    void RegisterCommand<T>(string commandName, string methodName = "Execute") where T : class;
 }

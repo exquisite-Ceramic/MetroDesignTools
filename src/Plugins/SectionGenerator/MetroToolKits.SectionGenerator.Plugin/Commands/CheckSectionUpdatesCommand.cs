@@ -1,5 +1,6 @@
 using MetroToolKits.Foundation.Core.Logging;
 using Microsoft.Extensions.Logging;
+using MetroToolKits.Bootstrap;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Plugin.UI;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
@@ -9,6 +10,7 @@ namespace MetroToolKits.SectionGenerator.Plugin.Commands;
 /// <summary>
 /// 检测剖面更新状态命令
 /// </summary>
+[CommandBinding(SectionGeneratorCommandNames.CheckSectionUpdates)]
 public sealed class CheckSectionUpdatesCommand
 {
     private readonly ICheckSectionUpdatesUseCase _checkUseCase;

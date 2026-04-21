@@ -2,6 +2,7 @@ using MetroToolKits.Foundation.Core.Logging;
 using System.Diagnostics;
 using Autodesk.AutoCAD.EditorInput;
 using Microsoft.Extensions.Logging;
+using MetroToolKits.Bootstrap;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
@@ -11,6 +12,7 @@ namespace MetroToolKits.SectionGenerator.Plugin.Commands;
 /// <summary>
 /// 生成剖面图命令
 /// </summary>
+[CommandBinding(SectionGeneratorCommandNames.GenSection)]
 public sealed class GenSectionCommand
 {
     private readonly IGenerateSectionUseCase _useCase;

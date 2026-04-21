@@ -20,6 +20,8 @@
 3. 在 AutoCAD 中执行 `NETLOAD`
 4. 选择 `MetroToolKits.Bootstrap.dll`
 
+首次加载后，插件会把可写配置复制到按包隔离的用户目录 `%LOCALAPPDATA%\MetroToolKits\Packages\<package-scope>\SectionGenerator\`；日志写入同 scope 下的 `Bootstrap\logs\`。
+
 ---
 
 ## 2. 首次使用建议流程

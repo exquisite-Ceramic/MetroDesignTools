@@ -1,14 +1,12 @@
-using MetroToolKits.SectionGenerator.Infrastructure.Services;
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using Autodesk.AutoCAD.ApplicationServices;
-using Autodesk.AutoCAD.DatabaseServices;
+using MetroToolKits.SectionGenerator.App.Abstractions;
+using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.Foundation.Cad.Services;
-using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace MetroToolKits.SectionGenerator.Plugin.UI;
 
@@ -18,19 +16,22 @@ namespace MetroToolKits.SectionGenerator.Plugin.UI;
 public partial class LayerMappingManager : Window
 {
     private readonly ILayerService _layerService;
-    private readonly ElementConversionBackupService _backupService;
-    private readonly ElementTypeLoader _typeLoader;
+    private readonly IElementTypeCatalog _typeCatalog;
+    private readonly IElementConversionUseCase _conversionUseCase;
     private readonly ObservableCollection<LayerInfo> _layers = new();
     private readonly ObservableCollection<ElementTypeDefinition> _types = new();
     private readonly ObservableCollection<LayerMapping> _mappings = new();
     private List<ElementTypeDefinition> _allTypes = new();
 
-    public LayerMappingManager(ILayerService layerService, ElementConversionBackupService backupService, ElementTypeLoader typeLoader)
+    public LayerMappingManager(
+        ILayerService layerService,
+        IElementTypeCatalog typeCatalog,
+        IElementConversionUseCase conversionUseCase)
     {
         InitializeComponent();
         _layerService = layerService;
-        _backupService = backupService;
-        _typeLoader = typeLoader;
+        _typeCatalog = typeCatalog;
+        _conversionUseCase = conversionUseCase;
 
         LoadData();
     }
@@ -48,7 +49,7 @@ public partial class LayerMappingManager : Window
 
         // 加载构件类型
         _types.Clear();
-        _allTypes = _typeLoader.Load().ToList();
+        _allTypes = _typeCatalog.GetAllTypes().ToList();
         foreach (var type in _allTypes.Where(t => t.IsEnabled))
         {
             _types.Add(type);
@@ -202,38 +203,27 @@ public partial class LayerMappingManager : Window
 
     private void ApplyMappings()
     {
-        var doc = Application.DocumentManager.MdiActiveDocument;
-        if (doc == null) return;
-
-        using var lockDoc = doc.LockDocument();
-        var db = doc.Database;
-
-        using var tr = db.TransactionManager.StartTransaction();
-        var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-        var btr = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
-
-        foreach (var mapping in _mappings)
+        var result = _conversionUseCase.ApplyMappings(new ElementConversionApplyRequest
         {
-            var targetLayer = $"{mapping.TargetLayerPrefix}_{mapping.LayerName}";
-            var layerId = _layerService.GetOrCreateLayer(targetLayer);
-            _layerService.SetLayerColor(targetLayer, mapping.ColorIndex);
-
-            // 遍历模型空间中的实体
-            btr.UpgradeOpen();
-            foreach (var objId in btr)
+            ApplyToEntireDrawing = true,
+            LayerMappings = _mappings.Select(static mapping => new LayerTypeAssignment
             {
-                var entity = (Entity)tr.GetObject(objId, OpenMode.ForRead);
-                if (entity.Layer == mapping.LayerName)
-                {
-                    entity.UpgradeOpen();
-                    _backupService.BackupEntity(entity, mapping.TypeId);
-                    entity.Layer = targetLayer;
-                }
-            }
+                SourceLayerName = mapping.LayerName,
+                TypeId = mapping.TypeId
+            }).ToList()
+        });
+
+        if (!result.Success)
+        {
+            MessageBox.Show(result.ErrorMessage ?? "图层映射应用失败。", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
         }
 
-        tr.Commit();
-        doc.Editor.WriteMessage($"\n已应用 {_mappings.Count} 个图层映射。");
+        MessageBox.Show(
+            $"已应用 {result.MappedLayerCount} 个图层映射，共转换 {result.ConvertedCount} 个实体。",
+            "完成",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
@@ -263,4 +253,3 @@ public class LayerMapping
     public string TargetLayerPrefix { get; set; } = string.Empty;
     public short ColorIndex { get; set; }
 }
-

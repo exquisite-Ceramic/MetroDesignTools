@@ -1,6 +1,7 @@
 using Autodesk.AutoCAD.ApplicationServices;
 using Microsoft.Extensions.Logging;
 using MetroToolKits.Bootstrap;
+using MetroToolKits.Foundation.Core.Logging;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.UseCases;
 
@@ -9,6 +10,7 @@ namespace MetroToolKits.SectionGenerator.Plugin.Commands;
 /// <summary>
 /// 宿主内自检命令，用于验证 Bootstrap、DI 和关键服务解析是否正常。
 /// </summary>
+[CommandBinding(SectionGeneratorCommandNames.SectionSelfTest)]
 public sealed class SectionGeneratorSelfTestCommand
 {
     private readonly IFloorConfigRepository _floorConfigRepository;
@@ -21,6 +23,7 @@ public sealed class SectionGeneratorSelfTestCommand
     private readonly ISectionReferenceRepository _sectionReferenceRepository;
     private readonly IEntityNavigationService _entityNavigationService;
     private readonly IDrawingService _drawingService;
+    private readonly IUserLogger _userLogger;
     private readonly ILogger<SectionGeneratorSelfTestCommand> _logger;
 
     public SectionGeneratorSelfTestCommand(
@@ -34,6 +37,7 @@ public sealed class SectionGeneratorSelfTestCommand
         ISectionReferenceRepository sectionReferenceRepository,
         IEntityNavigationService entityNavigationService,
         IDrawingService drawingService,
+        IUserLogger userLogger,
         ILogger<SectionGeneratorSelfTestCommand> logger)
     {
         _floorConfigRepository = floorConfigRepository;
@@ -46,6 +50,7 @@ public sealed class SectionGeneratorSelfTestCommand
         _sectionReferenceRepository = sectionReferenceRepository;
         _entityNavigationService = entityNavigationService;
         _drawingService = drawingService;
+        _userLogger = userLogger;
         _logger = logger;
     }
 
@@ -54,14 +59,11 @@ public sealed class SectionGeneratorSelfTestCommand
         var doc = Application.DocumentManager.MdiActiveDocument;
         var ed = doc?.Editor;
 
-        var bootstrapReady = Startup.ServiceProvider != null;
-        var userLoggerReady = Startup.UserLogger != null;
-
         var lines = new[]
         {
             "=== MetroToolKits SectionGenerator Self Test ===",
-            $"Bootstrap: {(bootstrapReady ? "READY" : "FAILED")}",
-            $"UserLogger: {(userLoggerReady ? "READY" : "FAILED")}",
+            "Bootstrap: READY",
+            $"UserLogger: {Describe(_userLogger)}",
             $"FloorConfigRepository: {Describe(_floorConfigRepository)}",
             $"GenerateSectionUseCase: {Describe(_generateSectionUseCase)}",
             $"CheckSectionUpdatesUseCase: {Describe(_checkSectionUpdatesUseCase)}",

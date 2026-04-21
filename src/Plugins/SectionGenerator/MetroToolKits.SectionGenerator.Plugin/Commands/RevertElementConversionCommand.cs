@@ -1,8 +1,7 @@
-using MetroToolKits.SectionGenerator.Infrastructure.Services;
 using Autodesk.AutoCAD.ApplicationServices;
-using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
-using Autodesk.AutoCAD.Runtime;
+using MetroToolKits.Bootstrap;
+using MetroToolKits.SectionGenerator.App.UseCases;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace MetroToolKits.SectionGenerator.Plugin.Commands;
@@ -10,13 +9,15 @@ namespace MetroToolKits.SectionGenerator.Plugin.Commands;
 /// <summary>
 /// 恢复构件转换命令 - 从扩展字典读取备份并恢复原始属性
 /// </summary>
+[CommandBinding(SectionGeneratorCommandNames.RevertConversion)]
+[CommandBinding(SectionGeneratorCommandNames.RevertAllConversions, nameof(RevertAll))]
 public class RevertElementConversionCommand
 {
-    private readonly ElementConversionBackupService _backupService;
+    private readonly IElementConversionUseCase _conversionUseCase;
 
-    public RevertElementConversionCommand(ElementConversionBackupService backupService)
+    public RevertElementConversionCommand(IElementConversionUseCase conversionUseCase)
     {
-        _backupService = backupService;
+        _conversionUseCase = conversionUseCase;
     }
 
     public void Execute()
@@ -25,7 +26,6 @@ public class RevertElementConversionCommand
         if (doc == null) return;
 
         var ed = doc.Editor;
-        var db = doc.Database;
 
         ed.WriteMessage("\n=== 恢复构件转换 ===");
         ed.WriteMessage("\n选择要恢复的实体（已转换的构件）: ");
@@ -44,46 +44,24 @@ public class RevertElementConversionCommand
 
         var selection = selectionResult.Value;
         ed.WriteMessage($"\n已选择 {selection.Count} 个实体。");
+        var handles = selection.GetObjectIds()
+            .Select(id => id.Handle.ToString())
+            .ToArray();
 
-        using var lockDoc = doc.LockDocument();
-        using var tr = db.TransactionManager.StartTransaction();
-
-        try
+        var result = _conversionUseCase.Revert(new ElementConversionRevertRequest
         {
-            int restoredCount = 0;
-            int skippedCount = 0;
+            EntityHandles = handles
+        });
 
-            foreach (var objId in selection.GetObjectIds())
-            {
-                var entity = (Entity)tr.GetObject(objId, OpenMode.ForRead);
-
-                if (_backupService.HasBackup(entity))
-                {
-                    var convertedType = _backupService.GetConvertedType(entity);
-                    entity.UpgradeOpen();
-
-                    if (_backupService.RestoreEntity(entity))
-                    {
-                        restoredCount++;
-                        ed.WriteMessage($"\n已恢复: {entity.Handle} (原类型: {convertedType})");
-                    }
-                }
-                else
-                {
-                    skippedCount++;
-                }
-            }
-
-            tr.Commit();
-
+        if (result.Success)
+        {
             ed.WriteMessage($"\n\n=== 恢复完成 ===");
-            ed.WriteMessage($"\n已恢复: {restoredCount} 个实体");
-            ed.WriteMessage($"\n已跳过: {skippedCount} 个实体（无备份记录）");
+            ed.WriteMessage($"\n已恢复: {result.RestoredCount} 个实体");
+            ed.WriteMessage($"\n已跳过: {result.SkippedCount} 个实体（无备份记录）");
         }
-        catch
+        else
         {
-            tr.Abort();
-            throw;
+            ed.WriteMessage($"\n恢复失败：{result.ErrorMessage}");
         }
     }
 
@@ -93,7 +71,6 @@ public class RevertElementConversionCommand
         if (doc == null) return;
 
         var ed = doc.Editor;
-        var db = doc.Database;
 
         ed.WriteMessage("\n=== 恢复所有转换 ===");
 
@@ -108,39 +85,14 @@ public class RevertElementConversionCommand
             return;
         }
 
-        using var lockDoc = doc.LockDocument();
-        using var tr = db.TransactionManager.StartTransaction();
-
-        try
+        var result = _conversionUseCase.RevertAll();
+        if (result.Success)
         {
-            int restoredCount = 0;
-
-            // 遍历模型空间
-            var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-            var btr = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForRead);
-
-            foreach (var objId in btr)
-            {
-                var entity = (Entity)tr.GetObject(objId, OpenMode.ForRead);
-
-                if (_backupService.HasBackup(entity))
-                {
-                    entity.UpgradeOpen();
-                    if (_backupService.RestoreEntity(entity))
-                    {
-                        restoredCount++;
-                    }
-                }
-            }
-
-            tr.Commit();
-            ed.WriteMessage($"\n已恢复 {restoredCount} 个实体的原始属性。");
+            ed.WriteMessage($"\n已恢复 {result.RestoredCount} 个实体的原始属性。");
         }
-        catch
+        else
         {
-            tr.Abort();
-            throw;
+            ed.WriteMessage($"\n恢复失败：{result.ErrorMessage}");
         }
     }
 }
-

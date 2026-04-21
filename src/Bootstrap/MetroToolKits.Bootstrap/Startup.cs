@@ -12,7 +12,6 @@ public static class Startup
 {
     private static IServiceProvider? _serviceProvider;
     private static ILoggerFactory? _loggerFactory;
-    private static UserLogger? _userLogger;
     private static CommandRegistry? _commandRegistry;
     private static bool _initialized;
 
@@ -24,30 +23,33 @@ public static class Startup
         {
             var assemblyDir = Path.GetDirectoryName(typeof(Startup).Assembly.Location)
                               ?? AppDomain.CurrentDomain.BaseDirectory;
+            var runtimeRoot = RuntimePathResolver.GetPackageScopedUserPath(
+                typeof(Startup).Assembly.Location,
+                "Bootstrap");
 
             // 1. 加载配置
             var config = BuildConfiguration(assemblyDir);
 
             // 2. 构建日志工厂
-            _loggerFactory = BuildLoggerFactory(config, assemblyDir);
+            _loggerFactory = BuildLoggerFactory(config, runtimeRoot);
             var logger = _loggerFactory.CreateLogger("MetroToolKits.Bootstrap.Startup");
 
             logger.LogDebug("DI 容器初始化开始");
             var sw = System.Diagnostics.Stopwatch.StartNew();
 
             // 3. 构建用户日志
-            var userLogPath = GetAbsolutePath(
+            var userLogPath = GetWritablePath(
                 config["Logging:Outputs:File:UserLogPath"] ?? "logs/MetroToolKits_User.log",
-                assemblyDir);
+                runtimeRoot);
             var verbosity = Enum.TryParse<UserLogVerbosity>(
                 config["UserLogging:Verbosity"] ?? "Normal", true, out var v) ? v : UserLogVerbosity.Normal;
-            _userLogger = new UserLogger(userLogPath, verbosity);
+            var userLogger = new UserLogger(userLogPath, verbosity);
 
             // 4. 注册服务
             var services = new ServiceCollection();
             services.AddSingleton(_loggerFactory);
             // UserLogger 同时作为 IUserLogger 接口注册，供所有依赖 IUserLogger 的用例解析
-            services.AddSingleton<MetroToolKits.Foundation.Core.Logging.IUserLogger>(_userLogger);
+            services.AddSingleton<MetroToolKits.Foundation.Core.Logging.IUserLogger>(userLogger);
             services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
 
             // 5. 加载插件
@@ -76,10 +78,6 @@ public static class Startup
         }
     }
 
-    public static IServiceProvider? ServiceProvider => _serviceProvider;
-    public static ILoggerFactory? LoggerFactory => _loggerFactory;
-    public static UserLogger? UserLogger => _userLogger;
-
     // ── 私有辅助 ──────────────────────────────────────────────────────────────
 
     private static IConfiguration BuildConfiguration(string baseDir)
@@ -93,7 +91,7 @@ public static class Startup
             .Build();
     }
 
-    private static ILoggerFactory BuildLoggerFactory(IConfiguration config, string baseDir)
+    private static ILoggerFactory BuildLoggerFactory(IConfiguration config, string runtimeRoot)
     {
         var defaultLevel = Enum.TryParse<LogLevel>(
             config["Logging:LogLevel:Default"] ?? "Information", true, out var dl)
@@ -104,8 +102,8 @@ public static class Startup
             ? al : LogLevel.Warning;
 
         var fileEnabled = config["Logging:Outputs:File:Enabled"]?.ToLower() != "false";
-        var filePath = GetAbsolutePath(
-            config["Logging:Outputs:File:Path"] ?? "logs/MetroToolKits.log", baseDir);
+        var filePath = GetWritablePath(
+            config["Logging:Outputs:File:Path"] ?? "logs/MetroToolKits.log", runtimeRoot);
 
         return Microsoft.Extensions.Logging.LoggerFactory.Create(builder =>
         {
@@ -120,10 +118,10 @@ public static class Startup
         });
     }
 
-    private static string GetAbsolutePath(string path, string baseDir)
-        => Path.IsPathRooted(path) ? path : Path.Combine(baseDir, path);
+    private static string GetWritablePath(string path, string runtimeRoot)
+        => Path.IsPathRooted(path) ? path : Path.Combine(runtimeRoot, path);
 
-    public static bool ExecuteRegisteredCommand(string commandName, string methodName, out string? errorMessage)
+    public static bool ExecuteRegisteredCommand(string commandName, out string? errorMessage)
     {
         errorMessage = null;
 
@@ -133,17 +131,24 @@ public static class Startup
             return false;
         }
 
-        var command = _commandRegistry.GetCommandInstance(commandName);
-        if (command == null)
+        var registration = _commandRegistry.GetCommandRegistration(commandName);
+        if (registration == null)
         {
             errorMessage = $"未找到命令 {commandName} 的注册实现。";
             return false;
         }
 
-        var method = command.GetType().GetMethod(methodName, Type.EmptyTypes);
+        var command = _commandRegistry.GetCommandInstance(registration);
+        if (command == null)
+        {
+            errorMessage = $"命令 {commandName} 的实例创建失败。";
+            return false;
+        }
+
+        var method = command.GetType().GetMethod(registration.MethodName, Type.EmptyTypes);
         if (method == null)
         {
-            errorMessage = $"命令 {commandName} 缺少可调用方法 {methodName}。";
+            errorMessage = $"命令 {commandName} 缺少可调用方法 {registration.MethodName}。";
             return false;
         }
 

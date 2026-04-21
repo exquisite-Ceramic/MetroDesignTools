@@ -32,9 +32,11 @@ AutoCAD .NET 插件工具集，当前包含 **SectionGenerator**（建筑剖面�
 ### 构建
 
 ```bash
-# 1. 将 AutoCAD DLL 复制到 build/References/（见构建指南 §1.2）
-# 2. 构建 + 测试
-.\build.ps1 all
+# 1. 同步 AutoCAD DLL（首次或切换版本时）
+.\build\sync-autocad-references.ps1 -AutoCADDir "C:\Program Files\Autodesk\AutoCAD 2025"
+
+# 2. 构建插件
+.\build.ps1 build
 ```
 
 ### 加载插件
@@ -67,14 +69,17 @@ NETLOAD
 | `LayerMapping` | 图层映射管理器 |
 | `ConvertRegion` | 区域引导构件转换 |
 | `RevertConversion` | 恢复构件转换 |
+| `RevertAllConversions` | 恢复当前图中的全部转换 |
+| `SectionSelfTest` | 宿主自检 |
 
 ---
 
 ## 依赖
 
-- AutoCAD .NET API（`acdbmgd.dll` / `acmgd.dll` / `accoremgd.dll`）— 不随仓库分发，见 [build/References/README.md](./build/References/README.md)
-- .NET 8 共享运行时中的 `Microsoft.Extensions.*` 程序集（构建与发布时自动复制到输出目录）
+- AutoCAD .NET API（`acdbmgd.dll` / `acmgd.dll` / `accoremgd.dll`）— 本机复制到 `build/References/`，不随仓库分发，且已被 Git 忽略，见 [build/References/README.md](./build/References/README.md)
+- `Microsoft.Extensions.*` 程序集会在构建/发布时从当前项目输出复制到插件目录
 - 发布包默认包含 `SectionGeneratorConfig.json`、`ElementTypes.json` 和 `README-release.md`
+- 运行期可写配置与日志默认落在按包隔离的用户目录 `%LOCALAPPDATA%\MetroToolKits\Packages\<package-scope>\...`，发布包中的 JSON 文件只作为初始化模板保留
 
 ---
 

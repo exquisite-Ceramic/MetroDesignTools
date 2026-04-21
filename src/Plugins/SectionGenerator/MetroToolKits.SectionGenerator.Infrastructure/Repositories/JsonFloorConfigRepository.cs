@@ -21,11 +21,16 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
     };
 
     private readonly string _filePath;
+    private readonly string? _templatePath;
     private readonly ILogger<JsonFloorConfigRepository> _logger;
 
-    public JsonFloorConfigRepository(string filePath, ILogger<JsonFloorConfigRepository> logger)
+    public JsonFloorConfigRepository(
+        string filePath,
+        string? templatePath,
+        ILogger<JsonFloorConfigRepository> logger)
     {
         _filePath = filePath;
+        _templatePath = templatePath;
         _logger   = logger;
     }
 
@@ -35,10 +40,17 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
 
         if (!File.Exists(_filePath))
         {
-            _logger.LogWarning("配置文件不存在，使用默认配置: {FilePath}", _filePath);
-            var defaultConfig = CreateDefault();
-            Save(defaultConfig);
-            return defaultConfig;
+            if (TrySeedFromTemplate())
+            {
+                _logger.LogInformation("配置文件不存在，已从模板复制到用户目录: {FilePath}", _filePath);
+            }
+            else
+            {
+                _logger.LogWarning("配置文件不存在，使用默认配置: {FilePath}", _filePath);
+                var defaultConfig = CreateDefault();
+                Save(defaultConfig);
+                return defaultConfig;
+            }
         }
 
         try
@@ -61,6 +73,19 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
         File.WriteAllText(_filePath, JsonSerializer.Serialize(config, WriteOptions));
         _logger.LogDebug("配置已保存: {FilePath}", _filePath);
+    }
+
+    private bool TrySeedFromTemplate()
+    {
+        if (string.IsNullOrWhiteSpace(_templatePath) || !File.Exists(_templatePath))
+        {
+            return false;
+        }
+
+        var dir = Path.GetDirectoryName(_filePath);
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+        File.Copy(_templatePath, _filePath, overwrite: false);
+        return true;
     }
 
     private static SectionConfig CreateDefault() => new()

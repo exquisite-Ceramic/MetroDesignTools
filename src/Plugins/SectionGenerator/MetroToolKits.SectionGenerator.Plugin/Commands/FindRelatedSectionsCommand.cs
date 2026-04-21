@@ -1,4 +1,5 @@
 using Autodesk.AutoCAD.EditorInput;
+using MetroToolKits.Bootstrap;
 using MetroToolKits.Foundation.Core.Logging;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.UseCases;
@@ -11,6 +12,7 @@ namespace MetroToolKits.SectionGenerator.Plugin.Commands;
 /// <summary>
 /// 平面构件查询关联剖面命令
 /// </summary>
+[CommandBinding(SectionGeneratorCommandNames.FindRelatedSections)]
 public sealed class FindRelatedSectionsCommand
 {
     private readonly IFindRelatedSectionsUseCase _useCase;

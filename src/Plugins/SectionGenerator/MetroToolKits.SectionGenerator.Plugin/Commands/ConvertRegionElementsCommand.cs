@@ -1,11 +1,9 @@
-using MetroToolKits.SectionGenerator.Infrastructure.Services;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
-using Autodesk.AutoCAD.Geometry;
-using Autodesk.AutoCAD.Runtime;
-using MetroToolKits.Foundation.Building.Types;
-using MetroToolKits.Foundation.Cad.Services;
+using MetroToolKits.Bootstrap;
+using MetroToolKits.SectionGenerator.App.Abstractions;
+using MetroToolKits.SectionGenerator.App.UseCases;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace MetroToolKits.SectionGenerator.Plugin.Commands;
@@ -13,21 +11,18 @@ namespace MetroToolKits.SectionGenerator.Plugin.Commands;
 /// <summary>
 /// 区域引导转换命令 - 框选区域后逐层分配构件类型
 /// </summary>
+[CommandBinding(SectionGeneratorCommandNames.ConvertRegion)]
 public class ConvertRegionElementsCommand
 {
-    private readonly ILayerService _layerService;
-    private readonly ElementConversionBackupService _backupService;
-    private readonly ElementTypeLoader _typeLoader;
-    private List<ElementTypeDefinition> _types = new();
+    private readonly IElementTypeCatalog _typeCatalog;
+    private readonly IElementConversionUseCase _conversionUseCase;
 
     public ConvertRegionElementsCommand(
-        ILayerService layerService,
-        ElementConversionBackupService backupService,
-        ElementTypeLoader typeLoader)
+        IElementTypeCatalog typeCatalog,
+        IElementConversionUseCase conversionUseCase)
     {
-        _layerService = layerService;
-        _backupService = backupService;
-        _typeLoader = typeLoader;
+        _typeCatalog = typeCatalog;
+        _conversionUseCase = conversionUseCase;
     }
 
     public void Execute()
@@ -39,8 +34,8 @@ public class ConvertRegionElementsCommand
         var db = doc.Database;
 
         // 加载构件类型
-        _types = _typeLoader.Load().Where(t => t.IsEnabled).ToList();
-        if (_types.Count == 0)
+        var types = _typeCatalog.GetEnabledTypes();
+        if (types.Count == 0)
         {
             ed.WriteMessage("\n未找到构件类型配置，请检查 ElementTypes.json 文件。");
             return;
@@ -60,14 +55,21 @@ public class ConvertRegionElementsCommand
 
         var selection = selectionResult.Value;
         ed.WriteMessage($"\n已选择 {selection.Count} 个实体。");
+        var selectedHandles = selection.GetObjectIds()
+            .Select(id => id.Handle.ToString())
+            .ToArray();
 
         // 2. 提取区域内图层列表
-        var layers = GetLayersFromSelection(db, selection);
-        if (layers.Count == 0)
+        var description = _conversionUseCase.DescribeSelection(new ElementConversionSelectionRequest
         {
-            ed.WriteMessage("\n所选区域内未找到图层。");
+            EntityHandles = selectedHandles
+        });
+        if (!description.Success || description.Layers.Count == 0)
+        {
+            ed.WriteMessage($"\n{description.ErrorMessage ?? "所选区域内未找到图层。"}");
             return;
         }
+        var layers = description.Layers;
 
         ed.WriteMessage($"\n发现 {layers.Count} 个图层:");
         foreach (var layer in layers)
@@ -89,7 +91,7 @@ public class ConvertRegionElementsCommand
                 HighlightLayerEntities(tr, db, selection, layerName);
 
                 // 显示提示
-                var typeHints = string.Join(" | ", _types.Select(t => $"{t.TypeName}({t.ShortcutKey})"));
+                var typeHints = string.Join(" | ", types.Select(t => $"{t.TypeName}({t.ShortcutKey})"));
                 ed.WriteMessage($"\n\n当前图层: {layerName}");
                 ed.WriteMessage($"\n可用类型: {typeHints}");
                 ed.WriteMessage("\n输入快捷字母分配类型，ESC 跳过，Q 退出: ");
@@ -113,7 +115,7 @@ public class ConvertRegionElementsCommand
                 }
 
                 // 查找匹配的类型
-                var matchedType = _types.FirstOrDefault(t => 
+                var matchedType = types.FirstOrDefault(t =>
                     t.ShortcutKey.Equals(keyResult, StringComparison.OrdinalIgnoreCase));
 
                 if (matchedType != null)
@@ -139,9 +141,28 @@ public class ConvertRegionElementsCommand
 
                 if (confirmResult.Status == PromptStatus.OK && confirmResult.StringResult == "是")
                 {
-                    ApplyLayerMappings(tr, db, selection, layerMappings);
-                    tr.Commit();
-                    ed.WriteMessage("\n转换完成。");
+                    tr.Abort();
+                    var result = _conversionUseCase.ApplyMappings(new ElementConversionApplyRequest
+                    {
+                        ApplyToEntireDrawing = false,
+                        EntityHandles = selectedHandles,
+                        LayerMappings = layerMappings
+                            .Select(static mapping => new LayerTypeAssignment
+                            {
+                                SourceLayerName = mapping.Key,
+                                TypeId = mapping.Value
+                            })
+                            .ToList()
+                    });
+
+                    if (result.Success)
+                    {
+                        ed.WriteMessage($"\n转换完成，共转换 {result.ConvertedCount} 个实体。");
+                    }
+                    else
+                    {
+                        ed.WriteMessage($"\n转换失败：{result.ErrorMessage}");
+                    }
                 }
                 else
                 {
@@ -160,24 +181,6 @@ public class ConvertRegionElementsCommand
             tr.Abort();
             throw;
         }
-    }
-
-    private List<string> GetLayersFromSelection(Database db, SelectionSet selection)
-    {
-        var layers = new HashSet<string>();
-
-        using var tr = db.TransactionManager.StartTransaction();
-        foreach (var objId in selection.GetObjectIds())
-        {
-            var entity = (Entity)tr.GetObject(objId, OpenMode.ForRead);
-            if (!string.IsNullOrEmpty(entity.Layer))
-            {
-                layers.Add(entity.Layer);
-            }
-        }
-        tr.Abort();
-
-        return layers.OrderBy(l => l).ToList();
     }
 
     private void HighlightLayerEntities(Transaction tr, Database db, SelectionSet selection, string layerName)
@@ -219,32 +222,4 @@ public class ConvertRegionElementsCommand
 
         return result.StringResult?.Trim().ToUpper();
     }
-
-    private void ApplyLayerMappings(Transaction tr, Database db, SelectionSet selection, 
-        Dictionary<string, string> layerMappings)
-    {
-        foreach (var mapping in layerMappings)
-        {
-            var layerName = mapping.Key;
-            var typeId = mapping.Value;
-            var typeDef = _types.FirstOrDefault(t => t.TypeId == typeId);
-            if (typeDef == null) continue;
-
-            var targetLayer = $"{typeDef.TargetLayerPrefix}_{layerName}";
-            _layerService.GetOrCreateLayer(targetLayer);
-            _layerService.SetLayerColor(targetLayer, typeDef.LayerColorIndex);
-
-            foreach (var objId in selection.GetObjectIds())
-            {
-                var entity = (Entity)tr.GetObject(objId, OpenMode.ForRead);
-                if (entity.Layer == layerName)
-                {
-                    entity.UpgradeOpen();
-                    _backupService.BackupEntity(entity, typeId);
-                    entity.Layer = targetLayer;
-                }
-            }
-        }
-    }
 }
-

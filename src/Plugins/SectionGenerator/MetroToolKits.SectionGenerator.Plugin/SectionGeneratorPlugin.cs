@@ -2,7 +2,6 @@ using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MetroToolKits.Bootstrap;
-using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.Foundation.Cad.Services;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.UseCases;
@@ -10,7 +9,6 @@ using MetroToolKits.SectionGenerator.Infrastructure.Recognition;
 using MetroToolKits.SectionGenerator.Infrastructure.Repositories;
 using MetroToolKits.SectionGenerator.Infrastructure.Services;
 using MetroToolKits.SectionGenerator.Plugin.Commands;
-using MetroToolKits.SectionGenerator.Plugin.Services;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace MetroToolKits.SectionGenerator.Plugin;
@@ -28,6 +26,7 @@ public class SectionGeneratorPlugin : IPlugin
     public void ConfigureServices(IServiceCollection services)
     {
         var assemblyDir = Path.GetDirectoryName(typeof(SectionGeneratorPlugin).Assembly.Location) ?? "";
+        var userDataDir = GetUserDataDirectory();
 
         // Foundation 服务
         services.AddSingleton<IDocumentService, DocumentService>();
@@ -36,17 +35,25 @@ public class SectionGeneratorPlugin : IPlugin
         services.AddSingleton<IEditorService, EditorService>();
 
         // 构件类型服务
-        var elementTypesPath = Path.Combine(assemblyDir, "ElementTypes.json");
-        services.AddSingleton(new ElementTypeLoader(elementTypesPath));
-        services.AddSingleton<ElementTypeService>();
+        var elementTypesPath = Path.Combine(userDataDir, "ElementTypes.json");
+        var elementTypesTemplatePath = Path.Combine(assemblyDir, "ElementTypes.json");
+        services.AddSingleton<IElementTypeCatalog>(sp =>
+            new JsonElementTypeCatalog(
+                elementTypesPath,
+                elementTypesTemplatePath,
+                sp.GetRequiredService<ILogger<JsonElementTypeCatalog>>()));
 
         // 备份服务
         services.AddSingleton<ElementConversionBackupService>();
+        services.AddSingleton<IElementConversionService, CadElementConversionService>();
 
         // 楼层配置仓储
-        var configPath = Path.Combine(assemblyDir, "SectionGeneratorConfig.json");
+        var configPath = Path.Combine(userDataDir, "SectionGeneratorConfig.json");
+        var configTemplatePath = Path.Combine(assemblyDir, "SectionGeneratorConfig.json");
         services.AddSingleton<IFloorConfigRepository>(sp =>
-            new JsonFloorConfigRepository(configPath,
+            new JsonFloorConfigRepository(
+                configPath,
+                configTemplatePath,
                 sp.GetRequiredService<ILogger<JsonFloorConfigRepository>>()));
 
         // 构件识别器
@@ -72,6 +79,8 @@ public class SectionGeneratorPlugin : IPlugin
         services.AddSingleton<IUpdateSectionUseCase, UpdateSectionUseCase>();
         services.AddSingleton<ILocateSourceElementUseCase, LocateSourceElementUseCase>();
         services.AddSingleton<IFindRelatedSectionsUseCase, FindRelatedSectionsUseCase>();
+        services.AddSingleton<IFloorConfigUseCase, FloorConfigUseCase>();
+        services.AddSingleton<IElementConversionUseCase, ElementConversionUseCase>();
 
         // UI/工具箱
         services.AddSingleton<UI.SectionToolboxPaletteService>();
@@ -91,44 +100,37 @@ public class SectionGeneratorPlugin : IPlugin
     }
 
     public void RegisterCommands(ICommandRegistry registry)
-    {
-        registry.RegisterCommand<GenSectionCommand>("GenSection");
-        registry.RegisterCommand<FloorConfigCommand>("FloorConfig");
-        registry.RegisterCommand<CheckSectionUpdatesCommand>("CheckSectionUpdates");
-        registry.RegisterCommand<UpdateSectionCommand>("UpdateSection");
-        registry.RegisterCommand<LocateSourceElementCommand>("LocateSourceElement");
-        registry.RegisterCommand<FindRelatedSectionsCommand>("FindRelatedSections");
-        registry.RegisterCommand<ShowToolboxCommand>("ShowToolbox");
-        registry.RegisterCommand<ConvertRegionElementsCommand>("ConvertRegion");
-        registry.RegisterCommand<RevertElementConversionCommand>("RevertConversion");
-        registry.RegisterCommand<RevertElementConversionCommand>("RevertAllConversions");
-        registry.RegisterCommand<SectionGeneratorSelfTestCommand>("SectionSelfTest");
-        registry.RegisterCommand<OpenLayerMappingCommand>("LayerMapping");
-    }
+        => CommandRegistrationScanner.RegisterAttributedCommands(registry, typeof(SectionGeneratorPlugin).Assembly);
+
+    private static string GetUserDataDirectory()
+        => RuntimePathResolver.GetPackageScopedUserPath(
+            typeof(SectionGeneratorPlugin).Assembly.Location,
+            "SectionGenerator");
 }
 
 /// <summary>
 /// 打开图层映射管理器命令
 /// </summary>
+[CommandBinding(SectionGeneratorCommandNames.LayerMapping)]
 public class OpenLayerMappingCommand
 {
     private readonly ILayerService _layerService;
-    private readonly ElementConversionBackupService _backupService;
-    private readonly ElementTypeLoader _typeLoader;
+    private readonly IElementTypeCatalog _typeCatalog;
+    private readonly IElementConversionUseCase _elementConversionUseCase;
 
     public OpenLayerMappingCommand(
         ILayerService layerService,
-        ElementConversionBackupService backupService,
-        ElementTypeLoader typeLoader)
+        IElementTypeCatalog typeCatalog,
+        IElementConversionUseCase elementConversionUseCase)
     {
         _layerService  = layerService;
-        _backupService = backupService;
-        _typeLoader    = typeLoader;
+        _typeCatalog = typeCatalog;
+        _elementConversionUseCase = elementConversionUseCase;
     }
 
     public void Execute()
     {
-        var window = new UI.LayerMappingManager(_layerService, _backupService, _typeLoader);
+        var window = new UI.LayerMappingManager(_layerService, _typeCatalog, _elementConversionUseCase);
         Application.ShowModalWindow(window);
     }
 }
