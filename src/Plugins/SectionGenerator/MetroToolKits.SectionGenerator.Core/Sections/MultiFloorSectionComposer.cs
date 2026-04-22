@@ -19,12 +19,12 @@ public sealed class MultiFloorSectionComposer
     /// <summary>
     /// 生成多楼层剖面数据
     /// </summary>
-    /// <param name="alignments">每层已解析的剖切线结果</param>
+    /// <param name="executionContexts">每层已解析的执行上下文</param>
     /// <param name="viewDirection">视图方向</param>
     /// <param name="floorElements">每层的构件列表，key = 楼层名称</param>
     /// <param name="floors">楼层配置列表（按楼层顺序）</param>
     public MultiFloorSectionData Generate(
-        IReadOnlyDictionary<string, FloorAlignmentResult> alignments,
+        IReadOnlyDictionary<string, FloorExecutionContext> executionContexts,
         Vector3D viewDirection,
         IReadOnlyDictionary<string, IReadOnlyList<BuildingElement>> floorElements,
         IReadOnlyList<FloorConfig> floors)
@@ -34,22 +34,25 @@ public sealed class MultiFloorSectionComposer
 
         foreach (var floor in floors)
         {
-            if (alignments.TryGetValue(floor.Name, out var alignment) &&
-                alignment.CanParticipate &&
-                alignment.SectionLine.HasValue)
+            if (executionContexts.TryGetValue(floor.Name, out var context) &&
+                context.CanParticipate &&
+                context.SectionLine.HasValue)
             {
                 var elements = floorElements.TryGetValue(floor.Name, out var list)
                     ? list
                     : Array.Empty<BuildingElement>();
 
                 var floorData = _singleFloorComposer.Generate(
-                    alignment.SectionLine.Value,
+                    context.SectionLine.Value,
                     viewDirection,
                     elements,
                     floor,
                     baseElevation: cumulativeElevation);
 
                 floorDataList.Add(floorData);
+
+                cumulativeElevation += ComputeTotalFloorHeight(floorData, floor);
+                continue;
             }
 
             cumulativeElevation += floor.BottomSlabThickness + floor.Height + floor.TopSlabThickness;
@@ -60,6 +63,19 @@ public sealed class MultiFloorSectionComposer
             Floors = floorDataList,
             TotalHeight = cumulativeElevation
         };
+    }
+
+    private static double ComputeTotalFloorHeight(SectionGeometryData floorData, FloorConfig fallbackFloor)
+    {
+        if (floorData.VerticalProfile == null)
+        {
+            return fallbackFloor.BottomSlabThickness + fallbackFloor.Height + fallbackFloor.TopSlabThickness;
+        }
+
+        var profile = floorData.VerticalProfile;
+        var bottomThickness = profile.GetBottomBoundaryTop(0) - profile.GetBottomBoundaryBottom(0);
+        var topThickness = profile.GetTopBoundaryTop(0) - profile.GetTopBoundaryBottom(0);
+        return bottomThickness + floorData.FloorHeight + topThickness;
     }
 
 }

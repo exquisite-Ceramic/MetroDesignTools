@@ -6,6 +6,7 @@ using MetroToolKits.Bootstrap;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Core.Sections;
+using MetroToolKits.SectionGenerator.Plugin.Selection;
 using MetroToolKits.SectionGenerator.Plugin.UI;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 
@@ -18,15 +19,18 @@ namespace MetroToolKits.SectionGenerator.Plugin.Commands;
 public sealed class FloorConfigCommand
 {
     private readonly IFloorConfigUseCase _floorConfigUseCase;
+    private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly ILogger<FloorConfigCommand> _logger;
     private readonly IUserLogger _userLogger;
 
     public FloorConfigCommand(
         IFloorConfigUseCase floorConfigUseCase,
+        ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         ILogger<FloorConfigCommand> logger,
         IUserLogger userLogger)
     {
         _floorConfigUseCase = floorConfigUseCase;
+        _slabTemplateCatalog = slabTemplateCatalog;
         _logger     = logger;
         _userLogger = userLogger;
     }
@@ -42,6 +46,7 @@ public sealed class FloorConfigCommand
         {
             var window = new FloorConfigWindow(
                 config,
+                _slabTemplateCatalog.GetAllTemplates(),
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<FloorConfigWindow>.Instance);
 
             Application.ShowModalWindow(window);
@@ -50,6 +55,12 @@ public sealed class FloorConfigCommand
             if (window.Tag is ("PickAlignment", FloorConfig floor))
             {
                 PickAlignmentPoints(config, floor);
+                continue;
+            }
+
+            if (window.Tag is ("PickScope", FloorConfig scopeFloor))
+            {
+                PickScopeBounds(scopeFloor);
                 continue;
             }
 
@@ -105,5 +116,40 @@ public sealed class FloorConfigCommand
         _userLogger.AlignmentPointsSet(floor.Name);
         _logger.LogInformation("楼层 {FloorName} 对齐点已设置", floor.Name);
         ed.WriteMessage($"\n楼层 [{floor.Name}] 对齐点已记录，请在配置窗口中保存。");
+    }
+
+    private void PickScopeBounds(FloorConfig floor)
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument;
+        if (doc == null) return;
+        var ed = doc.Editor;
+
+        ed.WriteMessage($"\n=== 选择楼层 [{floor.Name}] 的整层图元 ===");
+
+        var options = new PromptSelectionOptions
+        {
+            MessageForAdding = $"\n选择楼层 [{floor.Name}] 的全部图元，用于生成整层范围框: ",
+            AllowDuplicates = false
+        };
+
+        if (!SelectionScopeBoundsService.TryPickBounds(
+                doc,
+                options,
+                out var scopeBounds,
+                out var cancelled,
+                out var errorMessage))
+        {
+            if (!cancelled && !string.IsNullOrWhiteSpace(errorMessage))
+            {
+                ed.WriteMessage($"\n{errorMessage}");
+                _logger.LogWarning("楼层 {FloorName} 整层范围拾取失败: {Error}", floor.Name, errorMessage);
+            }
+
+            return;
+        }
+
+        floor.ScopeBounds = scopeBounds;
+        _logger.LogInformation("楼层 {FloorName} 整层范围已设置为 {ScopeBounds}", floor.Name, scopeBounds);
+        ed.WriteMessage($"\n楼层 [{floor.Name}] 整层范围已记录，请在配置窗口中保存。");
     }
 }

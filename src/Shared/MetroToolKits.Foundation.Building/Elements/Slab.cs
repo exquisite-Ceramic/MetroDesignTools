@@ -43,8 +43,9 @@ public sealed class Slab : BuildingElement
         return new Polygon3D(Outline);
     }
 
-    public override IEnumerable<Line3D> GetSectionGeometry(Line3D sectionLine, Vector3D viewDirection)
+    public override IEnumerable<Line3D> GetSectionGeometry(SectionGeometryContext context)
     {
+        var sectionLine = context.SectionLine;
         if (Outline.Count < 2) yield break;
 
         // 找出剖切线与楼板轮廓的交点
@@ -63,10 +64,30 @@ public sealed class Slab : BuildingElement
 
         if (intersections.Count < 2) yield break;
 
+        var orderedIntersections = intersections
+            .Select(point => new
+            {
+                Point = point,
+                Chainage = SectionCoordinateProjector.GetChainage(sectionLine, point)
+            })
+            .OrderBy(item => item.Chainage)
+            .ToList();
+
+        var uniqueIntersections = new List<(Point3D Point, double Chainage)>();
+        foreach (var intersection in orderedIntersections)
+        {
+            if (uniqueIntersections.Count == 0 ||
+                Math.Abs(uniqueIntersections[^1].Chainage - intersection.Chainage) > 1e-6)
+            {
+                uniqueIntersections.Add((intersection.Point, intersection.Chainage));
+            }
+        }
+
+        if (uniqueIntersections.Count < 2) yield break;
+
         // 生成楼板剖面线段
-        var sortedIntersections = intersections.OrderBy(p => p.X).ThenBy(p => p.Y).ToList();
-        var left = sortedIntersections[0];
-        var right = sortedIntersections[^1];
+        var left = uniqueIntersections[0].Point;
+        var right = uniqueIntersections[^1].Point;
 
         // 顶面线
         var topLeft = new Point3D(left.X, left.Y, TopElevation);
@@ -106,4 +127,3 @@ public sealed class Slab : BuildingElement
             line1.Start.Z + t * (line1.End.Z - line1.Start.Z));
     }
 }
-

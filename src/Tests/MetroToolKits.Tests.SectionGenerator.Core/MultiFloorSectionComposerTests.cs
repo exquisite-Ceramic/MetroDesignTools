@@ -22,10 +22,10 @@ public class MultiFloorSectionComposerTests
     private static MultiFloorSectionComposer MakeComposer()
         => new(new SectionComposer());
 
-    private static IReadOnlyDictionary<string, FloorAlignmentResult> Alignments(params (string FloorName, bool CanParticipate, Line3D? Line)[] items)
+    private static IReadOnlyDictionary<string, FloorExecutionContext> ExecutionContexts(params (string FloorName, bool CanParticipate, Line3D? Line)[] items)
         => items.ToDictionary(
             item => item.FloorName,
-            item => new FloorAlignmentResult
+            item => new FloorExecutionContext
             {
                 FloorName = item.FloorName,
                 CanParticipate = item.CanParticipate,
@@ -38,11 +38,11 @@ public class MultiFloorSectionComposerTests
     {
         var composer = MakeComposer();
         var floors = new[] { MakeFloor("F1"), MakeFloor("F2") };
-        var alignments = Alignments(
+        var executionContexts = ExecutionContexts(
             ("F1", true, new Line3D(new Point3D(0, 0, 0), new Point3D(0, 1000, 0))),
             ("F2", true, new Line3D(new Point3D(100, 0, 0), new Point3D(100, 1000, 0))));
 
-        var result = composer.Generate(alignments, ViewDir, new Dictionary<string, IReadOnlyList<BuildingElement>>(), floors);
+        var result = composer.Generate(executionContexts, ViewDir, new Dictionary<string, IReadOnlyList<BuildingElement>>(), floors);
 
         result.Floors.Should().HaveCount(2);
     }
@@ -57,12 +57,12 @@ public class MultiFloorSectionComposerTests
             MakeFloor("F2", height: 3000, bottomSlab: 800, topSlab: 600),
             MakeFloor("F3", height: 3000, bottomSlab: 800, topSlab: 600)
         };
-        var alignments = Alignments(
+        var executionContexts = ExecutionContexts(
             ("F1", true, new Line3D(new Point3D(0, 0, 0), new Point3D(0, 1000, 0))),
             ("F2", false, null),
             ("F3", true, new Line3D(new Point3D(200, 0, 0), new Point3D(200, 1000, 0))));
 
-        var result = composer.Generate(alignments, ViewDir, new Dictionary<string, IReadOnlyList<BuildingElement>>(), floors);
+        var result = composer.Generate(executionContexts, ViewDir, new Dictionary<string, IReadOnlyList<BuildingElement>>(), floors);
 
         result.Floors.Should().HaveCount(2);
         result.Floors[0].FloorName.Should().Be("F1");
@@ -80,11 +80,11 @@ public class MultiFloorSectionComposerTests
             MakeFloor("F1", height: 3000, bottomSlab: 800, topSlab: 600),
             MakeFloor("F2", height: 4000, bottomSlab: 1000, topSlab: 700)
         };
-        var alignments = Alignments(
+        var executionContexts = ExecutionContexts(
             ("F1", true, new Line3D(new Point3D(0, 0, 0), new Point3D(0, 1000, 0))),
             ("F2", true, new Line3D(new Point3D(100, 0, 0), new Point3D(100, 1000, 0))));
 
-        var result = composer.Generate(alignments, ViewDir, new Dictionary<string, IReadOnlyList<BuildingElement>>(), floors);
+        var result = composer.Generate(executionContexts, ViewDir, new Dictionary<string, IReadOnlyList<BuildingElement>>(), floors);
 
         result.TotalHeight.Should().Be(10100);
     }

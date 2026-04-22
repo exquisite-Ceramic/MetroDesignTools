@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace MetroToolKits.Foundation.Core.Geometry;
 
 /// <summary>
@@ -9,6 +11,7 @@ public readonly struct Point3D : IEquatable<Point3D>
     public double Y { get; }
     public double Z { get; }
 
+    [JsonConstructor]
     public Point3D(double x, double y, double z)
     {
         X = x;

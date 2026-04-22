@@ -4,6 +4,7 @@ using MetroToolKits.SectionGenerator.App.Diagnostics;
 using MetroToolKits.SectionGenerator.Core.Sections;
 using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
+using MetroToolKits.Foundation.Building.Types;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -70,6 +71,7 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
 
             var migrationDiagnostics = new List<OperationDiagnostic>();
             var config = MapToConfig(document, migrationDiagnostics, out var migratedFromLegacy, out var hasMigrationConflict);
+            config.OutputConfig = NormalizeOutputConfig(config.OutputConfig);
 
             if (migrationDiagnostics.Count > 0)
             {
@@ -123,15 +125,51 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
 
     private static SectionConfig CreateDefault() => new()
     {
-        GlobalSlopeEnabled = true,
-        GlobalSlopeValue   = 0.002,
-        GlobalSlopeTarget  = "StructuralSlab",
+        GlobalTopSlopeEnabled = true,
+        GlobalTopSlopeValue   = 0.002,
+        GlobalTopSlopeTarget  = "StructuralSlab",
+        GlobalBottomSlopeEnabled = false,
+        GlobalBottomSlopeValue = 0,
+        GlobalBottomSlopeTarget = "StructuralSlab",
         AlignmentBaseFloorName = "F1",
+        OutputConfig = new SectionOutputConfig
+        {
+            AnnotationOptions = new AnnotationOptions
+            {
+                GenerateAnnotations = false
+            },
+            HatchOptions = new HatchOptions
+            {
+                Enabled = false
+            },
+            LayerOptions = new LayerOptions()
+        },
         Floors = new List<FloorConfig>
         {
-            new() { Name = "F1", Height = 5200, FinishThickness = 120,
-                    BottomSlabThickness = 800, TopSlabThickness = 600,
-                    HasSlope = true, SlopeValue = 0.002 }
+            new()
+            {
+                Name = "F1",
+                Height = 5200,
+                FinishThickness = 120,
+                BottomSlabThickness = 800,
+                TopSlabThickness = 600,
+                HasSlope = true,
+                SlopeValue = 0.002,
+                BottomBoundarySlab = new BoundarySlabConfig
+                {
+                    TemplateId = string.Empty,
+                    SlopeEnabled = false,
+                    SlopeValue = 0,
+                    SlopeTarget = "StructuralSlab"
+                },
+                TopBoundarySlab = new BoundarySlabConfig
+                {
+                    TemplateId = string.Empty,
+                    SlopeEnabled = true,
+                    SlopeValue = 0.002,
+                    SlopeTarget = "StructuralSlab"
+                }
+            }
         }
     };
 
@@ -149,7 +187,14 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
             GlobalSlopeEnabled = document.GlobalSlopeEnabled,
             GlobalSlopeValue = document.GlobalSlopeValue,
             GlobalSlopeTarget = document.GlobalSlopeTarget ?? "StructuralSlab",
+            GlobalTopSlopeEnabled = document.GlobalTopSlopeEnabled ?? document.GlobalSlopeEnabled,
+            GlobalTopSlopeValue = document.GlobalTopSlopeValue ?? document.GlobalSlopeValue,
+            GlobalTopSlopeTarget = document.GlobalTopSlopeTarget ?? document.GlobalSlopeTarget ?? "StructuralSlab",
+            GlobalBottomSlopeEnabled = document.GlobalBottomSlopeEnabled ?? false,
+            GlobalBottomSlopeValue = document.GlobalBottomSlopeValue ?? 0,
+            GlobalBottomSlopeTarget = document.GlobalBottomSlopeTarget ?? "StructuralSlab",
             AlignmentBaseFloorName = document.AlignmentBaseFloorName ?? string.Empty,
+            OutputConfig = NormalizeOutputConfig(document.OutputConfig),
             Floors = document.Floors.Select(MapFloor).ToList()
         };
 
@@ -206,7 +251,14 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
             GlobalSlopeEnabled = config.GlobalSlopeEnabled,
             GlobalSlopeValue = config.GlobalSlopeValue,
             GlobalSlopeTarget = config.GlobalSlopeTarget,
+            GlobalTopSlopeEnabled = config.GlobalTopSlopeEnabled,
+            GlobalTopSlopeValue = config.GlobalTopSlopeValue,
+            GlobalTopSlopeTarget = config.GlobalTopSlopeTarget,
+            GlobalBottomSlopeEnabled = config.GlobalBottomSlopeEnabled,
+            GlobalBottomSlopeValue = config.GlobalBottomSlopeValue,
+            GlobalBottomSlopeTarget = config.GlobalBottomSlopeTarget,
             AlignmentBaseFloorName = config.AlignmentBaseFloorName,
+            OutputConfig = NormalizeOutputConfig(config.OutputConfig),
             Floors = config.Floors.Select(floor => new FloorConfigDocument
             {
                 Name = floor.Name,
@@ -217,7 +269,10 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
                 HasSlope = floor.HasSlope,
                 SlopeValue = floor.SlopeValue,
                 SlopeTarget = floor.SlopeTarget,
-                AlignmentPoints = ToPointDocuments(floor.AlignmentPoints)
+                BottomBoundarySlab = ToBoundarySlabDocument(floor.BottomBoundarySlab),
+                TopBoundarySlab = ToBoundarySlabDocument(floor.TopBoundarySlab),
+                AlignmentPoints = ToPointDocuments(floor.AlignmentPoints),
+                ScopeBounds = ToScopeBoundsDocument(floor.ScopeBounds)
             }).ToList()
         };
     }
@@ -232,7 +287,20 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
         HasSlope = document.HasSlope,
         SlopeValue = document.SlopeValue,
         SlopeTarget = document.SlopeTarget ?? "StructuralSlab",
-        AlignmentPoints = ToPoint3Ds(document.AlignmentPoints)
+        BottomBoundarySlab = ToBoundarySlab(
+            document.BottomBoundarySlab,
+            fallbackTemplateId: string.Empty,
+            fallbackSlopeEnabled: false,
+            fallbackSlopeValue: 0,
+            fallbackSlopeTarget: "StructuralSlab"),
+        TopBoundarySlab = ToBoundarySlab(
+            document.TopBoundarySlab,
+            fallbackTemplateId: string.Empty,
+            fallbackSlopeEnabled: document.HasSlope,
+            fallbackSlopeValue: document.SlopeValue,
+            fallbackSlopeTarget: document.SlopeTarget ?? "StructuralSlab"),
+        AlignmentPoints = ToPoint3Ds(document.AlignmentPoints),
+        ScopeBounds = ToScopeBounds(document.ScopeBounds)
     };
 
     private static bool UsesLegacyAlignment(SectionConfigDocument document)
@@ -289,12 +357,97 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
         return true;
     }
 
+    private static ScopeBounds2D? ToScopeBounds(ScopeBoundsDocument? document)
+    {
+        if (document == null)
+            return null;
+
+        return new ScopeBounds2D
+        {
+            MinX = document.MinX,
+            MinY = document.MinY,
+            MaxX = document.MaxX,
+            MaxY = document.MaxY
+        };
+    }
+
+    private static ScopeBoundsDocument? ToScopeBoundsDocument(ScopeBounds2D? scopeBounds)
+    {
+        if (!scopeBounds.HasValue)
+            return null;
+
+        return new ScopeBoundsDocument
+        {
+            MinX = scopeBounds.Value.MinX,
+            MinY = scopeBounds.Value.MinY,
+            MaxX = scopeBounds.Value.MaxX,
+            MaxY = scopeBounds.Value.MaxY
+        };
+    }
+
+    private static BoundarySlabConfig ToBoundarySlab(
+        BoundarySlabDocument? document,
+        string fallbackTemplateId,
+        bool fallbackSlopeEnabled,
+        double fallbackSlopeValue,
+        string fallbackSlopeTarget)
+    {
+        if (document == null)
+        {
+            return new BoundarySlabConfig
+            {
+                TemplateId = fallbackTemplateId,
+                SlopeEnabled = fallbackSlopeEnabled,
+                SlopeValue = fallbackSlopeValue,
+                SlopeTarget = fallbackSlopeTarget
+            };
+        }
+
+        return new BoundarySlabConfig
+        {
+            TemplateId = document.TemplateId ?? fallbackTemplateId,
+            SlopeEnabled = document.SlopeEnabled,
+            SlopeValue = document.SlopeValue,
+            SlopeTarget = document.SlopeTarget ?? fallbackSlopeTarget
+        };
+    }
+
+    private static BoundarySlabDocument ToBoundarySlabDocument(BoundarySlabConfig config)
+    {
+        return new BoundarySlabDocument
+        {
+            TemplateId = config.TemplateId,
+            SlopeEnabled = config.SlopeEnabled,
+            SlopeValue = config.SlopeValue,
+            SlopeTarget = config.SlopeTarget
+        };
+    }
+
+    private static SectionOutputConfig NormalizeOutputConfig(SectionOutputConfig? outputConfig)
+    {
+        outputConfig ??= new SectionOutputConfig();
+        outputConfig.AnnotationOptions ??= new AnnotationOptions();
+        outputConfig.HatchOptions ??= new HatchOptions();
+        outputConfig.HatchOptions.WallHatch ??= HatchStyleOptions.CreateDefault();
+        outputConfig.HatchOptions.ColumnHatch ??= HatchStyleOptions.CreateDefault();
+        outputConfig.HatchOptions.SlabHatch ??= HatchStyleOptions.CreateDefault();
+        outputConfig.LayerOptions ??= new LayerOptions();
+        return outputConfig;
+    }
+
     private sealed class SectionConfigDocument
     {
         public bool GlobalSlopeEnabled { get; set; }
         public double GlobalSlopeValue { get; set; } = 0.002;
         public string? GlobalSlopeTarget { get; set; } = "StructuralSlab";
+        public bool? GlobalTopSlopeEnabled { get; set; }
+        public double? GlobalTopSlopeValue { get; set; }
+        public string? GlobalTopSlopeTarget { get; set; }
+        public bool? GlobalBottomSlopeEnabled { get; set; }
+        public double? GlobalBottomSlopeValue { get; set; }
+        public string? GlobalBottomSlopeTarget { get; set; }
         public string? AlignmentBaseFloorName { get; set; }
+        public SectionOutputConfig? OutputConfig { get; set; }
         public List<FloorConfigDocument> Floors { get; set; } = new();
     }
 
@@ -308,7 +461,10 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
         public bool HasSlope { get; set; }
         public double SlopeValue { get; set; }
         public string? SlopeTarget { get; set; } = "StructuralSlab";
+        public BoundarySlabDocument? BottomBoundarySlab { get; set; }
+        public BoundarySlabDocument? TopBoundarySlab { get; set; }
         public List<PointDocument>? AlignmentPoints { get; set; }
+        public ScopeBoundsDocument? ScopeBounds { get; set; }
         public List<PointDocument>? AlignmentSourcePoints { get; set; }
         public List<PointDocument>? AlignmentTargetPoints { get; set; }
     }
@@ -318,5 +474,21 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
         public double X { get; set; }
         public double Y { get; set; }
         public double Z { get; set; }
+    }
+
+    private sealed class ScopeBoundsDocument
+    {
+        public double MinX { get; set; }
+        public double MinY { get; set; }
+        public double MaxX { get; set; }
+        public double MaxY { get; set; }
+    }
+
+    private sealed class BoundarySlabDocument
+    {
+        public string? TemplateId { get; set; }
+        public bool SlopeEnabled { get; set; }
+        public double SlopeValue { get; set; }
+        public string? SlopeTarget { get; set; } = "StructuralSlab";
     }
 }

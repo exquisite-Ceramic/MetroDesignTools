@@ -5,6 +5,7 @@ using MetroToolKits.Bootstrap;
 using MetroToolKits.Foundation.Cad.Services;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.UseCases;
+using MetroToolKits.SectionGenerator.Core.Sections;
 using MetroToolKits.SectionGenerator.Infrastructure.Recognition;
 using MetroToolKits.SectionGenerator.Infrastructure.Repositories;
 using MetroToolKits.SectionGenerator.Infrastructure.Services;
@@ -42,28 +43,39 @@ public class SectionGeneratorPlugin : IPlugin
                 elementTypesPath,
                 elementTypesTemplatePath,
                 sp.GetRequiredService<ILogger<JsonElementTypeCatalog>>()));
+        var wallTemplatesPath = Path.Combine(userDataDir, "WallAssemblyTemplates.json");
+        var wallTemplatesTemplatePath = Path.Combine(assemblyDir, "WallAssemblyTemplates.json");
+        services.AddSingleton<IWallAssemblyTemplateCatalog>(sp =>
+            new JsonWallAssemblyTemplateCatalog(
+                wallTemplatesPath,
+                wallTemplatesTemplatePath,
+                sp.GetRequiredService<ILogger<JsonWallAssemblyTemplateCatalog>>()));
+        var slabTemplatesPath = Path.Combine(userDataDir, "SlabAssemblyTemplates.json");
+        var slabTemplatesTemplatePath = Path.Combine(assemblyDir, "SlabAssemblyTemplates.json");
+        services.AddSingleton<ISlabAssemblyTemplateCatalog>(sp =>
+            new JsonSlabAssemblyTemplateCatalog(
+                slabTemplatesPath,
+                slabTemplatesTemplatePath,
+                sp.GetRequiredService<ILogger<JsonSlabAssemblyTemplateCatalog>>()));
 
         // 备份服务
         services.AddSingleton<ElementConversionBackupService>();
         services.AddSingleton<IElementConversionService, CadElementConversionService>();
 
-        // 楼层配置仓储
-        var configPath = Path.Combine(userDataDir, "SectionGeneratorConfig.json");
-        var configTemplatePath = Path.Combine(assemblyDir, "SectionGeneratorConfig.json");
-        services.AddSingleton<IFloorConfigRepository>(sp =>
-            new JsonFloorConfigRepository(
-                configPath,
-                configTemplatePath,
-                sp.GetRequiredService<ILogger<JsonFloorConfigRepository>>()));
+        // 楼层配置仓储（直接内嵌到 DWG）
+        services.AddSingleton<IFloorConfigRepository, DwgFloorConfigRepository>();
 
         // 构件识别器
         services.AddSingleton<IElementRecognizer, LayerBasedElementRecognizer>();
         services.AddSingleton<ISectionLineResolver, CadSectionLineResolver>();
 
         // Core 层
+        services.AddSingleton<FloorVerticalProfileBuilder>();
         services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.SectionComposer>();
         services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.MultiFloorSectionComposer>();
         services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.FloorGeometryHasher>();
+        services.AddSingleton<IWallAssemblyBuilder, MetroToolKits.SectionGenerator.Core.Sections.WallAssemblyBuilder>();
+        services.AddSingleton<ISlabAssemblyBuilder, MetroToolKits.SectionGenerator.Core.Sections.SlabAssemblyBuilder>();
 
         // 快照仓储 + 块删除服务
         services.AddSingleton<ISectionSnapshotRepository, XDataSnapshotRepository>();
@@ -118,21 +130,32 @@ public class OpenLayerMappingCommand
 {
     private readonly ILayerService _layerService;
     private readonly IElementTypeCatalog _typeCatalog;
+    private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
+    private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly IElementConversionUseCase _elementConversionUseCase;
 
     public OpenLayerMappingCommand(
         ILayerService layerService,
         IElementTypeCatalog typeCatalog,
+        IWallAssemblyTemplateCatalog wallTemplateCatalog,
+        ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         IElementConversionUseCase elementConversionUseCase)
     {
         _layerService  = layerService;
         _typeCatalog = typeCatalog;
+        _wallTemplateCatalog = wallTemplateCatalog;
+        _slabTemplateCatalog = slabTemplateCatalog;
         _elementConversionUseCase = elementConversionUseCase;
     }
 
     public void Execute()
     {
-        var window = new UI.LayerMappingManager(_layerService, _typeCatalog, _elementConversionUseCase);
+        var window = new UI.LayerMappingManager(
+            _layerService,
+            _typeCatalog,
+            _wallTemplateCatalog,
+            _slabTemplateCatalog,
+            _elementConversionUseCase);
         Application.ShowModalWindow(window);
     }
 }

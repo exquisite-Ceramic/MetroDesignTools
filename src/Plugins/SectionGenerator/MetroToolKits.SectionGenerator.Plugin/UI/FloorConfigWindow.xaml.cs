@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Extensions.Logging;
+using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
 namespace MetroToolKits.SectionGenerator.Plugin.UI;
@@ -12,6 +13,7 @@ namespace MetroToolKits.SectionGenerator.Plugin.UI;
 public partial class FloorConfigWindow : Window
 {
     private readonly ILogger<FloorConfigWindow> _logger;
+    private readonly IReadOnlyList<SlabAssemblyTemplate> _slabTemplates;
     private readonly ObservableCollection<FloorConfig> _floors = new();
     private SectionConfig _config = new();
     private FloorConfig? _currentFloor;
@@ -20,14 +22,18 @@ public partial class FloorConfigWindow : Window
 
     public FloorConfigWindow(
         SectionConfig config,
+        IReadOnlyList<SlabAssemblyTemplate> slabTemplates,
         ILogger<FloorConfigWindow> logger)
     {
         InitializeComponent();
         _config = config;
+        _slabTemplates = slabTemplates;
         _logger = logger;
 
         FloorListBox.ItemsSource = _floors;
         BaseFloorComboBox.ItemsSource = _floors;
+        TopBoundaryTemplateBox.ItemsSource = _slabTemplates;
+        BottomBoundaryTemplateBox.ItemsSource = _slabTemplates;
         LoadConfig();
     }
 
@@ -37,12 +43,14 @@ public partial class FloorConfigWindow : Window
     {
         _floors.Clear();
         foreach (var f in _config.Floors) _floors.Add(f);
+        ConfigSourceStatus.Text = BuildConfigSourceStatus(_config.RuntimeState);
 
         GlobalSlopeCheck.IsChecked     = _config.GlobalSlopeEnabled;
         GlobalSlopeValueBox.Text       = (_config.GlobalSlopeValue * 100).ToString("F2");
         GlobalSlopeTargetBox.SelectedIndex = _config.GlobalSlopeTarget == "FinishLayer" ? 1 : 0;
         BaseFloorComboBox.SelectedItem = _floors.FirstOrDefault(f =>
             string.Equals(f.Name, _config.AlignmentBaseFloorName, StringComparison.OrdinalIgnoreCase));
+        LoadOutputConfig(_config.OutputConfig);
 
         if (BaseFloorComboBox.SelectedItem == null && _floors.Count == 1)
         {
@@ -50,6 +58,105 @@ public partial class FloorConfigWindow : Window
         }
 
         _logger.LogDebug("楼层配置窗口加载，楼层数: {Count}", _floors.Count);
+    }
+
+    private void LoadOutputConfig(SectionOutputConfig outputConfig)
+    {
+        outputConfig ??= new SectionOutputConfig();
+        outputConfig.AnnotationOptions ??= new AnnotationOptions();
+        outputConfig.HatchOptions ??= new HatchOptions();
+        outputConfig.HatchOptions.WallHatch ??= HatchStyleOptions.CreateDefault();
+        outputConfig.HatchOptions.ColumnHatch ??= HatchStyleOptions.CreateDefault();
+        outputConfig.HatchOptions.SlabHatch ??= HatchStyleOptions.CreateDefault();
+        outputConfig.LayerOptions ??= new LayerOptions();
+
+        GenerateAnnotationsCheck.IsChecked = outputConfig.AnnotationOptions.GenerateAnnotations;
+        EnableHatchCheck.IsChecked = outputConfig.HatchOptions.Enabled;
+
+        BindHatchStyle(outputConfig.HatchOptions.WallHatch, WallHatchPatternBox, WallHatchScaleBox, WallHatchAngleBox, WallHatchByLayerCheck);
+        BindHatchStyle(outputConfig.HatchOptions.ColumnHatch, ColumnHatchPatternBox, ColumnHatchScaleBox, ColumnHatchAngleBox, ColumnHatchByLayerCheck);
+        BindHatchStyle(outputConfig.HatchOptions.SlabHatch, SlabHatchPatternBox, SlabHatchScaleBox, SlabHatchAngleBox, SlabHatchByLayerCheck);
+
+        CutLineLayerBox.Text = outputConfig.LayerOptions.CutLineLayer;
+        SightLineLayerBox.Text = outputConfig.LayerOptions.SightLineLayer;
+        AnnotationLayerBox.Text = outputConfig.LayerOptions.AnnotationLayer;
+        WallHatchLayerBox.Text = outputConfig.LayerOptions.WallHatchLayer;
+        ColumnHatchLayerBox.Text = outputConfig.LayerOptions.ColumnHatchLayer;
+        SlabHatchLayerBox.Text = outputConfig.LayerOptions.SlabHatchLayer;
+        StructuralLayerBox.Text = outputConfig.LayerOptions.StructuralLayer;
+        FinishLayerBox.Text = outputConfig.LayerOptions.FinishLayer;
+    }
+
+    private static void BindHatchStyle(
+        HatchStyleOptions style,
+        TextBox patternBox,
+        TextBox scaleBox,
+        TextBox angleBox,
+        CheckBox byLayerCheck)
+    {
+        patternBox.Text = style.PatternName;
+        scaleBox.Text = style.Scale.ToString("F2");
+        angleBox.Text = style.Angle.ToString("F2");
+        byLayerCheck.IsChecked = style.UseByLayer;
+    }
+
+    private void SaveOutputConfig()
+    {
+        _config.OutputConfig ??= new SectionOutputConfig();
+        _config.OutputConfig.AnnotationOptions ??= new AnnotationOptions();
+        _config.OutputConfig.HatchOptions ??= new HatchOptions();
+        _config.OutputConfig.HatchOptions.WallHatch ??= HatchStyleOptions.CreateDefault();
+        _config.OutputConfig.HatchOptions.ColumnHatch ??= HatchStyleOptions.CreateDefault();
+        _config.OutputConfig.HatchOptions.SlabHatch ??= HatchStyleOptions.CreateDefault();
+        _config.OutputConfig.LayerOptions ??= new LayerOptions();
+
+        _config.OutputConfig.AnnotationOptions.GenerateAnnotations = GenerateAnnotationsCheck.IsChecked == true;
+        _config.OutputConfig.HatchOptions.Enabled = EnableHatchCheck.IsChecked == true;
+
+        SaveHatchStyle(_config.OutputConfig.HatchOptions.WallHatch, WallHatchPatternBox, WallHatchScaleBox, WallHatchAngleBox, WallHatchByLayerCheck);
+        SaveHatchStyle(_config.OutputConfig.HatchOptions.ColumnHatch, ColumnHatchPatternBox, ColumnHatchScaleBox, ColumnHatchAngleBox, ColumnHatchByLayerCheck);
+        SaveHatchStyle(_config.OutputConfig.HatchOptions.SlabHatch, SlabHatchPatternBox, SlabHatchScaleBox, SlabHatchAngleBox, SlabHatchByLayerCheck);
+
+        _config.OutputConfig.LayerOptions.CutLineLayer = CutLineLayerBox.Text.Trim();
+        _config.OutputConfig.LayerOptions.SightLineLayer = SightLineLayerBox.Text.Trim();
+        _config.OutputConfig.LayerOptions.AnnotationLayer = AnnotationLayerBox.Text.Trim();
+        _config.OutputConfig.LayerOptions.WallHatchLayer = WallHatchLayerBox.Text.Trim();
+        _config.OutputConfig.LayerOptions.ColumnHatchLayer = ColumnHatchLayerBox.Text.Trim();
+        _config.OutputConfig.LayerOptions.SlabHatchLayer = SlabHatchLayerBox.Text.Trim();
+        _config.OutputConfig.LayerOptions.StructuralLayer = StructuralLayerBox.Text.Trim();
+        _config.OutputConfig.LayerOptions.FinishLayer = FinishLayerBox.Text.Trim();
+    }
+
+    private static void SaveHatchStyle(
+        HatchStyleOptions style,
+        TextBox patternBox,
+        TextBox scaleBox,
+        TextBox angleBox,
+        CheckBox byLayerCheck)
+    {
+        style.PatternName = patternBox.Text.Trim();
+        if (double.TryParse(scaleBox.Text, out var scale))
+            style.Scale = scale;
+        if (double.TryParse(angleBox.Text, out var angle))
+            style.Angle = angle;
+        style.UseByLayer = byLayerCheck.IsChecked == true;
+    }
+
+    private static string BuildConfigSourceStatus(SectionConfigRuntimeState state)
+    {
+        return state.Source switch
+        {
+            SectionConfigStorageSource.EmbeddedDwg =>
+                $"当前图纸 [{state.DrawingDisplayName}] 使用 DWG 内嵌楼层配置。",
+            SectionConfigStorageSource.TransientUnsavedDrawing when state.IsCurrentDrawingSaved =>
+                $"当前图纸 [{state.DrawingDisplayName}] 正在使用尚未写入 DWG 的临时楼层配置，请执行一次保存把配置写入图内。",
+            SectionConfigStorageSource.TransientUnsavedDrawing =>
+                $"当前图纸 [{state.DrawingDisplayName}] 尚未保存，楼层配置仅在本次会话有效，保存图纸后再保存配置才会写入 DWG。",
+            _ when state.IsCurrentDrawingSaved =>
+                $"当前图纸 [{state.DrawingDisplayName}] 尚未配置基准点/整层范围，保存后会直接写入该 DWG。",
+            _ =>
+                $"当前图纸 [{state.DrawingDisplayName}] 尚未建立图内楼层配置。"
+        };
     }
 
     // ── 楼层列表操作 ──────────────────────────────────────────────────────────
@@ -77,7 +184,21 @@ public partial class FloorConfigWindow : Window
             Height              = 3000,
             BottomSlabThickness = 800,
             TopSlabThickness    = 600,
-            FinishThickness     = 120
+            FinishThickness     = 120,
+            TopBoundarySlab = new BoundarySlabConfig
+            {
+                TemplateId = string.Empty,
+                SlopeEnabled = false,
+                SlopeValue = 0,
+                SlopeTarget = "StructuralSlab"
+            },
+            BottomBoundarySlab = new BoundarySlabConfig
+            {
+                TemplateId = string.Empty,
+                SlopeEnabled = false,
+                SlopeValue = 0,
+                SlopeTarget = "StructuralSlab"
+            }
         };
         _floors.Add(newFloor);
         if (_floors.Count == 1)
@@ -129,6 +250,14 @@ public partial class FloorConfigWindow : Window
         SlopeCheck.IsChecked = floor.HasSlope;
         SlopeValueBox.Text = (floor.SlopeValue * 100).ToString("F2");
         SlopeValueBox.IsEnabled = floor.HasSlope;
+        TopBoundaryTemplateBox.SelectedValue = floor.TopBoundarySlab.TemplateId;
+        BottomBoundaryTemplateBox.SelectedValue = floor.BottomBoundarySlab.TemplateId;
+        TopSlopeCheck.IsChecked = floor.TopBoundarySlab.SlopeEnabled;
+        TopSlopeValueBox.Text = (floor.TopBoundarySlab.SlopeValue * 100).ToString("F2");
+        TopSlopeValueBox.IsEnabled = floor.TopBoundarySlab.SlopeEnabled;
+        BottomSlopeCheck.IsChecked = floor.BottomBoundarySlab.SlopeEnabled;
+        BottomSlopeValueBox.Text = (floor.BottomBoundarySlab.SlopeValue * 100).ToString("F2");
+        BottomSlopeValueBox.IsEnabled = floor.BottomBoundarySlab.SlopeEnabled;
 
         var pointCount = floor.AlignmentPoints.Count;
         AlignmentLabel.Content = BaseFloorComboBox.SelectedItem is FloorConfig baseFloor &&
@@ -137,6 +266,14 @@ public partial class FloorConfigWindow : Window
             : "本层对齐点:";
         AlignmentStatus.Text = pointCount >= 3 ? "已设置（3点）" : "未设置";
         AlignmentStatus.Foreground = pointCount >= 3
+            ? System.Windows.Media.Brushes.Green
+            : System.Windows.Media.Brushes.Gray;
+
+        var hasScope = floor.ScopeBounds.HasValue && floor.ScopeBounds.Value.IsValid();
+        ScopeStatus.Text = hasScope
+            ? $"已设置（{floor.ScopeBounds!.Value.MinX:F0},{floor.ScopeBounds.Value.MinY:F0} ~ {floor.ScopeBounds.Value.MaxX:F0},{floor.ScopeBounds.Value.MaxY:F0}）"
+            : "未设置";
+        ScopeStatus.Foreground = hasScope
             ? System.Windows.Media.Brushes.Green
             : System.Windows.Media.Brushes.Gray;
     }
@@ -152,10 +289,24 @@ public partial class FloorConfigWindow : Window
         if (double.TryParse(FinishBox.Text, out var ft))    _currentFloor.FinishThickness = ft;
         _currentFloor.HasSlope = SlopeCheck.IsChecked == true;
         if (double.TryParse(SlopeValueBox.Text, out var sv)) _currentFloor.SlopeValue = sv / 100.0;
+        _currentFloor.TopBoundarySlab.TemplateId = TopBoundaryTemplateBox.SelectedValue?.ToString() ?? string.Empty;
+        _currentFloor.BottomBoundarySlab.TemplateId = BottomBoundaryTemplateBox.SelectedValue?.ToString() ?? string.Empty;
+        _currentFloor.TopBoundarySlab.SlopeEnabled = TopSlopeCheck.IsChecked == true;
+        _currentFloor.BottomBoundarySlab.SlopeEnabled = BottomSlopeCheck.IsChecked == true;
+        if (double.TryParse(TopSlopeValueBox.Text, out var topSlope))
+            _currentFloor.TopBoundarySlab.SlopeValue = topSlope / 100.0;
+        if (double.TryParse(BottomSlopeValueBox.Text, out var bottomSlope))
+            _currentFloor.BottomBoundarySlab.SlopeValue = bottomSlope / 100.0;
     }
 
     private void SlopeCheck_Changed(object sender, RoutedEventArgs e)
         => SlopeValueBox.IsEnabled = SlopeCheck.IsChecked == true;
+
+    private void TopSlopeCheck_Changed(object sender, RoutedEventArgs e)
+        => TopSlopeValueBox.IsEnabled = TopSlopeCheck.IsChecked == true;
+
+    private void BottomSlopeCheck_Changed(object sender, RoutedEventArgs e)
+        => BottomSlopeValueBox.IsEnabled = BottomSlopeCheck.IsChecked == true;
 
     private void BaseFloorComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -187,6 +338,25 @@ public partial class FloorConfigWindow : Window
         _logger.LogInformation("清除楼层 {FloorName} 对齐点", _currentFloor.Name);
     }
 
+    private void PickScope_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentFloor == null) return;
+        SaveCurrentEdits();
+
+        DialogResult = null;
+        Tag = ("PickScope", _currentFloor);
+        Close();
+    }
+
+    private void ClearScope_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentFloor == null) return;
+        _currentFloor.ScopeBounds = null;
+        ScopeStatus.Text = "未设置";
+        ScopeStatus.Foreground = System.Windows.Media.Brushes.Gray;
+        _logger.LogInformation("清除楼层 {FloorName} 整层范围", _currentFloor.Name);
+    }
+
     // ── 保存/取消 ─────────────────────────────────────────────────────────────
 
     private void Save_Click(object sender, RoutedEventArgs e)
@@ -199,7 +369,11 @@ public partial class FloorConfigWindow : Window
             _config.GlobalSlopeValue = gsv / 100.0;
         _config.GlobalSlopeTarget = (GlobalSlopeTargetBox.SelectedItem as ComboBoxItem)?.Tag?.ToString()
                                     ?? "StructuralSlab";
+        _config.GlobalTopSlopeEnabled = _config.GlobalSlopeEnabled;
+        _config.GlobalTopSlopeValue = _config.GlobalSlopeValue;
+        _config.GlobalTopSlopeTarget = _config.GlobalSlopeTarget;
         _config.AlignmentBaseFloorName = (BaseFloorComboBox.SelectedItem as FloorConfig)?.Name ?? string.Empty;
+        SaveOutputConfig();
 
         if (!ValidateBeforeSave(out var validationMessage))
         {
@@ -237,6 +411,18 @@ public partial class FloorConfigWindow : Window
         if (!FloorSectionLineTransformer.TryValidateAlignmentPoints(baseFloor.AlignmentPoints, out var baseError))
         {
             message = $"基准层 {baseFloor.Name} 的对齐点无效: {baseError}";
+            return false;
+        }
+
+        if (!baseFloor.ScopeBounds.HasValue)
+        {
+            message = $"基准层 {baseFloor.Name} 缺少整层范围框。";
+            return false;
+        }
+
+        if (!baseFloor.ScopeBounds.Value.IsValid())
+        {
+            message = $"基准层 {baseFloor.Name} 的整层范围框无效。";
             return false;
         }
 

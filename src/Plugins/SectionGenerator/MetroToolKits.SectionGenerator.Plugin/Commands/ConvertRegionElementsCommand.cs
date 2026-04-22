@@ -2,6 +2,7 @@ using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using MetroToolKits.Bootstrap;
+using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
@@ -15,13 +16,16 @@ namespace MetroToolKits.SectionGenerator.Plugin.Commands;
 public class ConvertRegionElementsCommand
 {
     private readonly IElementTypeCatalog _typeCatalog;
+    private readonly IWallAssemblyTemplateCatalog _templateCatalog;
     private readonly IElementConversionUseCase _conversionUseCase;
 
     public ConvertRegionElementsCommand(
         IElementTypeCatalog typeCatalog,
+        IWallAssemblyTemplateCatalog templateCatalog,
         IElementConversionUseCase conversionUseCase)
     {
         _typeCatalog = typeCatalog;
+        _templateCatalog = templateCatalog;
         _conversionUseCase = conversionUseCase;
     }
 
@@ -78,7 +82,7 @@ public class ConvertRegionElementsCommand
         }
 
         // 3. 逐层高亮预览并等待用户输入快捷字母
-        var layerMappings = new Dictionary<string, string>();
+        var layerMappings = new Dictionary<string, LayerTypeAssignment>();
 
         using var lockDoc = doc.LockDocument();
         using var tr = db.TransactionManager.StartTransaction();
@@ -120,8 +124,31 @@ public class ConvertRegionElementsCommand
 
                 if (matchedType != null)
                 {
-                    layerMappings[layerName] = matchedType.TypeId;
-                    ed.WriteMessage($" → {matchedType.TypeName}");
+                    var assignment = new LayerTypeAssignment
+                    {
+                        SourceLayerName = layerName,
+                        TypeId = matchedType.TypeId
+                    };
+
+                    if (string.Equals(matchedType.TypeId, "Wall", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var template = PromptWallTemplate(ed);
+                        if (template == null)
+                        {
+                            ed.WriteMessage(" 已取消墙体模板选择");
+                            UnhighlightLayerEntities(tr, db, selection, layerName);
+                            continue;
+                        }
+
+                        assignment.TemplateId = template.TemplateId;
+                        ed.WriteMessage($" → {matchedType.TypeName}[{template.TemplateName}]");
+                    }
+                    else
+                    {
+                        ed.WriteMessage($" → {matchedType.TypeName}");
+                    }
+
+                    layerMappings[layerName] = assignment;
                 }
                 else
                 {
@@ -147,10 +174,11 @@ public class ConvertRegionElementsCommand
                         ApplyToEntireDrawing = false,
                         EntityHandles = selectedHandles,
                         LayerMappings = layerMappings
-                            .Select(static mapping => new LayerTypeAssignment
+                            .Select(mapping => new LayerTypeAssignment
                             {
                                 SourceLayerName = mapping.Key,
-                                TypeId = mapping.Value
+                                TypeId = mapping.Value.TypeId,
+                                TemplateId = mapping.Value.TemplateId
                             })
                             .ToList()
                     });
@@ -221,5 +249,42 @@ public class ConvertRegionElementsCommand
         if (result.Status != PromptStatus.OK) return null;
 
         return result.StringResult?.Trim().ToUpper();
+    }
+
+    private WallAssemblyTemplate? PromptWallTemplate(Editor editor)
+    {
+        var templates = _templateCatalog.GetAllTemplates();
+        if (templates.Count == 0)
+        {
+            editor.WriteMessage("\n未找到墙体模板，请先在 LayerMapping 中维护墙体模板。");
+            return null;
+        }
+
+        if (templates.Count == 1)
+        {
+            return templates[0];
+        }
+
+        editor.WriteMessage("\n可用墙体模板:");
+        for (int i = 0; i < templates.Count; i++)
+        {
+            editor.WriteMessage($"\n  {i + 1}. {templates[i].TemplateName} ({templates[i].TemplateId})");
+        }
+
+        var result = editor.GetString(new PromptStringOptions("\n输入模板序号: ")
+        {
+            AllowSpaces = false
+        });
+
+        if (result.Status != PromptStatus.OK)
+        {
+            return null;
+        }
+
+        return int.TryParse(result.StringResult, out var index) &&
+               index >= 1 &&
+               index <= templates.Count
+            ? templates[index - 1]
+            : null;
     }
 }

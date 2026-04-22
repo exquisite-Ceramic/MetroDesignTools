@@ -161,11 +161,67 @@ public class CheckSectionUpdatesUseCaseTests
         result.Status.Should().Be(OperationStatus.PartialSuccess);
         result.Diagnostics.Should().Contain(d => d.Code == SectionGenerationErrorCodes.AlignmentPointsMissing);
         result.Items[0].SkippedFloors.Should().Contain("F2");
-        result.Items[0].Status.Should().Be(SectionUpdateStatus.Outdated);
+        result.Items[0].Status.Should().Be(SectionUpdateStatus.Unknown);
     }
 
     [Fact]
-    public void Execute_CurrentParticipatingFloorSetDiffersFromSnapshot_ReturnsOutdated()
+    public void Execute_MissingNonBaseScope_ReturnsUnknown()
+    {
+        var hasher = new FloorGeometryHasher();
+        var elements = new[] { MakeWall() };
+        var snapshot = new SectionSnapshot
+        {
+            BlockName = "MK_剖面_F1_F2",
+            SourceCutLineHandle = "71",
+            CutLineStart = new Point3D(0, 0, 0),
+            CutLineEnd = new Point3D(0, 20, 0),
+            ViewDepth = 3000,
+            GeneratedFloorNames = new List<string> { "F1", "F2" },
+            FloorSnapshots = new List<FloorSnapshot>
+            {
+                new() { FloorName = "F1", GeometryHash = hasher.ComputeHash(elements), ElementCount = 1 },
+                new() { FloorName = "F2", GeometryHash = hasher.ComputeHash(elements), ElementCount = 1 }
+            }
+        };
+
+        var snapshotRepo = Substitute.For<ISectionSnapshotRepository>();
+        snapshotRepo.FindAllSectionBlockHandles().Returns(new[] { "H1" });
+        snapshotRepo.Load("H1").Returns(snapshot);
+
+        var lineResolver = Substitute.For<ISectionLineResolver>();
+        lineResolver.ResolveCurrentLine("71").Returns(new Line3D(new Point3D(0, 0, 0), new Point3D(0, 20, 0)));
+
+        var recognizer = Substitute.For<IElementRecognizer>();
+        recognizer.RecognizeElements(Arg.Any<Line3D>(), Arg.Any<double>(), Arg.Any<ScopeBounds2D?>())
+            .Returns(new ElementRecognitionResult { Elements = elements });
+
+        var configRepo = Substitute.For<IFloorConfigRepository>();
+        configRepo.Load().Returns(new SectionConfig
+        {
+            AlignmentBaseFloorName = "F1",
+            Floors = new List<FloorConfig>
+            {
+                DefaultFloorWithScope("F1",
+                    new ScopeBounds2D { MinX = -1000, MinY = -1000, MaxX = 1000, MaxY = 1000 },
+                    new Point3D(0, 0, 0),
+                    new Point3D(10, 0, 0),
+                    new Point3D(0, 10, 0)),
+                DefaultFloorWithScope("F2", null,
+                    new Point3D(100, 0, 0),
+                    new Point3D(110, 0, 0),
+                    new Point3D(100, 10, 0))
+            }
+        });
+
+        var result = BuildUseCase(snapshotRepo, recognizer, configRepo, lineResolver).Execute();
+
+        result.Status.Should().Be(OperationStatus.PartialSuccess);
+        result.Items[0].Status.Should().Be(SectionUpdateStatus.Unknown);
+        result.Items[0].SkippedFloors.Should().Contain("F2");
+    }
+
+    [Fact]
+    public void Execute_SnapshotGeneratedFloorSetLimitsCurrentCheckScope()
     {
         var hasher = new FloorGeometryHasher();
         var elements = new[] { MakeWall() };
@@ -212,8 +268,8 @@ public class CheckSectionUpdatesUseCaseTests
 
         var result = BuildUseCase(snapshotRepo, recognizer, configRepo, lineResolver).Execute();
 
-        result.Items[0].Status.Should().Be(SectionUpdateStatus.Outdated);
-        result.Items[0].OutdatedFloors.Should().Contain("F2");
+        result.Items[0].Status.Should().Be(SectionUpdateStatus.UpToDate);
+        result.Items[0].OutdatedFloors.Should().BeEmpty();
     }
 
     private static CheckSectionUpdatesUseCase BuildUseCase(
@@ -269,6 +325,16 @@ public class CheckSectionUpdatesUseCaseTests
         Height = 3000,
         BottomSlabThickness = 800,
         TopSlabThickness = 600,
+        AlignmentPoints = alignmentPoints.ToList()
+    };
+
+    private static FloorConfig DefaultFloorWithScope(string name, ScopeBounds2D? scopeBounds, params Point3D[] alignmentPoints) => new()
+    {
+        Name = name,
+        Height = 3000,
+        BottomSlabThickness = 800,
+        TopSlabThickness = 600,
+        ScopeBounds = scopeBounds,
         AlignmentPoints = alignmentPoints.ToList()
     };
 }

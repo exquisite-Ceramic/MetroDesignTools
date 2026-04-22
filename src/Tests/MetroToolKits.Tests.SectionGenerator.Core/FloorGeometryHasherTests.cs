@@ -1,5 +1,6 @@
 using FluentAssertions;
 using MetroToolKits.Foundation.Building.Elements;
+using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
@@ -102,5 +103,98 @@ public class FloorGeometryHasherTests
         var hash   = hasher.ComputeHash(Enumerable.Empty<BuildingElement>());
         hash.Should().HaveLength(16);
         hash.Should().MatchRegex("^[0-9a-f]+$");
+    }
+
+    [Fact]
+    public void CompositeWall_TemplateChange_ProducesDifferentHash()
+    {
+        var hasher = new FloorGeometryHasher();
+        var wallA = CreateCompositeWall("wall-a", 20, 20);
+        var wallB = CreateCompositeWall("wall-b", 20, 20);
+
+        var hashA = hasher.ComputeHash(new BuildingElement[] { wallA });
+        var hashB = hasher.ComputeHash(new BuildingElement[] { wallB });
+
+        hashA.Should().NotBe(hashB);
+    }
+
+    [Fact]
+    public void CompositeWall_LayerThicknessChange_ProducesDifferentHash()
+    {
+        var hasher = new FloorGeometryHasher();
+        var wallA = CreateCompositeWall("wall-a", 20, 20);
+        var wallB = CreateCompositeWall("wall-a", 40, 20);
+
+        var hashA = hasher.ComputeHash(new BuildingElement[] { wallA });
+        var hashB = hasher.ComputeHash(new BuildingElement[] { wallB });
+
+        hashA.Should().NotBe(hashB);
+    }
+
+    [Fact]
+    public void CompositeWall_VerticalAnchorModeChange_ProducesDifferentHash()
+    {
+        var hasher = new FloorGeometryHasher();
+        var wallA = CreateCompositeWall("wall-a", 20, 20, WallVerticalAnchorMode.StructuralSlabFaces);
+        var wallB = CreateCompositeWall("wall-a", 20, 20, WallVerticalAnchorMode.FinishSurfaceFaces);
+
+        var hashA = hasher.ComputeHash(new BuildingElement[] { wallA });
+        var hashB = hasher.ComputeHash(new BuildingElement[] { wallB });
+
+        hashA.Should().NotBe(hashB);
+    }
+
+    private static CompositeWallElement CreateCompositeWall(
+        string templateId,
+        double leftThickness,
+        double rightThickness,
+        WallVerticalAnchorMode verticalAnchorMode = WallVerticalAnchorMode.StructuralSlabFaces)
+    {
+        var builder = new WallAssemblyBuilder();
+        return builder.Build(
+            new CoreWallSegment
+            {
+                StartPoint = new Point3D(0, 0, 0),
+                EndPoint = new Point3D(5000, 0, 0),
+                Thickness = 200,
+                Height = 3000,
+                BaseElevation = 0,
+                TemplateId = templateId,
+                SourceHandles = new List<string> { "AAA", "AAB" }
+            },
+            new WallAssemblyTemplate
+            {
+                TemplateId = templateId,
+                TemplateName = "复合墙",
+                VerticalAnchorMode = verticalAnchorMode,
+                CoreRule = new WallCoreRule
+                {
+                    Name = "结构芯",
+                    Thickness = 200,
+                    MaterialOrCategory = "结构"
+                },
+                LeftLayers =
+                {
+                    new WallLayerRule
+                    {
+                        Name = "左附加层",
+                        Side = WallLayerSide.Left,
+                        Order = 1,
+                        Thickness = leftThickness,
+                        MaterialOrCategory = "抹灰"
+                    }
+                },
+                RightLayers =
+                {
+                    new WallLayerRule
+                    {
+                        Name = "右附加层",
+                        Side = WallLayerSide.Right,
+                        Order = 1,
+                        Thickness = rightThickness,
+                        MaterialOrCategory = "抹灰"
+                    }
+                }
+            });
     }
 }

@@ -77,7 +77,8 @@ public sealed class ElementConversionUseCase : IElementConversionUseCase
             mappings.Add(new ElementLayerMapping
             {
                 SourceLayerName = assignment.SourceLayerName,
-                ElementType = elementType
+                ElementType = elementType,
+                TemplateId = assignment.TemplateId
             });
         }
 

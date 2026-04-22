@@ -15,4 +15,7 @@ public interface ISectionSnapshotRepository
 
     /// <summary>扫描图纸中所有剖面块，返回块句柄列表</summary>
     IReadOnlyList<string> FindAllSectionBlockHandles();
+
+    /// <summary>读取块定义中可见剖面几何的最小 X，用于旧快照兼容。</summary>
+    double? ResolveBlockGeometryAnchorX(string blockHandle);
 }

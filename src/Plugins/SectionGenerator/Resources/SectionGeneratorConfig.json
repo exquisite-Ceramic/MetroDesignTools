@@ -2,6 +2,12 @@
   "GlobalSlopeEnabled": true,
   "GlobalSlopeValue": 0.002,
   "GlobalSlopeTarget": "StructuralSlab",
+  "GlobalTopSlopeEnabled": true,
+  "GlobalTopSlopeValue": 0.002,
+  "GlobalTopSlopeTarget": "StructuralSlab",
+  "GlobalBottomSlopeEnabled": false,
+  "GlobalBottomSlopeValue": 0.0,
+  "GlobalBottomSlopeTarget": "StructuralSlab",
   "AlignmentBaseFloorName": "F1",
   "Floors": [
     {
@@ -13,7 +19,20 @@
       "HasSlope": true,
       "SlopeValue": 0.002,
       "SlopeTarget": "StructuralSlab",
-      "AlignmentPoints": []
+      "BottomBoundarySlab": {
+        "TemplateId": "",
+        "SlopeEnabled": false,
+        "SlopeValue": 0.0,
+        "SlopeTarget": "StructuralSlab"
+      },
+      "TopBoundarySlab": {
+        "TemplateId": "",
+        "SlopeEnabled": true,
+        "SlopeValue": 0.002,
+        "SlopeTarget": "StructuralSlab"
+      },
+      "AlignmentPoints": [],
+      "ScopeBounds": null
     }
   ]
 }

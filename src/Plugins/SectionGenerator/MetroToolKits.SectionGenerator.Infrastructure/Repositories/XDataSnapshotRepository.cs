@@ -145,6 +145,57 @@ public sealed class XDataSnapshotRepository : ISectionSnapshotRepository
         return handles;
     }
 
+    public double? ResolveBlockGeometryAnchorX(string blockHandle)
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument;
+        if (doc == null) return null;
+
+        var db = doc.Database;
+        using var tr = db.TransactionManager.StartTransaction();
+
+        try
+        {
+            var objId = db.GetObjectId(false, new Handle(Convert.ToInt64(blockHandle, 16)), 0);
+            if (objId == ObjectId.Null)
+            {
+                return null;
+            }
+
+            var blockRef = (BlockReference)tr.GetObject(objId, OpenMode.ForRead);
+            var blockDef = (BlockTableRecord)tr.GetObject(blockRef.BlockTableRecord, OpenMode.ForRead);
+
+            var xValues = new List<double>();
+            foreach (var entityId in blockDef)
+            {
+                if (tr.GetObject(entityId, OpenMode.ForRead) is not Entity entity)
+                {
+                    continue;
+                }
+
+                if (!string.Equals(entity.Layer, "MK_剖切线", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(entity.Layer, "MK_看线", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (entity is Line line)
+                {
+                    xValues.Add(line.StartPoint.X);
+                    xValues.Add(line.EndPoint.X);
+                }
+            }
+
+            tr.Commit();
+            return xValues.Count == 0 ? null : xValues.Min();
+        }
+        catch (SystemException ex)
+        {
+            tr.Abort();
+            _logger.LogError(ex, "读取块几何锚点失败，块句柄: {Handle}", blockHandle);
+            return null;
+        }
+    }
+
     private static void EnsureAppRegistered(Transaction tr, Database db)
     {
         var rat = (RegAppTable)tr.GetObject(db.RegAppTableId, OpenMode.ForRead);

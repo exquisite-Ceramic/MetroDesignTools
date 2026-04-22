@@ -33,6 +33,11 @@ public abstract class BuildingElement
     public string? SourceHandle { get; set; }
 
     /// <summary>
+    /// 原始 CAD 实体句柄集合
+    /// </summary>
+    public List<string> SourceHandles { get; set; } = new();
+
+    /// <summary>
     /// 原始图层名称
     /// </summary>
     public string? SourceLayer { get; set; }
@@ -43,7 +48,7 @@ public abstract class BuildingElement
     public abstract Polygon3D? GetBoundingBox();
 
     /// <summary>
-    /// 获取构件的剖面几何（给定剖切线和方向）
+    /// 获取构件的剖面几何（给定统一剖面上下文）
     /// </summary>
-    public abstract IEnumerable<Line3D> GetSectionGeometry(Line3D sectionLine, Vector3D viewDirection);
+    public abstract IEnumerable<Line3D> GetSectionGeometry(SectionGeometryContext context);
 }

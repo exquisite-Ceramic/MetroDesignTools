@@ -81,7 +81,7 @@ public sealed class CadElementConversionService : IElementConversionService
             }
 
             entity.UpgradeOpen();
-            _backupService.BackupEntity(tr, entity, mapping.ElementType.TypeId);
+            _backupService.BackupEntity(tr, entity, mapping.ElementType.TypeId, mapping.TemplateId);
             entity.Layer = BuildTargetLayerName(mapping);
             convertedCount++;
         }
@@ -130,7 +130,7 @@ public sealed class CadElementConversionService : IElementConversionService
             }
 
             entity.UpgradeOpen();
-            _backupService.BackupEntity(tr, entity, mapping.ElementType.TypeId);
+            _backupService.BackupEntity(tr, entity, mapping.ElementType.TypeId, mapping.TemplateId);
             entity.Layer = BuildTargetLayerName(mapping);
             convertedCount++;
         }

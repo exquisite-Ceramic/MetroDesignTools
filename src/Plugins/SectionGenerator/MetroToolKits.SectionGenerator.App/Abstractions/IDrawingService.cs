@@ -9,11 +9,34 @@ namespace MetroToolKits.SectionGenerator.App.Abstractions;
 public interface IDrawingService
 {
     /// <summary>绘制单层剖面块</summary>
-    DrawSectionBlockResult DrawSectionBlock(SectionGeometryData geometryData, Point3D insertionPoint, FloorConfig floorConfig);
+    DrawSectionBlockResult DrawSectionBlock(
+        SectionGeometryData geometryData,
+        Point3D insertionPoint,
+        FloorConfig floorConfig,
+        double geometryAnchorX = 0);
+
+    /// <summary>绘制单层剖面块（带图纸级输出配置）</summary>
+    DrawSectionBlockResult DrawSectionBlock(
+        SectionGeometryData geometryData,
+        Point3D insertionPoint,
+        FloorConfig floorConfig,
+        SectionOutputConfig outputConfig,
+        double geometryAnchorX = 0);
 
     /// <summary>绘制多楼层剖面块</summary>
-    DrawSectionBlockResult DrawMultiFloorSectionBlock(MultiFloorSectionData multiData, Point3D insertionPoint,
-        IReadOnlyList<FloorConfig> floors);
+    DrawSectionBlockResult DrawMultiFloorSectionBlock(
+        MultiFloorSectionData multiData,
+        Point3D insertionPoint,
+        IReadOnlyList<FloorConfig> floors,
+        double geometryAnchorX = 0);
+
+    /// <summary>绘制多楼层剖面块（带图纸级输出配置）</summary>
+    DrawSectionBlockResult DrawMultiFloorSectionBlock(
+        MultiFloorSectionData multiData,
+        Point3D insertionPoint,
+        IReadOnlyList<FloorConfig> floors,
+        SectionOutputConfig outputConfig,
+        double geometryAnchorX = 0);
 }
 
 /// <summary>

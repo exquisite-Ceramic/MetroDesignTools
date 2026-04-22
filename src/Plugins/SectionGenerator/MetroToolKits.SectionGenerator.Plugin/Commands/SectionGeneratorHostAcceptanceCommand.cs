@@ -1,11 +1,13 @@
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Microsoft.Extensions.Logging;
+using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.Bootstrap;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Core.Sections;
+using MetroToolKits.SectionGenerator.Infrastructure.Services;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 using AcadLine = Autodesk.AutoCAD.DatabaseServices.Line;
 using AcadPoint3d = Autodesk.AutoCAD.Geometry.Point3d;
@@ -31,6 +33,7 @@ public sealed class SectionGeneratorHostAcceptanceCommand
     private readonly ISectionSnapshotRepository _sectionSnapshotRepository;
     private readonly IElementRecognizer _elementRecognizer;
     private readonly FloorGeometryHasher _floorGeometryHasher;
+    private readonly ElementConversionBackupService _elementConversionBackupService;
     private readonly ILogger<SectionGeneratorHostAcceptanceCommand> _logger;
 
     public SectionGeneratorHostAcceptanceCommand(
@@ -43,6 +46,7 @@ public sealed class SectionGeneratorHostAcceptanceCommand
         ISectionSnapshotRepository sectionSnapshotRepository,
         IElementRecognizer elementRecognizer,
         FloorGeometryHasher floorGeometryHasher,
+        ElementConversionBackupService elementConversionBackupService,
         ILogger<SectionGeneratorHostAcceptanceCommand> logger)
     {
         _floorConfigRepository = floorConfigRepository;
@@ -54,6 +58,7 @@ public sealed class SectionGeneratorHostAcceptanceCommand
         _sectionSnapshotRepository = sectionSnapshotRepository;
         _elementRecognizer = elementRecognizer;
         _floorGeometryHasher = floorGeometryHasher;
+        _elementConversionBackupService = elementConversionBackupService;
         _logger = logger;
     }
 
@@ -73,8 +78,8 @@ public sealed class SectionGeneratorHostAcceptanceCommand
             ResetModelSpace(doc.Database);
             _floorConfigRepository.Save(BuildAcceptanceConfig());
 
-            var fixture = CreateAcceptanceFixture(doc.Database);
-            WriteMessage(ed, $"Fixture Ready: CutLine={fixture.CutLineHandle}, Wall={fixture.WallHandle}");
+            var fixture = CreateAcceptanceFixture(doc.Database, _elementConversionBackupService);
+            WriteMessage(ed, $"Fixture Ready: CutLine={fixture.CutLineHandle}, Wall={fixture.PrimaryWallHandle}");
 
             var generateResult = _generateSectionUseCase.Execute(new GenerateSectionRequest
             {
@@ -88,6 +93,9 @@ public sealed class SectionGeneratorHostAcceptanceCommand
             Ensure(generateResult.Success, $"Generate failed: {DescribeGenerateFailure(generateResult)}");
             Ensure(!string.IsNullOrWhiteSpace(generateResult.BlockHandle), "Generate did not return a block handle.");
             WriteMessage(ed, $"Generate OK: Block={generateResult.BlockHandle}");
+            ValidateProjectedBlockGeometry(doc.Database, generateResult.BlockHandle!);
+            var originalInsertion = GetBlockInsertionPoint(doc.Database, generateResult.BlockHandle!);
+            WriteMessage(ed, "Projected Geometry OK");
 
             var snapshot = _sectionSnapshotRepository.Load(generateResult.BlockHandle!);
             Ensure(snapshot != null, "Snapshot was not persisted.");
@@ -127,7 +135,7 @@ public sealed class SectionGeneratorHostAcceptanceCommand
 
             Ensure(locateResult.Success, locateResult.ErrorMessage ?? "LocateSourceElement returned failure.");
             Ensure(
-                string.Equals(locateResult.SourceHandle, fixture.WallHandle, StringComparison.OrdinalIgnoreCase),
+                string.Equals(locateResult.SourceHandle, fixture.PrimaryWallHandle, StringComparison.OrdinalIgnoreCase),
                 "LocateSourceElement returned an unexpected source handle.");
             WriteMessage(ed, $"LocateSourceElement OK: SectionEntity={sectionEntityHandle}");
 
@@ -163,6 +171,12 @@ public sealed class SectionGeneratorHostAcceptanceCommand
             var updatedHandle = remainingHandles[0];
             var finalCheck = FindCheckResult(updatedHandle, _checkSectionUpdatesUseCase.Execute());
             Ensure(finalCheck.Status == SectionUpdateStatus.UpToDate, "Updated section should return to up-to-date state.");
+            var updatedInsertion = GetBlockInsertionPoint(doc.Database, updatedHandle);
+            Ensure(
+                Math.Abs(updatedInsertion.X - originalInsertion.X) <= 1e-6 &&
+                Math.Abs(updatedInsertion.Y - originalInsertion.Y) <= 1e-6 &&
+                Math.Abs(updatedInsertion.Z - originalInsertion.Z) <= 1e-6,
+                "Updated section moved away from the original insertion point.");
 
             var relatedAfterUpdate = _findRelatedSectionsUseCase.Execute(new FindRelatedSectionsRequest
             {
@@ -199,14 +213,16 @@ public sealed class SectionGeneratorHostAcceptanceCommand
                 Height = 3000,
                 BottomSlabThickness = 800,
                 TopSlabThickness = 600,
-                FinishThickness = 0,
+                FinishThickness = 120,
                 HasSlope = false,
-                SlopeValue = 0
+                SlopeValue = 0,
+                BottomBoundarySlab = new BoundarySlabConfig(),
+                TopBoundarySlab = new BoundarySlabConfig()
             }
         }
     };
 
-    private static AcceptanceFixture CreateAcceptanceFixture(Database db)
+    private static AcceptanceFixture CreateAcceptanceFixture(Database db, ElementConversionBackupService backupService)
     {
         using var tr = db.TransactionManager.StartTransaction();
         var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
@@ -217,18 +233,28 @@ public sealed class SectionGeneratorHostAcceptanceCommand
         ms.AppendEntity(cutLine);
         tr.AddNewlyCreatedDBObject(cutLine, true);
 
-        var wallLine = new AcadLine(new AcadPoint3d(-500, 1000, 0), new AcadPoint3d(500, 1000, 0))
+        var wallLineA = new AcadLine(new AcadPoint3d(-500, 900, 0), new AcadPoint3d(500, 900, 0))
         {
             Layer = "MK_结构墙"
         };
-        ms.AppendEntity(wallLine);
-        tr.AddNewlyCreatedDBObject(wallLine, true);
+        ms.AppendEntity(wallLineA);
+        tr.AddNewlyCreatedDBObject(wallLineA, true);
+        backupService.BackupEntity(tr, wallLineA, "Wall", "wall-200-finish");
+
+        var wallLineB = new AcadLine(new AcadPoint3d(-500, 1100, 0), new AcadPoint3d(500, 1100, 0))
+        {
+            Layer = "MK_结构墙"
+        };
+        ms.AppendEntity(wallLineB);
+        tr.AddNewlyCreatedDBObject(wallLineB, true);
+        backupService.BackupEntity(tr, wallLineB, "Wall", "wall-200-finish");
 
         tr.Commit();
 
         return new AcceptanceFixture(
             cutLine.Handle.ToString(),
-            wallLine.Handle.ToString(),
+            wallLineA.Handle.ToString(),
+            wallLineB.Handle.ToString(),
             new ToolkitPoint3D(cutLine.StartPoint.X, cutLine.StartPoint.Y, cutLine.StartPoint.Z),
             new ToolkitPoint3D(cutLine.EndPoint.X, cutLine.EndPoint.Y, cutLine.EndPoint.Z));
     }
@@ -272,6 +298,55 @@ public sealed class SectionGeneratorHostAcceptanceCommand
         }
 
         throw new InvalidOperationException("No source-aware section entity was found in the generated block.");
+    }
+
+    private static void ValidateProjectedBlockGeometry(Database db, string blockHandle)
+    {
+        using var tr = db.TransactionManager.StartTransaction();
+        var objId = db.GetObjectId(false, new Handle(Convert.ToInt64(blockHandle, 16)), 0);
+        Ensure(objId != ObjectId.Null, $"Block handle {blockHandle} was not found.");
+
+        var blockRef = tr.GetObject(objId, OpenMode.ForRead) as BlockReference;
+        Ensure(blockRef != null, $"Block handle {blockHandle} is not a block reference.");
+
+        var blockDef = (BlockTableRecord)tr.GetObject(blockRef!.BlockTableRecord, OpenMode.ForRead);
+        var lines = new List<AcadLine>();
+        foreach (var entityId in blockDef)
+        {
+            if (tr.GetObject(entityId, OpenMode.ForRead) is AcadLine line)
+                lines.Add(line);
+        }
+
+        Ensure(lines.Count > 0, "Generated block does not contain any line geometry.");
+        Ensure(lines.All(line =>
+                Math.Abs(line.StartPoint.Z) <= 1e-6 &&
+                Math.Abs(line.EndPoint.Z) <= 1e-6),
+            "Generated section geometry is not flattened onto the XY plane.");
+
+        Ensure(lines.Any(line =>
+                Math.Abs(line.StartPoint.X - line.EndPoint.X) > 1e-6 &&
+                Math.Abs(line.StartPoint.Y - line.EndPoint.Y) <= 1e-6),
+            "Generated section block does not contain a non-degenerate horizontal line.");
+
+        Ensure(lines.Any(line =>
+                Math.Abs(line.StartPoint.X - line.EndPoint.X) <= 1e-6 &&
+                Math.Abs(line.StartPoint.Y - line.EndPoint.Y) > 1e-6),
+            "Generated section block does not contain a non-degenerate vertical line.");
+
+        tr.Commit();
+    }
+
+    private static ToolkitPoint3D GetBlockInsertionPoint(Database db, string blockHandle)
+    {
+        using var tr = db.TransactionManager.StartTransaction();
+        var objId = db.GetObjectId(false, new Handle(Convert.ToInt64(blockHandle, 16)), 0);
+        Ensure(objId != ObjectId.Null, $"Block handle {blockHandle} was not found.");
+
+        var blockRef = tr.GetObject(objId, OpenMode.ForRead) as BlockReference;
+        Ensure(blockRef != null, $"Block handle {blockHandle} is not a block reference.");
+        var position = blockRef!.Position;
+        tr.Commit();
+        return new ToolkitPoint3D(position.X, position.Y, position.Z);
     }
 
     private static SectionCheckResult FindCheckResult(string blockHandle, CheckSectionUpdatesResult result)
@@ -332,7 +407,11 @@ public sealed class SectionGeneratorHostAcceptanceCommand
 
     private sealed record AcceptanceFixture(
         string CutLineHandle,
-        string WallHandle,
+        string PrimaryWallHandle,
+        string SecondaryWallHandle,
         ToolkitPoint3D CutLineStart,
-        ToolkitPoint3D CutLineEnd);
+        ToolkitPoint3D CutLineEnd)
+    {
+        public string WallHandle => PrimaryWallHandle;
+    }
 }
