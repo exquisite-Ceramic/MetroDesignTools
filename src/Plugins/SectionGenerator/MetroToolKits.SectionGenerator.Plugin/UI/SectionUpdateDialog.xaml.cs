@@ -132,10 +132,11 @@ public partial class SectionUpdateDialog : Window
         }
 
         var outdated = result.Items.Count(r => r.Status == SectionUpdateStatus.Outdated);
+        var unknown = result.Items.Count(r => r.Status == SectionUpdateStatus.Unknown);
         var partial = result.Items.Count(r => r.SkippedFloors.Count > 0);
         SummaryText.Text = result.Status == OperationStatus.PartialSuccess
-            ? $"共 {result.Items.Count} 个剖面，其中 {outdated} 个需要更新，{partial} 个为部分检查"
-            : $"共 {result.Items.Count} 个剖面，其中 {outdated} 个需要更新";
+            ? $"共 {result.Items.Count} 个剖面，其中 {outdated} 个需要更新，{unknown} 个无法确认，{partial} 个为部分检查"
+            : $"共 {result.Items.Count} 个剖面，其中 {outdated} 个需要更新，{unknown} 个无法确认";
         _userLogger.CheckResult(result.Items.Count, outdated);
     }
 }
@@ -157,7 +158,8 @@ public sealed class SectionResultViewModel
             SectionUpdateStatus.UpToDate => "✓ 最新",
             SectionUpdateStatus.Outdated when result.SkippedFloors.Count > 0 => "⚠ 需更新（部分检查）",
             SectionUpdateStatus.Outdated => "⚠ 需更新",
-            _                            => "? 未知"
+            SectionUpdateStatus.Unknown when result.SkippedFloors.Count > 0 => "? 未知（范围缺失）",
+            _ => "? 未知"
         };
     }
 

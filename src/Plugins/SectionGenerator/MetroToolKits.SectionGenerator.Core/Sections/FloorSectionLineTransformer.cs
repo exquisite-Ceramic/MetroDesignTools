@@ -52,18 +52,25 @@ public static class FloorSectionLineTransformer
         IReadOnlyList<Point3D> sourcePoints,
         IReadOnlyList<Point3D> targetPoints)
     {
+        var transform = CreateAlignmentTransform(sourcePoints, targetPoints);
+
+        return new Line3D(
+            transform.Transform(sectionLine.Start),
+            transform.Transform(sectionLine.End));
+    }
+
+    public static Transform3D CreateAlignmentTransform(
+        IReadOnlyList<Point3D> sourcePoints,
+        IReadOnlyList<Point3D> targetPoints)
+    {
         if (!TryValidateAlignmentPoints(sourcePoints, out var sourceError))
             throw new ArgumentException($"源对齐点无效: {sourceError}", nameof(sourcePoints));
 
         if (!TryValidateAlignmentPoints(targetPoints, out var targetError))
             throw new ArgumentException($"目标对齐点无效: {targetError}", nameof(targetPoints));
 
-        var transform = Transform3D.AlignPoints(
+        return Transform3D.AlignPoints(
             sourcePoints[0], sourcePoints[1], sourcePoints[2],
             targetPoints[0], targetPoints[1], targetPoints[2]);
-
-        return new Line3D(
-            transform.Transform(sectionLine.Start),
-            transform.Transform(sectionLine.End));
     }
 }

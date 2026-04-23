@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using MetroToolKits.Foundation.Building.Elements;
+using MetroToolKits.Foundation.Core.Geometry;
 
 namespace MetroToolKits.SectionGenerator.Core.Sections;
 
@@ -13,7 +14,10 @@ public sealed class FloorGeometryHasher
     /// <summary>
     /// 计算构件列表的几何哈希
     /// </summary>
-    public string ComputeHash(IEnumerable<BuildingElement> elements)
+    public string ComputeHash(
+        IEnumerable<BuildingElement> elements,
+        FloorConfig? floorConfig = null,
+        FloorVerticalProfile? verticalProfile = null)
     {
         var sb = new StringBuilder();
 
@@ -24,6 +28,60 @@ public sealed class FloorGeometryHasher
             sb.Append('|');
             sb.Append(ComputeElementHash(e));
             sb.Append(';');
+        }
+
+        if (floorConfig != null)
+        {
+            sb.Append("|floor:");
+            sb.Append(floorConfig.Name);
+            sb.Append('|');
+            sb.Append(floorConfig.Height.ToString("F2"));
+            sb.Append('|');
+            sb.Append(floorConfig.TopBoundarySlab.SlopeEnabled);
+            sb.Append('|');
+            sb.Append(floorConfig.TopBoundarySlab.SlopeValue.ToString("F6"));
+            sb.Append('|');
+            sb.Append(floorConfig.BottomBoundarySlab.SlopeEnabled);
+            sb.Append('|');
+            sb.Append(floorConfig.BottomBoundarySlab.SlopeValue.ToString("F6"));
+            sb.Append('|');
+            sb.Append(floorConfig.FinishThickness.ToString("F2"));
+        }
+
+        if (verticalProfile != null)
+        {
+            sb.Append("|profile:");
+            sb.Append(verticalProfile.BottomStructuralBottom.StartY.ToString("F2"));
+            sb.Append(',');
+            sb.Append(verticalProfile.BottomStructuralBottom.EndY.ToString("F2"));
+            sb.Append('|');
+            sb.Append(verticalProfile.BottomStructuralTop.StartY.ToString("F2"));
+            sb.Append(',');
+            sb.Append(verticalProfile.BottomStructuralTop.EndY.ToString("F2"));
+            sb.Append('|');
+            sb.Append(verticalProfile.BottomBoundaryBottom.StartY.ToString("F2"));
+            sb.Append(',');
+            sb.Append(verticalProfile.BottomBoundaryBottom.EndY.ToString("F2"));
+            sb.Append('|');
+            sb.Append(verticalProfile.BottomBoundaryTop.StartY.ToString("F2"));
+            sb.Append(',');
+            sb.Append(verticalProfile.BottomBoundaryTop.EndY.ToString("F2"));
+            sb.Append('|');
+            sb.Append(verticalProfile.TopStructuralBottom.StartY.ToString("F2"));
+            sb.Append(',');
+            sb.Append(verticalProfile.TopStructuralBottom.EndY.ToString("F2"));
+            sb.Append('|');
+            sb.Append(verticalProfile.TopStructuralTop.StartY.ToString("F2"));
+            sb.Append(',');
+            sb.Append(verticalProfile.TopStructuralTop.EndY.ToString("F2"));
+            sb.Append('|');
+            sb.Append(verticalProfile.TopBoundaryBottom.StartY.ToString("F2"));
+            sb.Append(',');
+            sb.Append(verticalProfile.TopBoundaryBottom.EndY.ToString("F2"));
+            sb.Append('|');
+            sb.Append(verticalProfile.TopBoundaryTop.StartY.ToString("F2"));
+            sb.Append(',');
+            sb.Append(verticalProfile.TopBoundaryTop.EndY.ToString("F2"));
         }
 
         return ComputeSha256(sb.ToString());

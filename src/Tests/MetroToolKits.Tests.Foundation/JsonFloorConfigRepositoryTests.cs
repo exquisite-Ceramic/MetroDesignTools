@@ -67,6 +67,7 @@ public class JsonFloorConfigRepositoryTests : IDisposable
         config.AlignmentBaseFloorName.Should().Be("F1");
         config.Floors[0].AlignmentPoints.Should().HaveCount(3);
         config.Floors[1].AlignmentPoints[0].X.Should().Be(100);
+        config.Floors[0].ScopeBounds.Should().BeNull();
 
         var persisted = File.ReadAllText(filePath);
         persisted.Should().Contain("AlignmentBaseFloorName");
@@ -139,6 +140,13 @@ public class JsonFloorConfigRepositoryTests : IDisposable
                 new MetroToolKits.SectionGenerator.Core.Sections.FloorConfig
                 {
                     Name = "F1",
+                    ScopeBounds = new MetroToolKits.Foundation.Core.Geometry.ScopeBounds2D
+                    {
+                        MinX = 10,
+                        MinY = 20,
+                        MaxX = 110,
+                        MaxY = 220
+                    },
                     AlignmentPoints =
                     {
                         new(0, 0, 0),
@@ -154,6 +162,13 @@ public class JsonFloorConfigRepositoryTests : IDisposable
 
         loaded.AlignmentBaseFloorName.Should().Be("F1");
         loaded.Floors.Single().AlignmentPoints.Should().HaveCount(3);
+        loaded.Floors.Single().ScopeBounds.Should().Be(new MetroToolKits.Foundation.Core.Geometry.ScopeBounds2D
+        {
+            MinX = 10,
+            MinY = 20,
+            MaxX = 110,
+            MaxY = 220
+        });
     }
 
     public void Dispose()

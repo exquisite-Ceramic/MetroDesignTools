@@ -60,8 +60,9 @@ public sealed class Column : BuildingElement
         return new Polygon3D(vertices);
     }
 
-    public override IEnumerable<Line3D> GetSectionGeometry(Line3D sectionLine, Vector3D viewDirection)
+    public override IEnumerable<Line3D> GetSectionGeometry(SectionGeometryContext context)
     {
+        var sectionLine = context.SectionLine;
         // 检查剖切线是否穿过柱子
         var bbox = GetBoundingBox();
         if (bbox == null) yield break;
@@ -81,14 +82,48 @@ public sealed class Column : BuildingElement
 
         if (intersections.Count < 2) yield break;
 
-        // 生成柱剖面
-        var left = intersections.OrderBy(p => p.X).First();
-        var right = intersections.OrderBy(p => p.X).Last();
+        var orderedIntersections = intersections
+            .Select(point => new
+            {
+                Point = point,
+                Chainage = SectionCoordinateProjector.GetChainage(sectionLine, point)
+            })
+            .OrderBy(item => item.Chainage)
+            .ToList();
 
-        var bottomLeft = new Point3D(left.X, left.Y, BaseElevation);
-        var topLeft = new Point3D(left.X, left.Y, BaseElevation + Height);
-        var bottomRight = new Point3D(right.X, right.Y, BaseElevation);
-        var topRight = new Point3D(right.X, right.Y, BaseElevation + Height);
+        var uniqueIntersections = new List<(Point3D Point, double Chainage)>();
+        foreach (var intersection in orderedIntersections)
+        {
+            if (uniqueIntersections.Count == 0 ||
+                Math.Abs(uniqueIntersections[^1].Chainage - intersection.Chainage) > 1e-6)
+            {
+                uniqueIntersections.Add((intersection.Point, intersection.Chainage));
+            }
+        }
+
+        if (uniqueIntersections.Count < 2) yield break;
+
+        // 生成柱剖面
+        var left = uniqueIntersections.First().Point;
+        var right = uniqueIntersections.Last().Point;
+
+        var leftChainage = context.Projector.GetChainage(left);
+        var rightChainage = context.Projector.GetChainage(right);
+        var leftBottomElevation = context.VerticalProfile?.GetBottomStructuralTop(leftChainage) ?? BaseElevation;
+        var leftTopElevation = context.VerticalProfile?.GetTopStructuralBottom(leftChainage) ?? (BaseElevation + Height);
+        var rightBottomElevation = context.VerticalProfile?.GetBottomStructuralTop(rightChainage) ?? BaseElevation;
+        var rightTopElevation = context.VerticalProfile?.GetTopStructuralBottom(rightChainage) ?? (BaseElevation + Height);
+
+        if (leftTopElevation <= leftBottomElevation + 1e-6 ||
+            rightTopElevation <= rightBottomElevation + 1e-6)
+        {
+            yield break;
+        }
+
+        var bottomLeft = new Point3D(left.X, left.Y, leftBottomElevation);
+        var topLeft = new Point3D(left.X, left.Y, leftTopElevation);
+        var bottomRight = new Point3D(right.X, right.Y, rightBottomElevation);
+        var topRight = new Point3D(right.X, right.Y, rightTopElevation);
 
         yield return new Line3D(bottomLeft, topLeft);
         yield return new Line3D(bottomRight, topRight);
@@ -125,4 +160,3 @@ public sealed class Column : BuildingElement
             line1.Start.Z + t * (line1.End.Z - line1.Start.Z));
     }
 }
-

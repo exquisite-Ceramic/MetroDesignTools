@@ -8,6 +8,14 @@ public class SlabSectionTests
 {
     private static readonly Vector3D ViewDir = new(0, 1, 0);
 
+    private static SectionGeometryContext CreateContext(Line3D sectionLine)
+        => new()
+        {
+            SectionLine = sectionLine,
+            ViewDirection = ViewDir,
+            Projector = new SectionCoordinateProjector(sectionLine)
+        };
+
     private static Slab MakeRectSlab(double x0, double y0, double x1, double y1,
         double topElevation = 0, double thickness = 200)
     {
@@ -32,7 +40,7 @@ public class SlabSectionTests
         // 剖切线沿 X 方向穿过楼板中部
         var sectionLine = new Line3D(new Point3D(-500, 2000, 0), new Point3D(6500, 2000, 0));
 
-        var lines = slab.GetSectionGeometry(sectionLine, ViewDir).ToList();
+        var lines = slab.GetSectionGeometry(CreateContext(sectionLine)).ToList();
 
         // 顶面线 + 底面线 + 左竖线 + 右竖线
         lines.Should().HaveCount(4);
@@ -44,7 +52,7 @@ public class SlabSectionTests
         var slab = MakeRectSlab(0, 0, 6000, 4000, topElevation: 500, thickness: 200);
         var sectionLine = new Line3D(new Point3D(-500, 2000, 0), new Point3D(6500, 2000, 0));
 
-        var lines = slab.GetSectionGeometry(sectionLine, ViewDir).ToList();
+        var lines = slab.GetSectionGeometry(CreateContext(sectionLine)).ToList();
 
         // 找顶面线（Z = 500）和底面线（Z = 300）
         var topLine    = lines.FirstOrDefault(l => Math.Abs(l.Start.Z - 500) < 1e-6);
@@ -61,7 +69,7 @@ public class SlabSectionTests
         // 剖切线在楼板范围之外
         var sectionLine = new Line3D(new Point3D(-500, 5000, 0), new Point3D(6500, 5000, 0));
 
-        var lines = slab.GetSectionGeometry(sectionLine, ViewDir).ToList();
+        var lines = slab.GetSectionGeometry(CreateContext(sectionLine)).ToList();
         lines.Should().BeEmpty();
     }
 
@@ -77,5 +85,16 @@ public class SlabSectionTests
     {
         var slab = new Slab { Outline = new List<Point3D> { new(0, 0, 0), new(1, 0, 0) } };
         slab.GetBoundingBox().Should().BeNull();
+    }
+
+    [Fact]
+    public void Slab_SectionTouchingCorner_DoesNotReturnDegenerateLines()
+    {
+        var slab = MakeRectSlab(0, 0, 6000, 4000);
+        var sectionLine = new Line3D(new Point3D(-500, -500, 0), new Point3D(0, 0, 0));
+
+        var lines = slab.GetSectionGeometry(CreateContext(sectionLine)).ToList();
+
+        lines.Should().BeEmpty("仅切到楼板角点时不应生成退化矩形");
     }
 }

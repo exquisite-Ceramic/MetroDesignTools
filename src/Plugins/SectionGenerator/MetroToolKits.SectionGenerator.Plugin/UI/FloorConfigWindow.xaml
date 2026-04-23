@@ -1,17 +1,23 @@
 <Window x:Class="MetroToolKits.SectionGenerator.Plugin.UI.FloorConfigWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="楼层配置管理" Height="560" Width="680"
+        Title="楼层配置管理" Height="860" Width="860"
         WindowStartupLocation="CenterScreen" ResizeMode="CanResize">
     <Grid Margin="10">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
+        <Border Grid.Row="0" Background="#FFF8E1" BorderBrush="#FFE0A3" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,8">
+            <TextBlock x:Name="ConfigSourceStatus" TextWrapping="Wrap" Foreground="#8A5A00"/>
+        </Border>
+
         <!-- 主内容区 -->
-        <Grid Grid.Row="0">
+        <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="200"/>
                 <ColumnDefinition Width="*"/>
@@ -54,6 +60,13 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="130"/>
@@ -85,11 +98,36 @@
 
                         <Separator Grid.Row="7" Grid.ColumnSpan="2" Margin="0,8"/>
 
-                        <Label Grid.Row="8" Grid.Column="0" x:Name="AlignmentLabel" Content="对齐点:" VerticalAlignment="Top"/>
-                        <StackPanel Grid.Row="8" Grid.Column="1" Margin="0,2">
+                        <Label Grid.Row="8" Grid.Column="0" Content="顶板坡度 (%):"/>
+                        <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal">
+                            <CheckBox x:Name="TopSlopeCheck" VerticalAlignment="Center" Margin="0,2,8,2"
+                                      Checked="TopSlopeCheck_Changed" Unchecked="TopSlopeCheck_Changed"/>
+                            <TextBox x:Name="TopSlopeValueBox" Width="100" Margin="0,2"/>
+                        </StackPanel>
+
+                        <Label Grid.Row="9" Grid.Column="0" Content="底板坡度 (%):"/>
+                        <StackPanel Grid.Row="9" Grid.Column="1" Orientation="Horizontal">
+                            <CheckBox x:Name="BottomSlopeCheck" VerticalAlignment="Center" Margin="0,2,8,2"
+                                      Checked="BottomSlopeCheck_Changed" Unchecked="BottomSlopeCheck_Changed"/>
+                            <TextBox x:Name="BottomSlopeValueBox" Width="100" Margin="0,2"/>
+                        </StackPanel>
+
+                        <Separator Grid.Row="10" Grid.ColumnSpan="2" Margin="0,8"/>
+
+                        <Label Grid.Row="11" Grid.Column="0" x:Name="AlignmentLabel" Content="对齐点:" VerticalAlignment="Top"/>
+                        <StackPanel Grid.Row="11" Grid.Column="1" Margin="0,2">
                             <TextBlock x:Name="AlignmentStatus" Text="未设置" Foreground="Gray" Margin="0,0,0,4"/>
                             <Button Content="拾取对齐点..." Height="26" Click="PickAlignment_Click"/>
                             <Button Content="清除对齐点" Height="26" Margin="0,4,0,0" Click="ClearAlignment_Click"/>
+                        </StackPanel>
+
+                        <Separator Grid.Row="12" Grid.ColumnSpan="2" Margin="0,8"/>
+
+                        <Label Grid.Row="13" Grid.Column="0" Content="整层范围:" VerticalAlignment="Top"/>
+                        <StackPanel Grid.Row="13" Grid.Column="1" Margin="0,2">
+                            <TextBlock x:Name="ScopeStatus" Text="未设置" Foreground="Gray" Margin="0,0,0,4"/>
+                            <Button Content="选择整层图元..." Height="26" Click="PickScope_Click"/>
+                            <Button Content="清除整层范围" Height="26" Margin="0,4,0,0" Click="ClearScope_Click"/>
                         </StackPanel>
                     </Grid>
                 </ScrollViewer>
@@ -97,7 +135,7 @@
         </Grid>
 
         <!-- 全局坡度设置 -->
-        <GroupBox Grid.Row="1" Header="全局设置" Margin="0,8,0,0">
+        <GroupBox Grid.Row="2" Header="全局设置" Margin="0,8,0,0">
             <Grid Margin="5">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -125,8 +163,95 @@
             </Grid>
         </GroupBox>
 
+        <GroupBox Grid.Row="3" Header="输出设置" Margin="0,8,0,0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="260">
+                <Grid Margin="5">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140"/>
+                        <ColumnDefinition Width="180"/>
+                        <ColumnDefinition Width="80"/>
+                        <ColumnDefinition Width="80"/>
+                        <ColumnDefinition Width="80"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <CheckBox Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
+                              x:Name="GenerateAnnotationsCheck"
+                              Content="生成标注与标高"
+                              VerticalAlignment="Center"
+                              Margin="0,2"/>
+
+                    <CheckBox Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="2"
+                              x:Name="EnableHatchCheck"
+                              Content="启用剖面填充"
+                              VerticalAlignment="Center"
+                              Margin="10,2,0,2"/>
+
+                    <Label Grid.Row="1" Grid.Column="0" Content="墙填充:"/>
+                    <TextBox Grid.Row="1" Grid.Column="1" x:Name="WallHatchPatternBox" Margin="0,2"/>
+                    <TextBox Grid.Row="1" Grid.Column="2" x:Name="WallHatchScaleBox" Margin="4,2"/>
+                    <TextBox Grid.Row="1" Grid.Column="3" x:Name="WallHatchAngleBox" Margin="4,2"/>
+                    <CheckBox Grid.Row="1" Grid.Column="4" x:Name="WallHatchByLayerCheck" Content="随层" VerticalAlignment="Center" Margin="8,2,0,2"/>
+
+                    <Label Grid.Row="2" Grid.Column="0" Content="柱填充:"/>
+                    <TextBox Grid.Row="2" Grid.Column="1" x:Name="ColumnHatchPatternBox" Margin="0,2"/>
+                    <TextBox Grid.Row="2" Grid.Column="2" x:Name="ColumnHatchScaleBox" Margin="4,2"/>
+                    <TextBox Grid.Row="2" Grid.Column="3" x:Name="ColumnHatchAngleBox" Margin="4,2"/>
+                    <CheckBox Grid.Row="2" Grid.Column="4" x:Name="ColumnHatchByLayerCheck" Content="随层" VerticalAlignment="Center" Margin="8,2,0,2"/>
+
+                    <Label Grid.Row="3" Grid.Column="0" Content="楼板填充:"/>
+                    <TextBox Grid.Row="3" Grid.Column="1" x:Name="SlabHatchPatternBox" Margin="0,2"/>
+                    <TextBox Grid.Row="3" Grid.Column="2" x:Name="SlabHatchScaleBox" Margin="4,2"/>
+                    <TextBox Grid.Row="3" Grid.Column="3" x:Name="SlabHatchAngleBox" Margin="4,2"/>
+                    <CheckBox Grid.Row="3" Grid.Column="4" x:Name="SlabHatchByLayerCheck" Content="随层" VerticalAlignment="Center" Margin="8,2,0,2"/>
+
+                    <TextBlock Grid.Row="4" Grid.Column="1" Text="图案名" Foreground="Gray" Margin="0,0,0,4"/>
+                    <TextBlock Grid.Row="4" Grid.Column="2" Text="比例" Foreground="Gray" Margin="4,0,0,4"/>
+                    <TextBlock Grid.Row="4" Grid.Column="3" Text="角度" Foreground="Gray" Margin="4,0,0,4"/>
+
+                    <Separator Grid.Row="5" Grid.ColumnSpan="6" Margin="0,8"/>
+
+                    <Label Grid.Row="6" Grid.Column="0" Content="剖切线图层:"/>
+                    <TextBox Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="5" x:Name="CutLineLayerBox" Margin="0,2"/>
+
+                    <Label Grid.Row="7" Grid.Column="0" Content="看线图层:"/>
+                    <TextBox Grid.Row="7" Grid.Column="1" Grid.ColumnSpan="5" x:Name="SightLineLayerBox" Margin="0,2"/>
+
+                    <Label Grid.Row="8" Grid.Column="0" Content="标注图层:"/>
+                    <TextBox Grid.Row="8" Grid.Column="1" Grid.ColumnSpan="5" x:Name="AnnotationLayerBox" Margin="0,2"/>
+
+                    <Label Grid.Row="9" Grid.Column="0" Content="墙/柱/板填充图层:"/>
+                    <StackPanel Grid.Row="9" Grid.Column="1" Grid.ColumnSpan="5" Orientation="Horizontal">
+                        <TextBox x:Name="WallHatchLayerBox" Width="180" Margin="0,2,8,2"/>
+                        <TextBox x:Name="ColumnHatchLayerBox" Width="180" Margin="0,2,8,2"/>
+                        <TextBox x:Name="SlabHatchLayerBox" Width="180" Margin="0,2"/>
+                    </StackPanel>
+
+                    <Label Grid.Row="10" Grid.Column="0" Content="结构输出图层:"/>
+                    <TextBox Grid.Row="10" Grid.Column="1" Grid.ColumnSpan="5" x:Name="StructuralLayerBox" Margin="0,2"/>
+
+                    <Label Grid.Row="11" Grid.Column="0" Content="装修输出图层:"/>
+                    <TextBox Grid.Row="11" Grid.Column="1" Grid.ColumnSpan="5" x:Name="FinishLayerBox" Margin="0,2"/>
+                </Grid>
+            </ScrollViewer>
+        </GroupBox>
+
         <!-- 底部按钮 -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
             <Button Content="保存" Width="80" Height="30" Margin="5,0" Click="Save_Click"/>
             <Button Content="取消" Width="80" Height="30" Margin="5,0" Click="Cancel_Click" IsCancel="True"/>
         </StackPanel>

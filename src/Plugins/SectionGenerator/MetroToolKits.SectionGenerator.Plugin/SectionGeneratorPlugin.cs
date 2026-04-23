@@ -47,20 +47,15 @@ public class SectionGeneratorPlugin : IPlugin
         services.AddSingleton<ElementConversionBackupService>();
         services.AddSingleton<IElementConversionService, CadElementConversionService>();
 
-        // 楼层配置仓储
-        var configPath = Path.Combine(userDataDir, "SectionGeneratorConfig.json");
-        var configTemplatePath = Path.Combine(assemblyDir, "SectionGeneratorConfig.json");
-        services.AddSingleton<IFloorConfigRepository>(sp =>
-            new JsonFloorConfigRepository(
-                configPath,
-                configTemplatePath,
-                sp.GetRequiredService<ILogger<JsonFloorConfigRepository>>()));
+        // 楼层配置仓储（DWG 内嵌配置）
+        services.AddSingleton<IFloorConfigRepository, DwgFloorConfigRepository>();
 
         // 构件识别器
         services.AddSingleton<IElementRecognizer, LayerBasedElementRecognizer>();
         services.AddSingleton<ISectionLineResolver, CadSectionLineResolver>();
 
         // Core 层
+        services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.FloorVerticalProfileBuilder>();
         services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.SectionComposer>();
         services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.MultiFloorSectionComposer>();
         services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.FloorGeometryHasher>();

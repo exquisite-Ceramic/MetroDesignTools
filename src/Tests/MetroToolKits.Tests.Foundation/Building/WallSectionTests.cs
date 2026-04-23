@@ -8,6 +8,14 @@ public class WallSectionTests
 {
     private static readonly Vector3D ViewDir = new(0, 1, 0);
 
+    private static SectionGeometryContext CreateContext(Line3D sectionLine)
+        => new()
+        {
+            SectionLine = sectionLine,
+            ViewDirection = ViewDir,
+            Projector = new SectionCoordinateProjector(sectionLine)
+        };
+
     // ── 正交剖切 ──────────────────────────────────────────────────────────────
 
     [Fact]
@@ -24,7 +32,7 @@ public class WallSectionTests
         };
         var sectionLine = new Line3D(new Point3D(-1000, 2500, 0), new Point3D(1000, 2500, 0));
 
-        var lines = wall.GetSectionGeometry(sectionLine, ViewDir).ToList();
+        var lines = wall.GetSectionGeometry(CreateContext(sectionLine)).ToList();
 
         lines.Should().HaveCount(1);
         lines[0].Start.Z.Should().BeApproximately(0, 1e-6);
@@ -44,7 +52,7 @@ public class WallSectionTests
         // 剖切线在墙体延长线之外
         var sectionLine = new Line3D(new Point3D(-1000, 6000, 0), new Point3D(1000, 6000, 0));
 
-        var lines = wall.GetSectionGeometry(sectionLine, ViewDir).ToList();
+        var lines = wall.GetSectionGeometry(CreateContext(sectionLine)).ToList();
         lines.Should().BeEmpty();
     }
 
@@ -60,7 +68,7 @@ public class WallSectionTests
         };
         var sectionLine = new Line3D(new Point3D(-500, 2500, 0), new Point3D(500, 2500, 0));
 
-        var lines = wall.GetSectionGeometry(sectionLine, ViewDir).ToList();
+        var lines = wall.GetSectionGeometry(CreateContext(sectionLine)).ToList();
 
         lines.Should().HaveCount(1);
         lines[0].Start.Z.Should().BeApproximately(1000, 1e-6);

@@ -77,14 +77,29 @@ public sealed class UpdateSectionUseCase : IUpdateSectionUseCase
                 };
             }
 
+            var snapshotDirection = ResolveSnapshotDirection(snapshot);
+            var geometryAnchorX = ResolveGeometryAnchor(request.BlockHandle, snapshot);
+            var alignedSectionLine = AlignToSnapshotDirection(currentSectionLine.Value, snapshotDirection);
+            EnsureSnapshotCompatibilityFields(request.BlockHandle, snapshot, geometryAnchorX, snapshotDirection);
+
             // 2. 重新生成（使用快照中记录的插入点）
+            var includedFloorNames = snapshot.GeneratedFloorNames.Count > 0
+                ? snapshot.GeneratedFloorNames
+                : snapshot.FloorSnapshots.Select(floor => floor.FloorName).ToList();
+
             var genResult = _generateUseCase.Execute(new GenerateSectionRequest
             {
-                CutLineHandle  = snapshot.SourceCutLineHandle,
-                CutLineStart   = currentSectionLine.Value.Start,
-                CutLineEnd     = currentSectionLine.Value.End,
+                CutLineHandle = snapshot.SourceCutLineHandle,
+                CutLineStart = alignedSectionLine.Start,
+                CutLineEnd = alignedSectionLine.End,
                 InsertionPoint = snapshot.InsertionPoint,
-                ViewDepth      = snapshot.ViewDepth
+                GeometryAnchorX = geometryAnchorX,
+                ViewDepth = snapshot.ViewDepth,
+                TargetFloorName = snapshot.TargetFloorName,
+                LocalScopeBounds = snapshot.LocalScopeBounds,
+                LocalScopeFloorName = snapshot.LocalScopeFloorName,
+                IncludedFloorNames = includedFloorNames,
+                RequireCompleteIncludedFloors = true
             });
 
             if (!genResult.Success)
@@ -117,5 +132,74 @@ public sealed class UpdateSectionUseCase : IUpdateSectionUseCase
             _logger.LogError(ex, "更新剖面块 {Handle} 失败", request.BlockHandle);
             return new UpdateSectionResult { Success = false, ErrorMessage = ex.Message };
         }
+    }
+
+    private void EnsureSnapshotCompatibilityFields(
+        string blockHandle,
+        SectionSnapshot snapshot,
+        double geometryAnchorX,
+        Vector3D snapshotDirection)
+    {
+        var shouldSave = false;
+        if (!snapshot.GeometryAnchorX.HasValue)
+        {
+            snapshot.GeometryAnchorX = geometryAnchorX;
+            shouldSave = true;
+        }
+
+        if (!snapshot.SectionDirection.HasValue || ResolveVector(snapshot.SectionDirection.Value).Length <= 1e-9)
+        {
+            snapshot.SectionDirection = new Point3D(snapshotDirection.X, snapshotDirection.Y, snapshotDirection.Z);
+            shouldSave = true;
+        }
+
+        if (shouldSave)
+        {
+            _snapshotRepo.Save(blockHandle, snapshot);
+        }
+    }
+
+    private double ResolveGeometryAnchor(string blockHandle, SectionSnapshot snapshot)
+    {
+        if (snapshot.GeometryAnchorX.HasValue)
+        {
+            return snapshot.GeometryAnchorX.Value;
+        }
+
+        var resolvedAnchor = _snapshotRepo.ResolveBlockGeometryAnchorX(blockHandle);
+        return resolvedAnchor ?? 0;
+    }
+
+    private static Vector3D ResolveSnapshotDirection(SectionSnapshot snapshot)
+    {
+        if (snapshot.SectionDirection.HasValue && ResolveVector(snapshot.SectionDirection.Value).Length > 1e-9)
+        {
+            return ResolveVector(snapshot.SectionDirection.Value);
+        }
+
+        return new Vector3D(
+            snapshot.CutLineEnd.X - snapshot.CutLineStart.X,
+            snapshot.CutLineEnd.Y - snapshot.CutLineStart.Y,
+            0);
+    }
+
+    private static Vector3D ResolveVector(Point3D direction)
+        => new(direction.X, direction.Y, direction.Z);
+
+    private static Line3D AlignToSnapshotDirection(Line3D currentLine, Vector3D snapshotDirection)
+    {
+        var currentDirection = new Vector3D(
+            currentLine.End.X - currentLine.Start.X,
+            currentLine.End.Y - currentLine.Start.Y,
+            0);
+
+        if (snapshotDirection.Length <= 1e-9 || currentDirection.Length <= 1e-9)
+        {
+            return currentLine;
+        }
+
+        return Vector3D.Dot(snapshotDirection.Normalized, currentDirection.Normalized) < 0
+            ? new Line3D(currentLine.End, currentLine.Start)
+            : currentLine;
     }
 }

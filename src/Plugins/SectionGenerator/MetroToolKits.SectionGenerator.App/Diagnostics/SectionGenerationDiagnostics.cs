@@ -14,6 +14,10 @@ public static class SectionGenerationErrorCodes
     public const string AlignmentPointsMissing = "SectionGenerator.FloorConfigLoad.AlignmentPointsMissing";
     public const string AlignmentPointsInvalid = "SectionGenerator.FloorConfigLoad.AlignmentPointsInvalid";
     public const string AlignmentMigrationConflict = "SectionGenerator.FloorConfigLoad.AlignmentMigrationConflict";
+    public const string FloorScopeMissing = "SectionGenerator.FloorConfigLoad.FloorScopeMissing";
+    public const string FloorScopeInvalid = "SectionGenerator.FloorConfigLoad.FloorScopeInvalid";
+    public const string TargetFloorInvalid = "SectionGenerator.InputValidation.TargetFloorInvalid";
+    public const string LocalScopeInvalid = "SectionGenerator.InputValidation.LocalScopeInvalid";
     public const string NoRecognizedElements = "SectionGenerator.ElementRecognition.NoRecognizedElements";
     public const string UnsupportedEntityType = "SectionGenerator.ElementRecognition.UnsupportedEntityType";
     public const string ConversionFailed = "SectionGenerator.ElementRecognition.ConversionFailed";
@@ -63,6 +67,40 @@ public static class SectionGenerationFailures
         Stage = PipelineStage.FloorConfigLoad,
         Module = "FloorAlignmentResolver",
         UserMessage = "基准层配置无效，请检查基准层名称和对齐点",
+        TechnicalMessage = technicalMessage
+    };
+
+    public static OperationFailure TargetFloorInvalid(string technicalMessage) => new()
+    {
+        Code = SectionGenerationErrorCodes.TargetFloorInvalid,
+        Category = FailureCategory.UserInput,
+        Stage = PipelineStage.InputValidation,
+        Module = "GenerateSectionCommand",
+        UserMessage = "目标楼层无效，请重新选择楼层",
+        TechnicalMessage = technicalMessage
+    };
+
+    public static OperationFailure FloorScopeInvalid(string technicalMessage, bool isBaseFloor) => new()
+    {
+        Code = isBaseFloor
+            ? SectionGenerationErrorCodes.FloorScopeInvalid
+            : SectionGenerationErrorCodes.FloorScopeMissing,
+        Category = FailureCategory.UserInput,
+        Stage = PipelineStage.FloorConfigLoad,
+        Module = "FloorScopeResolver",
+        UserMessage = isBaseFloor
+            ? "基准层整层范围无效，请先在 FloorConfig 中重新配置"
+            : "楼层范围配置无效，请先检查 FloorConfig",
+        TechnicalMessage = technicalMessage
+    };
+
+    public static OperationFailure LocalScopeInvalid(string technicalMessage) => new()
+    {
+        Code = SectionGenerationErrorCodes.LocalScopeInvalid,
+        Category = FailureCategory.UserInput,
+        Stage = PipelineStage.InputValidation,
+        Module = "GenSectionCommand",
+        UserMessage = "局部范围无效，请重新选择局部图元",
         TechnicalMessage = technicalMessage
     };
 
@@ -118,8 +156,8 @@ public static class SectionGenerationDiagnosticFactory
         Code = SectionGenerationErrorCodes.FloorConfigMissing,
         Stage = PipelineStage.FloorConfigLoad,
         Module = "GenerateSectionUseCase",
-        Message = "未找到楼层配置文件，已回退到默认单层配置",
-        Suggestion = "如需多楼层剖面，请先执行 FloorConfig 配置楼层。"
+        Message = "当前图纸未找到楼层配置，已回退到默认单层配置",
+        Suggestion = "如需多楼层剖面，请先执行 FloorConfig，为当前图纸配置基准点和整层范围。"
     };
 
     public static OperationDiagnostic AlignmentPointsMissing(string floorName, bool isBaseFloor = false) => new()
@@ -164,6 +202,47 @@ public static class SectionGenerationDiagnosticFactory
         Module = "JsonFloorConfigRepository",
         Message = $"楼层 {floorName} 的旧版对齐数据与全局基准不一致，已清空本层对齐点待人工确认",
         Suggestion = "请打开 FloorConfig，重新确认该楼层的 3 个对齐点后再保存。",
+        Metadata = CreateMetadata(
+            ("floor", floorName),
+            ("reason", reason))
+    };
+
+    public static OperationDiagnostic FloorScopeMissing(string floorName, bool isBaseFloor = false) => new()
+    {
+        Level = DiagnosticLevel.Warning,
+        Code = SectionGenerationErrorCodes.FloorScopeMissing,
+        Stage = PipelineStage.FloorConfigLoad,
+        Module = "FloorScopeResolver",
+        Message = isBaseFloor
+            ? $"基准层 {floorName} 缺少整层范围框"
+            : $"楼层 {floorName} 缺少整层范围框，已跳过该楼层",
+        Suggestion = "请在 FloorConfig 中选择该楼层全部图元，自动生成整层范围框。",
+        Metadata = CreateMetadata(("floor", floorName))
+    };
+
+    public static OperationDiagnostic FloorScopeInvalid(string floorName, string reason, bool isBaseFloor = false) => new()
+    {
+        Level = DiagnosticLevel.Warning,
+        Code = SectionGenerationErrorCodes.FloorScopeInvalid,
+        Stage = PipelineStage.FloorConfigLoad,
+        Module = "FloorScopeResolver",
+        Message = isBaseFloor
+            ? $"基准层 {floorName} 的整层范围框无效: {reason}"
+            : $"楼层 {floorName} 的整层范围框无效，已跳过该楼层: {reason}",
+        Suggestion = "请重新选择该楼层的全部图元，重新生成整层范围框。",
+        Metadata = CreateMetadata(
+            ("floor", floorName),
+            ("reason", reason))
+    };
+
+    public static OperationDiagnostic LocalScopeInvalid(string floorName, string reason) => new()
+    {
+        Level = DiagnosticLevel.Warning,
+        Code = SectionGenerationErrorCodes.LocalScopeInvalid,
+        Stage = PipelineStage.InputValidation,
+        Module = "FloorScopeResolver",
+        Message = $"楼层 {floorName} 的局部范围不可用，已跳过该楼层: {reason}",
+        Suggestion = "请检查局部范围是否定义在正确楼层，并确保它与整层范围存在交集。",
         Metadata = CreateMetadata(
             ("floor", floorName),
             ("reason", reason))

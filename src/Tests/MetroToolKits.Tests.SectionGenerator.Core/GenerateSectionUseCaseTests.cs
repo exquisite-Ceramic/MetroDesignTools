@@ -21,6 +21,22 @@ public class GenerateSectionUseCaseTests
         configRepo.Load().Returns(new SectionConfig
         {
             AlignmentBaseFloorName = "F1",
+            OutputConfig = new SectionOutputConfig
+            {
+                AnnotationOptions = new AnnotationOptions
+                {
+                    GenerateAnnotations = false
+                },
+                HatchOptions = new HatchOptions
+                {
+                    Enabled = true
+                },
+                LayerOptions = new LayerOptions
+                {
+                    StructuralLayer = "T_STRUCT",
+                    FinishLayer = "T_FINISH"
+                }
+            },
             Floors = new List<FloorConfig>
             {
                 DefaultFloor(
@@ -54,7 +70,9 @@ public class GenerateSectionUseCaseTests
         drawingService.DrawMultiFloorSectionBlock(
                 Arg.Any<MultiFloorSectionData>(),
                 Arg.Any<Point3D>(),
-                Arg.Any<IReadOnlyList<FloorConfig>>())
+                Arg.Any<IReadOnlyList<FloorConfig>>(),
+                Arg.Any<SectionOutputConfig>(),
+                Arg.Any<double>())
             .Returns(new DrawSectionBlockResult
             {
                 BlockName = "MK_剖面_F1_F2",
@@ -85,10 +103,21 @@ public class GenerateSectionUseCaseTests
                 line.Start.Equals(new Point3D(100, 0, 0)) &&
                 line.End.Equals(new Point3D(100, 20, 0))),
             3000);
+        drawingService.Received(1).DrawMultiFloorSectionBlock(
+            Arg.Any<MultiFloorSectionData>(),
+            Arg.Any<Point3D>(),
+            Arg.Any<IReadOnlyList<FloorConfig>>(),
+            Arg.Is<SectionOutputConfig>(config =>
+                !config.AnnotationOptions.GenerateAnnotations &&
+                config.HatchOptions.Enabled &&
+                config.LayerOptions.StructuralLayer == "T_STRUCT"),
+            0);
         snapshotRepo.Received(1).Save(
             "ABCD",
             Arg.Is<SectionSnapshot>(snapshot =>
                 snapshot.SourceCutLineHandle == "10" &&
+                snapshot.GeometryAnchorX == 0 &&
+                snapshot.SectionDirection.HasValue &&
                 snapshot.FloorSnapshots.Count == 2));
     }
 
@@ -144,6 +173,79 @@ public class GenerateSectionUseCaseTests
     }
 
     [Fact]
+    public void Execute_SomeFloorsMissingScope_ReturnsPartialSuccess()
+    {
+        var configRepo = Substitute.For<IFloorConfigRepository>();
+        configRepo.Load().Returns(new SectionConfig
+        {
+            AlignmentBaseFloorName = "F1",
+            Floors = new List<FloorConfig>
+            {
+                DefaultFloorWithScope(
+                    "F1",
+                    new ScopeBounds2D { MinX = -1000, MinY = -1000, MaxX = 1000, MaxY = 1000 },
+                    new Point3D(0, 0, 0),
+                    new Point3D(10, 0, 0),
+                    new Point3D(0, 10, 0)),
+                DefaultFloorWithScope("F2", null,
+                    new Point3D(100, 0, 0),
+                    new Point3D(110, 0, 0),
+                    new Point3D(100, 10, 0))
+            }
+        });
+
+        var recognizer = Substitute.For<IElementRecognizer>();
+        recognizer.RecognizeElements(Arg.Any<Line3D>(), Arg.Any<double>(), Arg.Any<ScopeBounds2D?>())
+            .Returns(RecognitionResult(MakeWallAtX(0, "F1W")));
+
+        var useCase = BuildUseCase(configRepo: configRepo, recognizer: recognizer);
+        var result = useCase.Execute(CreateRequest());
+
+        result.Status.Should().Be(OperationStatus.PartialSuccess);
+        result.Diagnostics.Should().Contain(d => d.Code == SectionGenerationErrorCodes.FloorScopeMissing);
+        recognizer.Received(1).RecognizeElements(
+            Arg.Any<Line3D>(),
+            3000,
+            Arg.Is<ScopeBounds2D?>(scope => scope.HasValue && scope.Value.MinX == -1000));
+    }
+
+    [Fact]
+    public void Execute_SingleFloorWithLocalScope_PassesScopeToRecognizerAndSnapshot()
+    {
+        var recognizer = Substitute.For<IElementRecognizer>();
+        recognizer.RecognizeElements(Arg.Any<Line3D>(), Arg.Any<double>(), Arg.Any<ScopeBounds2D?>())
+            .Returns(RecognitionResult(MakeWallAtX(0, "F1W")));
+
+        var snapshotRepo = Substitute.For<ISectionSnapshotRepository>();
+        var useCase = BuildUseCase(recognizer: recognizer, snapshotRepo: snapshotRepo);
+        var localScope = new ScopeBounds2D { MinX = 10, MinY = 20, MaxX = 30, MaxY = 40 };
+
+        var result = useCase.Execute(new GenerateSectionRequest
+        {
+            CutLineHandle = "10",
+            CutLineStart = new Point3D(0, 0, 0),
+            CutLineEnd = new Point3D(0, 20, 0),
+            ViewDepth = 3000,
+            InsertionPoint = new Point3D(5000, 0, 0),
+            LocalScopeBounds = localScope,
+            LocalScopeFloorName = "F1"
+        });
+
+        result.Status.Should().Be(OperationStatus.Success);
+        recognizer.Received(1).RecognizeElements(
+            Arg.Any<Line3D>(),
+            3000,
+            Arg.Is<ScopeBounds2D?>(scope => scope.HasValue && scope.Value.Equals(localScope)));
+        snapshotRepo.Received(1).Save(
+            "ABCD",
+            Arg.Is<SectionSnapshot>(snapshot =>
+                snapshot.LocalScopeBounds.HasValue &&
+                snapshot.LocalScopeBounds.Value.Equals(localScope) &&
+                snapshot.GeometryAnchorX == 0 &&
+                snapshot.GeneratedFloorNames.SequenceEqual(new[] { "F1" })));
+    }
+
+    [Fact]
     public void Execute_AllRecognizedFloorsEmpty_ReturnsFailedWithNoRecognizedElements()
     {
         var recognizer = Substitute.For<IElementRecognizer>();
@@ -175,7 +277,9 @@ public class GenerateSectionUseCaseTests
         drawingService.DrawMultiFloorSectionBlock(
                 Arg.Any<MultiFloorSectionData>(),
                 Arg.Any<Point3D>(),
-                Arg.Any<IReadOnlyList<FloorConfig>>())
+                Arg.Any<IReadOnlyList<FloorConfig>>(),
+                Arg.Any<SectionOutputConfig>(),
+                Arg.Any<double>())
             .Returns(_ => throw new InfrastructureException(
                 SectionGenerationFailures.DrawFailed("事务提交失败")));
 
@@ -240,7 +344,9 @@ public class GenerateSectionUseCaseTests
             drawingService.DrawMultiFloorSectionBlock(
                     Arg.Any<MultiFloorSectionData>(),
                     Arg.Any<Point3D>(),
-                    Arg.Any<IReadOnlyList<FloorConfig>>())
+                    Arg.Any<IReadOnlyList<FloorConfig>>(),
+                    Arg.Any<SectionOutputConfig>(),
+                    Arg.Any<double>())
                 .Returns(new DrawSectionBlockResult
                 {
                     BlockName = "MK_剖面_F1",
@@ -271,12 +377,27 @@ public class GenerateSectionUseCaseTests
         InsertionPoint = new Point3D(5000, 0, 0)
     };
 
-    private static FloorConfig DefaultFloor(string name = "F1", params Point3D[] alignmentPoints) => new()
+    private static FloorConfig DefaultFloor(
+        string name = "F1",
+        params Point3D[] alignmentPoints) => new()
     {
         Name = name,
         Height = 3000,
         BottomSlabThickness = 800,
         TopSlabThickness = 600,
+        AlignmentPoints = alignmentPoints.ToList()
+    };
+
+    private static FloorConfig DefaultFloorWithScope(
+        string name,
+        ScopeBounds2D? scopeBounds,
+        params Point3D[] alignmentPoints) => new()
+    {
+        Name = name,
+        Height = 3000,
+        BottomSlabThickness = 800,
+        TopSlabThickness = 600,
+        ScopeBounds = scopeBounds,
         AlignmentPoints = alignmentPoints.ToList()
     };
 

@@ -12,7 +12,7 @@ public interface IElementRecognizer
     /// <summary>
     /// 识别剖切线附近的构件
     /// </summary>
-    ElementRecognitionResult RecognizeElements(Line3D sectionLine, double viewDepth);
+    ElementRecognitionResult RecognizeElements(Line3D sectionLine, double viewDepth, ScopeBounds2D? scopeBounds = null);
 }
 
 /// <summary>

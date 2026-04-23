@@ -1,4 +1,5 @@
 using MetroToolKits.Foundation.Core.Geometry;
+using MetroToolKits.Foundation.Building.Types;
 
 namespace MetroToolKits.SectionGenerator.Core.Sections;
 
@@ -24,9 +25,16 @@ public sealed class SectionSnapshot
     public Point3D CutLineStart          { get; set; }
     public Point3D CutLineEnd            { get; set; }
     public Point3D InsertionPoint        { get; set; }
+    public double? GeometryAnchorX       { get; set; }
+    public Point3D? SectionDirection     { get; set; }
+    public WallVerticalAnchorMode VerticalAnchorMode { get; set; } = WallVerticalAnchorMode.StructuralSlabFaces;
     public double  ViewDepth             { get; set; } = 3000;
+    public string? TargetFloorName       { get; set; }
+    public ScopeBounds2D? LocalScopeBounds { get; set; }
+    public string? LocalScopeFloorName   { get; set; }
     public DateTime GeneratedAt          { get; set; } = DateTime.Now;
     public double TotalHeight            { get; set; }
+    public List<string> GeneratedFloorNames { get; set; } = new();
     public List<FloorSnapshot> FloorSnapshots { get; set; } = new();
 }
 

@@ -8,6 +8,8 @@ using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.App.Diagnostics;
 using MetroToolKits.SectionGenerator.App.UseCases;
+using MetroToolKits.SectionGenerator.Core.Sections;
+using MetroToolKits.SectionGenerator.Plugin.Selection;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace MetroToolKits.SectionGenerator.Plugin.Commands;
@@ -19,17 +21,20 @@ namespace MetroToolKits.SectionGenerator.Plugin.Commands;
 public sealed class GenSectionCommand
 {
     private readonly IGenerateSectionUseCase _useCase;
+    private readonly IFloorConfigUseCase _floorConfigUseCase;
     private readonly ILogger<GenSectionCommand> _logger;
     private readonly IUserLogger _userLogger;
     private readonly OperationFeedbackPresenter _feedbackPresenter;
 
     public GenSectionCommand(
         IGenerateSectionUseCase useCase,
+        IFloorConfigUseCase floorConfigUseCase,
         ILogger<GenSectionCommand> logger,
         IUserLogger userLogger,
         OperationFeedbackPresenter feedbackPresenter)
     {
         _useCase = useCase;
+        _floorConfigUseCase = floorConfigUseCase;
         _logger = logger;
         _userLogger = userLogger;
         _feedbackPresenter = feedbackPresenter;
@@ -84,6 +89,19 @@ public sealed class GenSectionCommand
         var depthResult = ed.GetDouble(depthOpt);
         double viewDepth = depthResult.Status == PromptStatus.OK ? depthResult.Value : 3000;
 
+        var config = _floorConfigUseCase.Load();
+        if (!TryPromptTargetFloor(ed, config, out var targetFloorName))
+        {
+            _userLogger.CommandCancelled("GenSection");
+            return;
+        }
+
+        if (!TryPromptLocalScope(doc, config, targetFloorName, out var localScopeBounds, out var localScopeFloorName))
+        {
+            _userLogger.CommandCancelled("GenSection");
+            return;
+        }
+
         // 步骤3：插入点
         var ptResult = ed.GetPoint(new PromptPointOptions("\n指定剖面图插入点: "));
         if (ptResult.Status != PromptStatus.OK)
@@ -103,7 +121,10 @@ public sealed class GenSectionCommand
             CutLineStart   = cutStart,
             CutLineEnd     = cutEnd,
             ViewDepth      = viewDepth,
-            InsertionPoint = insertPt
+            InsertionPoint = insertPt,
+            TargetFloorName = targetFloorName,
+            LocalScopeBounds = localScopeBounds,
+            LocalScopeFloorName = localScopeFloorName
         });
 
         sw.Stop();
@@ -145,5 +166,104 @@ public sealed class GenSectionCommand
             result.BlockName,
             result.FloorCount,
             sw.ElapsedMilliseconds);
+    }
+
+    private static bool TryPromptTargetFloor(Editor editor, SectionConfig config, out string? targetFloorName)
+    {
+        targetFloorName = null;
+        if (config.Floors.Count <= 1)
+            return true;
+
+        var modeOptions = new PromptKeywordOptions("\n生成模式 [All/Single] <All>: ")
+        {
+            AllowNone = true
+        };
+        modeOptions.Keywords.Add("All");
+        modeOptions.Keywords.Add("Single");
+        modeOptions.Keywords.Default = "All";
+
+        var modeResult = editor.GetKeywords(modeOptions);
+        if (modeResult.Status == PromptStatus.Cancel)
+            return false;
+
+        if (!string.Equals(modeResult.StringResult, "Single", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var floorOptions = new PromptKeywordOptions("\n选择目标楼层: ")
+        {
+            AllowNone = false
+        };
+
+        foreach (var floor in config.Floors)
+        {
+            floorOptions.Keywords.Add(floor.Name);
+        }
+
+        var floorResult = editor.GetKeywords(floorOptions);
+        if (floorResult.Status != PromptStatus.OK)
+            return false;
+
+        targetFloorName = floorResult.StringResult;
+        return true;
+    }
+
+    private bool TryPromptLocalScope(
+        Autodesk.AutoCAD.ApplicationServices.Document document,
+        SectionConfig config,
+        string? targetFloorName,
+        out ScopeBounds2D? localScopeBounds,
+        out string? localScopeFloorName)
+    {
+        localScopeBounds = null;
+        localScopeFloorName = null;
+
+        var editor = document.Editor;
+        var options = new PromptKeywordOptions("\n是否选择本次局部范围 [Yes/No] <No>: ")
+        {
+            AllowNone = true
+        };
+        options.Keywords.Add("Yes");
+        options.Keywords.Add("No");
+        options.Keywords.Default = "No";
+
+        var selectionChoice = editor.GetKeywords(options);
+        if (selectionChoice.Status == PromptStatus.Cancel)
+            return false;
+
+        if (string.Equals(selectionChoice.StringResult, "Yes", StringComparison.OrdinalIgnoreCase))
+        {
+            localScopeFloorName = string.IsNullOrWhiteSpace(targetFloorName)
+                ? config.AlignmentBaseFloorName
+                : targetFloorName;
+
+            var selectionOptions = new PromptSelectionOptions
+            {
+                MessageForAdding = string.IsNullOrWhiteSpace(localScopeFloorName)
+                    ? "\n选择本次局部区域图元: "
+                    : $"\n选择楼层 [{localScopeFloorName}] 的本次局部区域图元: ",
+                AllowDuplicates = false
+            };
+
+            if (!SelectionScopeBoundsService.TryPickBounds(
+                    document,
+                    selectionOptions,
+                    out var bounds,
+                    out var cancelled,
+                    out var errorMessage))
+            {
+                if (!cancelled && !string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    _feedbackPresenter.PresentFailure(
+                        "GenSection",
+                        SectionGenerationFailures.LocalScopeInvalid(errorMessage));
+                }
+
+                return false;
+            }
+
+            localScopeBounds = bounds;
+        }
+
+        return true;
     }
 }

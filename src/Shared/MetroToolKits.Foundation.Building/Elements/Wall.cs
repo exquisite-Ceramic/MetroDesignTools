@@ -59,17 +59,27 @@ public sealed class Wall : BuildingElement
         return new Polygon3D(vertices);
     }
 
-    public override IEnumerable<Line3D> GetSectionGeometry(Line3D sectionLine, Vector3D viewDirection)
+    public override IEnumerable<Line3D> GetSectionGeometry(SectionGeometryContext context)
     {
+        var sectionLine = context.SectionLine;
         // 计算剖切线与墙体的交点
         var wallLine = new Line3D(StartPoint, EndPoint);
         var intersection = LineIntersection2D(sectionLine, wallLine);
 
         if (intersection == null) yield break;
 
+        var chainage = context.Projector.GetChainage(intersection.Value);
+        var bottomElevation = context.VerticalProfile?.GetBottomStructuralTop(chainage) ?? BaseElevation;
+        var topElevation = context.VerticalProfile?.GetTopStructuralBottom(chainage) ?? (BaseElevation + Height);
+
+        if (topElevation <= bottomElevation + 1e-6)
+        {
+            yield break;
+        }
+
         // 生成剖面线段（垂直方向）
-        var bottom = new Point3D(intersection.Value.X, intersection.Value.Y, BaseElevation);
-        var top = new Point3D(intersection.Value.X, intersection.Value.Y, BaseElevation + Height);
+        var bottom = new Point3D(intersection.Value.X, intersection.Value.Y, bottomElevation);
+        var top = new Point3D(intersection.Value.X, intersection.Value.Y, topElevation);
 
         yield return new Line3D(bottom, top);
     }
@@ -95,4 +105,3 @@ public sealed class Wall : BuildingElement
             line1.Start.Z + t * (line1.End.Z - line1.Start.Z));
     }
 }
-
