@@ -3,10 +3,11 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using MetroToolKits.Foundation.Cad.Layering.Services;
+using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.UseCases;
-using MetroToolKits.Foundation.Building.Types;
-using MetroToolKits.Foundation.Cad.Services;
+using MetroToolKits.SectionGenerator.Core.Sections;
 
 namespace MetroToolKits.SectionGenerator.Plugin.UI;
 
@@ -17,6 +18,8 @@ public partial class LayerMappingManager : Window
 {
     private readonly ILayerService _layerService;
     private readonly IElementTypeCatalog _typeCatalog;
+    private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
+    private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly IElementConversionUseCase _conversionUseCase;
     private readonly ObservableCollection<LayerInfo> _layers = new();
     private readonly ObservableCollection<ElementTypeDefinition> _types = new();
@@ -26,11 +29,15 @@ public partial class LayerMappingManager : Window
     public LayerMappingManager(
         ILayerService layerService,
         IElementTypeCatalog typeCatalog,
+        IWallAssemblyTemplateCatalog wallTemplateCatalog,
+        ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         IElementConversionUseCase conversionUseCase)
     {
         InitializeComponent();
         _layerService = layerService;
         _typeCatalog = typeCatalog;
+        _wallTemplateCatalog = wallTemplateCatalog;
+        _slabTemplateCatalog = slabTemplateCatalog;
         _conversionUseCase = conversionUseCase;
 
         LoadData();
@@ -119,6 +126,32 @@ public partial class LayerMappingManager : Window
 
     private void AddMapping(string layerName, ElementTypeDefinition type)
     {
+        string? templateId = null;
+        string? templateName = null;
+
+        if (string.Equals(type.TypeId, "Wall", StringComparison.OrdinalIgnoreCase))
+        {
+            var selectedTemplate = ChooseWallTemplate();
+            if (selectedTemplate.Cancelled)
+            {
+                return;
+            }
+
+            templateId = selectedTemplate.Template?.TemplateId;
+            templateName = selectedTemplate.Template?.TemplateName;
+        }
+        else if (string.Equals(type.TypeId, "Slab", StringComparison.OrdinalIgnoreCase))
+        {
+            var selectedTemplate = ChooseSlabTemplate();
+            if (selectedTemplate.Cancelled)
+            {
+                return;
+            }
+
+            templateId = selectedTemplate.Template?.TemplateId;
+            templateName = selectedTemplate.Template?.TemplateName;
+        }
+
         // 检查是否已存在映射
         var existing = _mappings.FirstOrDefault(m => m.LayerName == layerName);
         if (existing != null)
@@ -132,7 +165,9 @@ public partial class LayerMappingManager : Window
             TypeName = type.TypeName,
             TypeId = type.TypeId,
             TargetLayerPrefix = type.TargetLayerPrefix,
-            ColorIndex = type.LayerColorIndex
+            ColorIndex = type.LayerColorIndex,
+            TemplateId = templateId,
+            TemplateName = templateName
         });
     }
 
@@ -209,7 +244,8 @@ public partial class LayerMappingManager : Window
             LayerMappings = _mappings.Select(static mapping => new LayerTypeAssignment
             {
                 SourceLayerName = mapping.LayerName,
-                TypeId = mapping.TypeId
+                TypeId = mapping.TypeId,
+                TemplateId = mapping.TemplateId
             }).ToList()
         });
 
@@ -230,6 +266,138 @@ public partial class LayerMappingManager : Window
     {
         DialogResult = false;
         Close();
+    }
+
+    private void WallTemplatesButton_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new WallAssemblyTemplateManager(_wallTemplateCatalog)
+        {
+            Owner = this
+        };
+
+        window.ShowDialog();
+    }
+
+    private void SlabTemplatesButton_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new SlabAssemblyTemplateManager(_slabTemplateCatalog)
+        {
+            Owner = this
+        };
+
+        window.ShowDialog();
+    }
+
+    private TemplateSelectionResult<WallAssemblyTemplate> ChooseWallTemplate()
+    {
+        var templates = _wallTemplateCatalog.GetAllTemplates().ToList();
+        return ChooseTemplate(
+            "选择墙体模板",
+            "（不绑定模板，沿用稳定模式）",
+            templates,
+            template => template.TemplateName);
+    }
+
+    private TemplateSelectionResult<SlabAssemblyTemplate> ChooseSlabTemplate()
+    {
+        var templates = _slabTemplateCatalog.GetAllTemplates().ToList();
+        return ChooseTemplate(
+            "选择楼板模板",
+            "（不绑定模板，沿用稳定模式）",
+            templates,
+            template => template.TemplateName);
+    }
+
+    private TemplateSelectionResult<TTemplate> ChooseTemplate<TTemplate>(
+        string title,
+        string legacyLabel,
+        IReadOnlyList<TTemplate> templates,
+        Func<TTemplate, string> displayNameSelector)
+        where TTemplate : class
+    {
+        var dialog = new Window
+        {
+            Title = title,
+            Width = 360,
+            Height = 440,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = this
+        };
+
+        var options = new List<TemplateSelectionOption<TTemplate>>
+        {
+            new()
+            {
+                DisplayName = legacyLabel,
+                Template = null
+            }
+        };
+        options.AddRange(templates.Select(template => new TemplateSelectionOption<TTemplate>
+        {
+            DisplayName = displayNameSelector(template),
+            Template = template
+        }));
+
+        var listBox = new ListBox { Margin = new Thickness(10) };
+        foreach (var option in options)
+        {
+            listBox.Items.Add(option);
+        }
+
+        listBox.DisplayMemberPath = nameof(TemplateSelectionOption<TTemplate>.DisplayName);
+        listBox.SelectedIndex = 0;
+
+        var okButton = new Button
+        {
+            Content = "确定",
+            Width = 80,
+            Height = 28,
+            Margin = new Thickness(10),
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+
+        TemplateSelectionResult<TTemplate> selection = new() { Cancelled = true };
+        okButton.Click += (_, _) =>
+        {
+            selection = new TemplateSelectionResult<TTemplate>
+            {
+                Cancelled = false,
+                Template = (listBox.SelectedItem as TemplateSelectionOption<TTemplate>)?.Template
+            };
+            dialog.DialogResult = true;
+            dialog.Close();
+        };
+
+        var cancelButton = new Button
+        {
+            Content = "取消",
+            Width = 80,
+            Height = 28,
+            Margin = new Thickness(10, 0, 10, 10),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            IsCancel = true
+        };
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        buttons.Children.Add(okButton);
+        buttons.Children.Add(cancelButton);
+
+        var panel = new DockPanel();
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        panel.Children.Add(buttons);
+        panel.Children.Add(listBox);
+
+        dialog.Content = panel;
+        if (dialog.ShowDialog() != true)
+        {
+            return new TemplateSelectionResult<TTemplate> { Cancelled = true };
+        }
+
+        return selection;
     }
 }
 
@@ -252,4 +420,27 @@ public class LayerMapping
     public string TypeId { get; set; } = string.Empty;
     public string TargetLayerPrefix { get; set; } = string.Empty;
     public short ColorIndex { get; set; }
+    public string? TemplateId { get; set; }
+    public string? TemplateName { get; set; }
+
+    public string DisplayText =>
+        string.IsNullOrWhiteSpace(TemplateName)
+            ? $"{LayerName} → {TypeName}"
+            : $"{LayerName} → {TypeName} [{TemplateName}]";
+}
+
+internal sealed class TemplateSelectionOption<TTemplate>
+    where TTemplate : class
+{
+    public string DisplayName { get; init; } = string.Empty;
+
+    public TTemplate? Template { get; init; }
+}
+
+internal sealed class TemplateSelectionResult<TTemplate>
+    where TTemplate : class
+{
+    public bool Cancelled { get; init; }
+
+    public TTemplate? Template { get; init; }
 }

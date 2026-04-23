@@ -13,12 +13,13 @@ public sealed class ElementConversionBackupService
     private const string OriginalLinetypeKey = "OriginalLinetype";
     private const string OriginalLineweightKey = "OriginalLineweight";
     private const string ConvertedTypeKey = "ConvertedType";
+    private const string TemplateIdKey = "TemplateId";
     private const string ConvertedTimeKey = "ConvertedTime";
 
     /// <summary>
     /// 备份实体原始属性
     /// </summary>
-    public void BackupEntity(Transaction tr, Entity entity, string convertedType)
+    public void BackupEntity(Transaction tr, Entity entity, string convertedType, string? templateId = null)
     {
         var db = entity.Database;
         if (db == null)
@@ -50,6 +51,7 @@ public sealed class ElementConversionBackupService
         SetXrecordValue(tr, entityDict, OriginalLinetypeKey, entity.Linetype);
         SetXrecordValue(tr, entityDict, OriginalLineweightKey, ((int)entity.LineWeight).ToString());
         SetXrecordValue(tr, entityDict, ConvertedTypeKey, convertedType);
+        SetXrecordValue(tr, entityDict, TemplateIdKey, templateId ?? string.Empty);
         SetXrecordValue(tr, entityDict, ConvertedTimeKey, DateTime.Now.ToString("O"));
     }
 
@@ -145,6 +147,36 @@ public sealed class ElementConversionBackupService
         var entityDictId = dict.GetAt(handleStr);
         var entityDict = (DBDictionary)tr.GetObject(entityDictId, OpenMode.ForRead);
         return GetXrecordValue(tr, entityDict, ConvertedTypeKey);
+    }
+
+    /// <summary>
+    /// 获取实体的模板标识。
+    /// </summary>
+    public string? GetTemplateId(Transaction tr, Entity entity)
+    {
+        var db = entity.Database;
+        if (db == null)
+        {
+            return null;
+        }
+
+        var dictId = GetBackupDictionary(tr, db);
+        if (dictId == ObjectId.Null)
+        {
+            return null;
+        }
+
+        var dict = (DBDictionary)tr.GetObject(dictId, OpenMode.ForRead);
+        var handleStr = entity.Handle.ToString();
+
+        if (!dict.Contains(handleStr))
+        {
+            return null;
+        }
+
+        var entityDictId = dict.GetAt(handleStr);
+        var entityDict = (DBDictionary)tr.GetObject(entityDictId, OpenMode.ForRead);
+        return GetXrecordValue(tr, entityDict, TemplateIdKey);
     }
 
     private ObjectId GetOrCreateBackupDictionary(Transaction tr, Database db)

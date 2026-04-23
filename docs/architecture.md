@@ -20,7 +20,7 @@ AutoCAD 宿主
   -> SectionGenerator.Core
      剖面算法 / 多楼层对齐 / 指纹计算
   -> Shared
-     Foundation.Core / Foundation.Cad / Foundation.Building
+     Foundation.Core / Foundation.Cad / Foundation.Cad.Layering / Foundation.Building
 ```
 
 ---
@@ -30,12 +30,13 @@ AutoCAD 宿主
 | 层级 | 项目 | 职责 | 允许依赖 |
 |:---|:---|:---|:---|
 | **共享层** | `Foundation.Core` | 几何、公用值对象、`IUserLogger`、统一失败/诊断契约 | 无 |
-| | `Foundation.Cad` | 可复用的 AutoCAD 宿主访问能力（文档/事务/图层等） | `Foundation.Core` |
+| | `Foundation.Cad` | 可复用的 AutoCAD 宿主访问能力（文档/编辑器/事务） | `Foundation.Core`、`Foundation.Cad.Layering` |
+| | `Foundation.Cad.Layering` | 纯 AutoCAD 图层基础能力（建层/查层/换层/样式应用） | 无 |
 | | `Foundation.Building` | 纯建筑构件模型与 `ElementTypeDefinition` | `Foundation.Core` |
 | **核心层** | `SectionGenerator.Core` | 剖面生成算法、多楼层叠加、楼层对齐、几何哈希 | `Foundation.Core`、`Foundation.Building` |
 | **应用层** | `SectionGenerator.App` | 用例编排、请求/响应模型、基础设施抽象 | `SectionGenerator.Core`、`Foundation.Core`、`Foundation.Building` |
 | **基础设施层** | `SectionGenerator.Infrastructure` | JSON 持久化、XData 仓储、CAD 绘图/导航/识别实现 | `SectionGenerator.App`、`SectionGenerator.Core`、`Foundation.*` |
-| **表示层** | `SectionGenerator.Plugin` | 命令、WPF、PaletteSet、用户交互 | `Bootstrap`、`SectionGenerator.App`、`SectionGenerator.Infrastructure`、`Foundation.*` |
+| **表示层** | `SectionGenerator.Plugin` | 命令、WPF、PaletteSet、用户交互 | `SectionGenerator.App`、`SectionGenerator.Infrastructure`、`Foundation.*` |
 | **引导层** | `Bootstrap` | `NETLOAD` 入口、插件加载、命令桥接、DI 组合根 | `Foundation.Core`、`Foundation.Cad` |
 
 ---
@@ -75,15 +76,17 @@ AutoCAD 宿主
 
 ### 5. Command 契约集中管理
 
-- 对外命令名统一定义在 `Bootstrap/SectionGeneratorCommandNames.cs`。
+- 对外命令名统一定义在 `Foundation.Core/Hosting/SectionGeneratorCommandNames.cs`。
 - 各命令类通过 `CommandBindingAttribute` 自声明命令名和入口方法。
 - `SectionGeneratorPlugin.RegisterCommands(...)` 使用 `CommandRegistrationScanner` 扫描这些绑定，不再手工维护第二份命令清单。
 - `BootstrapCommandBridge` 与扫描注册链共用同一组命令常量。
 - `CommandRegistry` 同时记录命令类型和入口方法名，避免桥接层再维护额外的反射特例。
 
-### 6. Foundation.Cad 与 Infrastructure 的职责划分
+### 6. Foundation.Cad、Foundation.Cad.Layering 与 Infrastructure 的职责划分
 
 - `Foundation.Cad` 提供跨插件可复用的宿主访问能力。
+- `Foundation.Cad.Layering` 提供跨插件可复用的图层基础能力。
+- `SectionGenerator` 继续保留图层映射、构件转换、输出图层配置等业务语义，不把这些规则上提到共享层。
 - `Infrastructure` 可以直接使用 AutoCAD API，但仅限插件特有的适配实现，例如：
   - XData 快照
   - 图纸导航
@@ -116,7 +119,8 @@ AutoCAD 宿主
 | `Foundation.Building` | `net8.0` | 纯领域模型 |
 | `SectionGenerator.Core` | `net8.0` | 可脱离宿主单测 |
 | `SectionGenerator.App` | `net8.0` | 可脱离宿主单测 |
-| `Foundation.Cad` | `net8.0-windows` | 持有 AutoCAD API 依赖 |
+| `Foundation.Cad` | `net8.0` | 持有 AutoCAD 宿主访问能力 |
+| `Foundation.Cad.Layering` | `net8.0` | 持有 AutoCAD 图层基础能力 |
 | `SectionGenerator.Infrastructure` | `net8.0-windows` | AutoCAD 适配实现 |
 | `SectionGenerator.Plugin` | `net8.0-windows` | WPF / AutoCAD 命令 |
 | `Bootstrap` | `net8.0-windows` | AutoCAD `NETLOAD` 入口 |
@@ -131,10 +135,9 @@ Bootstrap
   -> Foundation.Cad
 
 SectionGenerator.Plugin
-  -> Bootstrap
   -> SectionGenerator.App
   -> SectionGenerator.Infrastructure
-  -> Foundation.Core / Foundation.Cad / Foundation.Building
+  -> Foundation.Core / Foundation.Cad / Foundation.Cad.Layering / Foundation.Building
 
 SectionGenerator.App
   -> SectionGenerator.Core
@@ -143,7 +146,7 @@ SectionGenerator.App
 SectionGenerator.Infrastructure
   -> SectionGenerator.App
   -> SectionGenerator.Core
-  -> Foundation.Core / Foundation.Cad / Foundation.Building
+  -> Foundation.Core / Foundation.Cad / Foundation.Cad.Layering / Foundation.Building
 
 SectionGenerator.Core
   -> Foundation.Core / Foundation.Building
@@ -153,6 +156,10 @@ Foundation.Building
 
 Foundation.Cad
   -> Foundation.Core
+  -> Foundation.Cad.Layering
+
+Foundation.Cad.Layering
+  -> (none)
 ```
 
 ---

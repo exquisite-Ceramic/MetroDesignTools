@@ -14,6 +14,7 @@ namespace MetroToolKits.SectionGenerator.Plugin.UI;
 public partial class FloorConfigWindow : Window
 {
     private readonly ILogger<FloorConfigWindow> _logger;
+    private readonly IReadOnlyList<TemplateOption> _slabTemplates;
     private readonly ObservableCollection<FloorConfig> _floors = new();
     private LoadedSectionConfig _document = new();
     private FloorConfig? _currentFloor;
@@ -22,15 +23,37 @@ public partial class FloorConfigWindow : Window
 
     public FloorConfigWindow(
         LoadedSectionConfig document,
+        IReadOnlyList<SlabAssemblyTemplate> slabTemplates,
         ILogger<FloorConfigWindow> logger)
     {
         InitializeComponent();
         _document = document;
         _logger = logger;
+        _slabTemplates = BuildTemplateOptions(slabTemplates);
 
         FloorListBox.ItemsSource = _floors;
         BaseFloorComboBox.ItemsSource = _floors;
+        TopBoundaryTemplateBox.ItemsSource = _slabTemplates;
+        BottomBoundaryTemplateBox.ItemsSource = _slabTemplates;
         LoadConfig();
+    }
+
+    private static IReadOnlyList<TemplateOption> BuildTemplateOptions(IReadOnlyList<SlabAssemblyTemplate> slabTemplates)
+    {
+        var options = new List<TemplateOption>
+        {
+            new()
+            {
+                TemplateId = string.Empty,
+                TemplateName = "（不绑定模板，沿用厚度参数）"
+            }
+        };
+        options.AddRange(slabTemplates.Select(template => new TemplateOption
+        {
+            TemplateId = template.TemplateId,
+            TemplateName = template.TemplateName
+        }));
+        return options;
     }
 
     private void LoadConfig()
@@ -268,6 +291,8 @@ public partial class FloorConfigWindow : Window
         BottomSlopeCheck.IsChecked = floor.BottomBoundarySlab.SlopeEnabled;
         BottomSlopeValueBox.Text = (floor.BottomBoundarySlab.SlopeValue * 100).ToString("F2");
         BottomSlopeValueBox.IsEnabled = floor.BottomBoundarySlab.SlopeEnabled;
+        TopBoundaryTemplateBox.SelectedValue = floor.TopBoundarySlab.TemplateId;
+        BottomBoundaryTemplateBox.SelectedValue = floor.BottomBoundarySlab.TemplateId;
 
         var pointCount = floor.AlignmentPoints.Count;
         AlignmentLabel.Content = BaseFloorComboBox.SelectedItem is FloorConfig baseFloor &&
@@ -324,6 +349,8 @@ public partial class FloorConfigWindow : Window
 
         _currentFloor.TopBoundarySlab.SlopeEnabled = TopSlopeCheck.IsChecked == true;
         _currentFloor.BottomBoundarySlab.SlopeEnabled = BottomSlopeCheck.IsChecked == true;
+        _currentFloor.TopBoundarySlab.TemplateId = TopBoundaryTemplateBox.SelectedValue?.ToString() ?? string.Empty;
+        _currentFloor.BottomBoundarySlab.TemplateId = BottomBoundaryTemplateBox.SelectedValue?.ToString() ?? string.Empty;
         if (double.TryParse(TopSlopeValueBox.Text, out var topSlope))
         {
             _currentFloor.TopBoundarySlab.SlopeValue = topSlope / 100.0;
@@ -481,4 +508,11 @@ public partial class FloorConfigWindow : Window
         _document.Config.AlignmentBaseFloorName = (BaseFloorComboBox.SelectedItem as FloorConfig)?.Name ?? string.Empty;
         SaveOutputConfig();
     }
+}
+
+internal sealed class TemplateOption
+{
+    public string TemplateId { get; init; } = string.Empty;
+
+    public string TemplateName { get; init; } = string.Empty;
 }

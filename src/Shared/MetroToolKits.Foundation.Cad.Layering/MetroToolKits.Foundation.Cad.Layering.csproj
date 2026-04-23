@@ -4,8 +4,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>MetroToolKits.Foundation.Cad</RootNamespace>
-    <AssemblyName>MetroToolKits.Foundation.Cad</AssemblyName>
+    <RootNamespace>MetroToolKits.Foundation.Cad.Layering</RootNamespace>
+    <AssemblyName>MetroToolKits.Foundation.Cad.Layering</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,11 +21,6 @@
       <HintPath>..\..\..\build\References\accoremgd.dll</HintPath>
       <Private>False</Private>
     </Reference>
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\MetroToolKits.Foundation.Core\MetroToolKits.Foundation.Core.csproj" />
-    <ProjectReference Include="..\MetroToolKits.Foundation.Cad.Layering\MetroToolKits.Foundation.Cad.Layering.csproj" />
   </ItemGroup>
 
 </Project>

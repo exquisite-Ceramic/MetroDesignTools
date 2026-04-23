@@ -1,4 +1,5 @@
 using Autodesk.AutoCAD.DatabaseServices;
+using MetroToolKits.Foundation.Cad.Layering.Services;
 using MetroToolKits.Foundation.Cad.Services;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 
@@ -81,7 +82,7 @@ public sealed class CadElementConversionService : IElementConversionService
             }
 
             entity.UpgradeOpen();
-            _backupService.BackupEntity(tr, entity, mapping.ElementType.TypeId);
+            _backupService.BackupEntity(tr, entity, mapping.ElementType.TypeId, mapping.TemplateId);
             entity.Layer = BuildTargetLayerName(mapping);
             convertedCount++;
         }
@@ -130,7 +131,7 @@ public sealed class CadElementConversionService : IElementConversionService
             }
 
             entity.UpgradeOpen();
-            _backupService.BackupEntity(tr, entity, mapping.ElementType.TypeId);
+            _backupService.BackupEntity(tr, entity, mapping.ElementType.TypeId, mapping.TemplateId);
             entity.Layer = BuildTargetLayerName(mapping);
             convertedCount++;
         }

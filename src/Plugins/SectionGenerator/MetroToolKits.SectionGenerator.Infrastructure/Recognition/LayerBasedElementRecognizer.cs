@@ -1,9 +1,12 @@
 using Autodesk.AutoCAD.DatabaseServices;
 using Microsoft.Extensions.Logging;
+using MetroToolKits.Foundation.Building.Elements;
+using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Diagnostics;
+using MetroToolKits.SectionGenerator.Core.Sections;
 using MetroToolKits.SectionGenerator.Infrastructure.Services;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 using BuildingColumn = MetroToolKits.Foundation.Building.Elements.Column;
@@ -15,12 +18,16 @@ namespace MetroToolKits.SectionGenerator.Infrastructure.Recognition;
 
 /// <summary>
 /// 基于图层映射的构件识别器。
-/// 主线稳定版不依赖墙/板模板绑定。
+/// 增强模式支持模板驱动装配，但未绑定模板时仍沿用主线稳定识别。
 /// </summary>
 public sealed class LayerBasedElementRecognizer : IElementRecognizer
 {
     private readonly ILogger<LayerBasedElementRecognizer> _logger;
     private readonly ElementConversionBackupService _backupService;
+    private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
+    private readonly IWallAssemblyBuilder _wallAssemblyBuilder;
+    private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
+    private readonly ISlabAssemblyBuilder _slabAssemblyBuilder;
 
     private static readonly Dictionary<string, string> LayerTypeMap = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -31,10 +38,18 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
 
     public LayerBasedElementRecognizer(
         ILogger<LayerBasedElementRecognizer> logger,
-        ElementConversionBackupService backupService)
+        ElementConversionBackupService backupService,
+        IWallAssemblyTemplateCatalog wallTemplateCatalog,
+        IWallAssemblyBuilder wallAssemblyBuilder,
+        ISlabAssemblyTemplateCatalog slabTemplateCatalog,
+        ISlabAssemblyBuilder slabAssemblyBuilder)
     {
         _logger = logger;
         _backupService = backupService;
+        _wallTemplateCatalog = wallTemplateCatalog;
+        _wallAssemblyBuilder = wallAssemblyBuilder;
+        _slabTemplateCatalog = slabTemplateCatalog;
+        _slabAssemblyBuilder = slabAssemblyBuilder;
     }
 
     public ElementRecognitionResult RecognizeElements(Line3D sectionLine, double viewDepth, ScopeBounds2D? scopeBounds = null)
@@ -52,6 +67,7 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
             var viewDirection = ComputeViewDirection(sectionLine);
             var matchedLayerCount = 0;
             var intersectingElementCount = 0;
+            var wallCandidates = new Dictionary<(string Layer, string TemplateId), List<WallCandidate>>();
 
             _logger.LogDebug("当前识别器暂未使用 viewDepth 过滤，收到视图深度 {ViewDepth}", viewDepth);
 
@@ -75,7 +91,31 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
                 }
 
                 matchedLayerCount++;
-                var element = ConvertToElement(entity, elementType, diagnostics);
+                var templateId = _backupService.GetTemplateId(tr, entity);
+
+                if (string.Equals(elementType, "Wall", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(templateId))
+                {
+                    var template = _wallTemplateCatalog.GetById(templateId);
+                    if (template != null)
+                    {
+                        var candidate = ConvertToWallCandidate(entity, template, diagnostics);
+                        if (candidate != null)
+                        {
+                            var key = (entity.Layer, template.TemplateId);
+                            if (!wallCandidates.TryGetValue(key, out var candidates))
+                            {
+                                candidates = new List<WallCandidate>();
+                                wallCandidates[key] = candidates;
+                            }
+
+                            candidates.Add(candidate);
+                            continue;
+                        }
+                    }
+                }
+
+                var element = ConvertToElement(entity, elementType, templateId, diagnostics);
                 if (element == null)
                 {
                     continue;
@@ -93,6 +133,65 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
                 {
                     continue;
                 }
+            }
+
+            foreach (var ((layerName, templateId), candidates) in wallCandidates)
+            {
+                var template = _wallTemplateCatalog.GetById(templateId);
+                if (template == null)
+                {
+                    foreach (var candidate in candidates)
+                    {
+                        var legacyWall = CreateLegacyWallFromCandidate(candidate, templateId);
+                        if (!TryAddRecognizedElement(
+                                legacyWall,
+                                sectionLine,
+                                viewDirection,
+                                scopeBounds,
+                                layerName,
+                                diagnostics,
+                                elements,
+                                ref intersectingElementCount))
+                        {
+                            continue;
+                        }
+                    }
+
+                    continue;
+                }
+
+                if (template.CoreRule.RecognitionMode == WallCoreRecognitionMode.Centerline)
+                {
+                    foreach (var candidate in candidates)
+                    {
+                        var core = BuildCenterlineCoreWall(candidate, template);
+                        var wall = _wallAssemblyBuilder.Build(core, template);
+                        if (!TryAddRecognizedElement(
+                                wall,
+                                sectionLine,
+                                viewDirection,
+                                scopeBounds,
+                                layerName,
+                                diagnostics,
+                                elements,
+                                ref intersectingElementCount))
+                        {
+                            continue;
+                        }
+                    }
+
+                    continue;
+                }
+
+                ProcessBoundaryPairWalls(
+                    candidates,
+                    template,
+                    sectionLine,
+                    viewDirection,
+                    scopeBounds,
+                    diagnostics,
+                    elements,
+                    ref intersectingElementCount);
             }
 
             tr.Commit();
@@ -144,6 +243,7 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
     private BuildingElement? ConvertToElement(
         Entity entity,
         string elementType,
+        string? templateId,
         ICollection<OperationDiagnostic> diagnostics)
     {
         try
@@ -152,7 +252,7 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
             {
                 "Wall" => ConvertToWall(entity),
                 "Column" => ConvertToColumn(entity),
-                "Slab" => ConvertToSlab(entity),
+                "Slab" => ConvertToSlab(entity, templateId),
                 _ => null
             };
 
@@ -249,6 +349,66 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
         return elementBounds.HasValue && elementBounds.Value.Intersects(scopeBounds);
     }
 
+    private void ProcessBoundaryPairWalls(
+        IReadOnlyList<WallCandidate> candidates,
+        WallAssemblyTemplate template,
+        Line3D sectionLine,
+        Vector3D viewDirection,
+        ScopeBounds2D? scopeBounds,
+        ICollection<OperationDiagnostic> diagnostics,
+        ICollection<BuildingElement> recognizedElements,
+        ref int intersectingElementCount)
+    {
+        var intersections = candidates
+            .Select(candidate => new WallIntersection(
+                candidate,
+                IntersectSectionLine(sectionLine, candidate.Segment)))
+            .Where(item => item.Intersection.HasValue)
+            .Select(item => item with
+            {
+                Chainage = SectionCoordinateProjector.GetChainage(sectionLine, item.Intersection!.Value)
+            })
+            .OrderBy(item => item.Chainage)
+            .ToList();
+
+        if (intersections.Count == 0)
+        {
+            foreach (var candidate in candidates)
+            {
+                diagnostics.Add(SectionGenerationDiagnosticFactory.NoIntersectingElements(
+                    nameof(LayerBasedElementRecognizer),
+                    candidate.SourceHandle,
+                    "Wall",
+                    candidate.LayerName));
+            }
+
+            return;
+        }
+
+        var pairings = BuildPairings(intersections, diagnostics, template);
+        foreach (var (left, right) in pairings)
+        {
+            if (!TryBuildCoreFromPair(left, right, template, out var core))
+            {
+                continue;
+            }
+
+            var wall = _wallAssemblyBuilder.Build(core!, template);
+            if (!TryAddRecognizedElement(
+                    wall,
+                    sectionLine,
+                    viewDirection,
+                    scopeBounds,
+                    left.Candidate.LayerName,
+                    diagnostics,
+                    recognizedElements,
+                    ref intersectingElementCount))
+            {
+                continue;
+            }
+        }
+    }
+
     private static BuildingWall? ConvertToWall(Entity entity)
     {
         return TryGetWallSegment(entity, out var segment)
@@ -264,6 +424,46 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
                 BaseElevation = 0
             }
             : null;
+    }
+
+    private static WallCandidate? ConvertToWallCandidate(
+        Entity entity,
+        WallAssemblyTemplate template,
+        ICollection<OperationDiagnostic> diagnostics)
+    {
+        if (!TryGetWallSegment(entity, out var segment))
+        {
+            diagnostics.Add(SectionGenerationDiagnosticFactory.UnsupportedEntityType(
+                nameof(LayerBasedElementRecognizer),
+                entity.Handle.ToString(),
+                entity.Layer,
+                entity.GetType().Name,
+                $"{nameof(Line)} / Open {nameof(Polyline)}(2 vertices)"));
+            return null;
+        }
+
+        return new WallCandidate(
+            entity.Handle.ToString(),
+            entity.Layer,
+            segment,
+            template.TemplateId,
+            template.CoreRule.RecognitionMode);
+    }
+
+    private static BuildingWall CreateLegacyWallFromCandidate(WallCandidate candidate, string? templateId)
+    {
+        return new BuildingWall
+        {
+            SourceHandle = candidate.SourceHandle,
+            SourceHandles = new List<string> { candidate.SourceHandle },
+            SourceLayer = candidate.LayerName,
+            StartPoint = candidate.Segment.Start,
+            EndPoint = candidate.Segment.End,
+            Height = 3000,
+            Thickness = 200,
+            BaseElevation = 0,
+            Name = string.IsNullOrWhiteSpace(templateId) ? null : $"legacy:{templateId}"
+        };
     }
 
     private static BuildingColumn? ConvertToColumn(Entity entity)
@@ -303,7 +503,7 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
         return null;
     }
 
-    private static BuildingSlab? ConvertToSlab(Entity entity)
+    private BuildingElement? ConvertToSlab(Entity entity, string? templateId)
     {
         if (entity is not Polyline polyline)
         {
@@ -315,6 +515,24 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
         {
             var point = polyline.GetPoint3dAt(i);
             outline.Add(new Point3D(point.X, point.Y, point.Z));
+        }
+
+        if (!string.IsNullOrWhiteSpace(templateId))
+        {
+            var template = _slabTemplateCatalog.GetById(templateId);
+            if (template != null)
+            {
+                return _slabAssemblyBuilder.Build(
+                    new CoreSlabArea
+                    {
+                        TemplateId = template.TemplateId,
+                        Outline = outline,
+                        CoreTopElevation = 0,
+                        SourceLayer = entity.Layer,
+                        SourceHandles = new List<string> { entity.Handle.ToString() }
+                    },
+                    template);
+            }
         }
 
         return new BuildingSlab
@@ -415,6 +633,148 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
         return new Vector3D(-direction.Y, direction.X, 0);
     }
 
+    private static IReadOnlyList<(WallIntersection Left, WallIntersection Right)> BuildPairings(
+        IReadOnlyList<WallIntersection> intersections,
+        ICollection<OperationDiagnostic> diagnostics,
+        WallAssemblyTemplate template)
+    {
+        var result = new List<(WallIntersection Left, WallIntersection Right)>();
+        if (intersections.Count == 3)
+        {
+            result.Add((intersections[0], intersections[1]));
+            result.Add((intersections[1], intersections[2]));
+            return result;
+        }
+
+        if (intersections.Count % 2 != 0)
+        {
+            diagnostics.Add(SectionGenerationDiagnosticFactory.AmbiguousWallPairing(
+                nameof(LayerBasedElementRecognizer),
+                intersections[0].Candidate.LayerName,
+                template.TemplateId,
+                intersections.Count));
+            return result;
+        }
+
+        for (int i = 0; i < intersections.Count; i += 2)
+        {
+            result.Add((intersections[i], intersections[i + 1]));
+        }
+
+        return result;
+    }
+
+    private static bool TryBuildCoreFromPair(
+        WallIntersection left,
+        WallIntersection right,
+        WallAssemblyTemplate template,
+        out CoreWallSegment? coreSegment)
+    {
+        coreSegment = null;
+
+        if (!TryAlignSegments(left.Candidate.Segment, right.Candidate.Segment, out var alignedLeft, out var alignedRight))
+        {
+            return false;
+        }
+
+        var leftDirection = alignedLeft.Direction.Normalized;
+        if (leftDirection.Length <= 1e-9)
+        {
+            return false;
+        }
+
+        var normal = new Vector3D(-leftDirection.Y, leftDirection.X, 0).Normalized;
+        var delta = new Vector3D(
+            alignedRight.Start.X - alignedLeft.Start.X,
+            alignedRight.Start.Y - alignedLeft.Start.Y,
+            0);
+        var thickness = Math.Abs(Vector3D.Dot(delta, normal));
+        if (thickness <= 1e-6)
+        {
+            return false;
+        }
+
+        coreSegment = new CoreWallSegment
+        {
+            StartPoint = MidPoint(alignedLeft.Start, alignedRight.Start),
+            EndPoint = MidPoint(alignedLeft.End, alignedRight.End),
+            Thickness = thickness,
+            Height = 3000,
+            BaseElevation = 0,
+            TemplateId = template.TemplateId,
+            SourceLayer = left.Candidate.LayerName,
+            SourceHandles = new List<string>
+            {
+                left.Candidate.SourceHandle,
+                right.Candidate.SourceHandle
+            }
+        };
+        return true;
+    }
+
+    private static CoreWallSegment BuildCenterlineCoreWall(WallCandidate candidate, WallAssemblyTemplate template)
+    {
+        return new CoreWallSegment
+        {
+            StartPoint = candidate.Segment.Start,
+            EndPoint = candidate.Segment.End,
+            Thickness = template.CoreRule.Thickness,
+            Height = 3000,
+            BaseElevation = 0,
+            TemplateId = template.TemplateId,
+            SourceLayer = candidate.LayerName,
+            SourceHandles = new List<string> { candidate.SourceHandle }
+        };
+    }
+
+    private static Point3D? IntersectSectionLine(Line3D sectionLine, Line3D segment)
+    {
+        var x1 = sectionLine.Start.X; var y1 = sectionLine.Start.Y;
+        var x2 = sectionLine.End.X; var y2 = sectionLine.End.Y;
+        var x3 = segment.Start.X; var y3 = segment.Start.Y;
+        var x4 = segment.End.X; var y4 = segment.End.Y;
+
+        var denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+        if (Math.Abs(denom) < 1e-10)
+        {
+            return null;
+        }
+
+        var t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+        var u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
+        if (t < 0 || t > 1 || u < 0 || u > 1)
+        {
+            return null;
+        }
+
+        return new Point3D(
+            x1 + t * (x2 - x1),
+            y1 + t * (y2 - y1),
+            sectionLine.Start.Z + t * (sectionLine.End.Z - sectionLine.Start.Z));
+    }
+
+    private static bool TryAlignSegments(Line3D left, Line3D right, out Line3D alignedLeft, out Line3D alignedRight)
+    {
+        alignedLeft = left;
+        alignedRight = right;
+
+        var sameDirection = left.Start.DistanceTo(right.Start) + left.End.DistanceTo(right.End);
+        var reversedDirection = left.Start.DistanceTo(right.End) + left.End.DistanceTo(right.Start);
+        if (reversedDirection < sameDirection)
+        {
+            alignedRight = new Line3D(right.End, right.Start);
+        }
+
+        var leftDirection = alignedLeft.Direction.Normalized;
+        var rightDirection = alignedRight.Direction.Normalized;
+        return leftDirection.Length > 1e-9 &&
+               rightDirection.Length > 1e-9 &&
+               Math.Abs(Vector3D.Dot(leftDirection, rightDirection)) >= 0.95;
+    }
+
+    private static Point3D MidPoint(Point3D left, Point3D right)
+        => new((left.X + right.X) / 2.0, (left.Y + right.Y) / 2.0, (left.Z + right.Z) / 2.0);
+
     private static string GetExpectedEntityTypeName(string elementType)
     {
         return elementType switch
@@ -438,5 +798,19 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
             TechnicalMessage = technicalMessage,
             InnerException = innerException
         });
+    }
+
+    private sealed record WallCandidate(
+        string SourceHandle,
+        string LayerName,
+        Line3D Segment,
+        string TemplateId,
+        WallCoreRecognitionMode RecognitionMode);
+
+    private sealed record WallIntersection(
+        WallCandidate Candidate,
+        Point3D? Intersection)
+    {
+        public double Chainage { get; init; }
     }
 }

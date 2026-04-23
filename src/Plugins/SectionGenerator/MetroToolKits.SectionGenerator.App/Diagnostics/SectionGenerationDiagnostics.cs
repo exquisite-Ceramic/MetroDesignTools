@@ -22,6 +22,7 @@ public static class SectionGenerationErrorCodes
     public const string UnsupportedEntityType = "SectionGenerator.ElementRecognition.UnsupportedEntityType";
     public const string ConversionFailed = "SectionGenerator.ElementRecognition.ConversionFailed";
     public const string NoIntersectingElements = "SectionGenerator.ElementRecognition.NoIntersectingElements";
+    public const string AmbiguousWallPairing = "SectionGenerator.ElementRecognition.AmbiguousWallPairing";
     public const string EmptyGeometry = "SectionGenerator.SectionComposition.EmptyGeometry";
     public const string DrawFailed = "SectionGenerator.DrawingOutput.DrawFailed";
     public const string SnapshotSaveFailed = "SectionGenerator.SnapshotPersist.SaveFailed";
@@ -313,6 +314,24 @@ public static class SectionGenerationDiagnosticFactory
         Metadata = CreateMetadata(
             ("elementType", elementType),
             ("layer", layerName))
+    };
+
+    public static OperationDiagnostic AmbiguousWallPairing(
+        string module,
+        string layerName,
+        string templateId,
+        int intersectionCount) => new()
+    {
+        Level = DiagnosticLevel.Warning,
+        Code = SectionGenerationErrorCodes.AmbiguousWallPairing,
+        Stage = PipelineStage.ElementRecognition,
+        Module = module,
+        Message = $"墙图层 {layerName} 在模板 {templateId} 下产生了 {intersectionCount} 个交点，无法稳定配对为墙体",
+        Suggestion = "请检查墙边界是否成对、是否存在贴墙共享边或异常断裂线。",
+        Metadata = CreateMetadata(
+            ("layer", layerName),
+            ("templateId", templateId),
+            ("intersectionCount", intersectionCount.ToString()))
     };
 
     private static IReadOnlyDictionary<string, string?> CreateMetadata(params (string Key, string? Value)[] entries)

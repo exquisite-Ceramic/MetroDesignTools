@@ -1,12 +1,14 @@
 using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using MetroToolKits.Foundation.Cad.Layering.Services;
 using MetroToolKits.Foundation.Core.Hosting;
 using MetroToolKits.Foundation.Core.Runtime;
 using MetroToolKits.Foundation.Cad.Services;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Support;
 using MetroToolKits.SectionGenerator.App.UseCases;
+using MetroToolKits.SectionGenerator.Core.Sections;
 using MetroToolKits.SectionGenerator.Infrastructure.Recognition;
 using MetroToolKits.SectionGenerator.Infrastructure.Repositories;
 using MetroToolKits.SectionGenerator.Infrastructure.Services;
@@ -31,7 +33,9 @@ public class SectionGeneratorPlugin : IPlugin
         var userDataDir = GetUserDataDirectory();
 
         // Foundation 服务
-        services.AddSingleton<IDocumentService, DocumentService>();
+        services.AddSingleton<DocumentService>();
+        services.AddSingleton<IDocumentService>(sp => sp.GetRequiredService<DocumentService>());
+        services.AddSingleton<ICadDatabaseAccessor>(sp => sp.GetRequiredService<DocumentService>());
         services.AddSingleton<ILayerService, LayerService>();
         services.AddSingleton<ITransactionService, TransactionService>();
         services.AddSingleton<IEditorService, EditorService>();
@@ -44,6 +48,20 @@ public class SectionGeneratorPlugin : IPlugin
                 elementTypesPath,
                 elementTypesTemplatePath,
                 sp.GetRequiredService<ILogger<JsonElementTypeCatalog>>()));
+        var wallTemplatesPath = Path.Combine(userDataDir, "WallAssemblyTemplates.json");
+        var wallTemplatesTemplatePath = Path.Combine(assemblyDir, "WallAssemblyTemplates.json");
+        services.AddSingleton<IWallAssemblyTemplateCatalog>(sp =>
+            new JsonWallAssemblyTemplateCatalog(
+                wallTemplatesPath,
+                wallTemplatesTemplatePath,
+                sp.GetRequiredService<ILogger<JsonWallAssemblyTemplateCatalog>>()));
+        var slabTemplatesPath = Path.Combine(userDataDir, "SlabAssemblyTemplates.json");
+        var slabTemplatesTemplatePath = Path.Combine(assemblyDir, "SlabAssemblyTemplates.json");
+        services.AddSingleton<ISlabAssemblyTemplateCatalog>(sp =>
+            new JsonSlabAssemblyTemplateCatalog(
+                slabTemplatesPath,
+                slabTemplatesTemplatePath,
+                sp.GetRequiredService<ILogger<JsonSlabAssemblyTemplateCatalog>>()));
 
         // 备份服务
         services.AddSingleton<ElementConversionBackupService>();
@@ -61,6 +79,8 @@ public class SectionGeneratorPlugin : IPlugin
         services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.SectionComposer>();
         services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.MultiFloorSectionComposer>();
         services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.FloorGeometryHasher>();
+        services.AddSingleton<IWallAssemblyBuilder, WallAssemblyBuilder>();
+        services.AddSingleton<ISlabAssemblyBuilder, SlabAssemblyBuilder>();
         services.AddSingleton<OperationFeedbackPresenter>();
 
         // 快照仓储 + 块删除服务
@@ -77,6 +97,7 @@ public class SectionGeneratorPlugin : IPlugin
         // 用例
         services.AddSingleton<IGenerateSectionUseCase, GenerateSectionUseCase>();
         services.AddSingleton<ICheckSectionUpdatesUseCase, CheckSectionUpdatesUseCase>();
+        services.AddSingleton<IGenerateSectionPreflightUseCase, GenerateSectionPreflightUseCase>();
         services.AddSingleton<IUpdateSectionUseCase, UpdateSectionUseCase>();
         services.AddSingleton<ILocateSourceElementUseCase, LocateSourceElementUseCase>();
         services.AddSingleton<IFindRelatedSectionsUseCase, FindRelatedSectionsUseCase>();
@@ -118,21 +139,32 @@ public class OpenLayerMappingCommand
 {
     private readonly ILayerService _layerService;
     private readonly IElementTypeCatalog _typeCatalog;
+    private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
+    private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly IElementConversionUseCase _elementConversionUseCase;
 
     public OpenLayerMappingCommand(
         ILayerService layerService,
         IElementTypeCatalog typeCatalog,
+        IWallAssemblyTemplateCatalog wallTemplateCatalog,
+        ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         IElementConversionUseCase elementConversionUseCase)
     {
         _layerService  = layerService;
         _typeCatalog = typeCatalog;
+        _wallTemplateCatalog = wallTemplateCatalog;
+        _slabTemplateCatalog = slabTemplateCatalog;
         _elementConversionUseCase = elementConversionUseCase;
     }
 
     public void Execute()
     {
-        var window = new UI.LayerMappingManager(_layerService, _typeCatalog, _elementConversionUseCase);
+        var window = new UI.LayerMappingManager(
+            _layerService,
+            _typeCatalog,
+            _wallTemplateCatalog,
+            _slabTemplateCatalog,
+            _elementConversionUseCase);
         Application.ShowModalWindow(window);
     }
 }

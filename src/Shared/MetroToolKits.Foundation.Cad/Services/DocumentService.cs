@@ -1,12 +1,13 @@
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
+using MetroToolKits.Foundation.Cad.Layering.Services;
 
 namespace MetroToolKits.Foundation.Cad.Services;
 
 /// <summary>
 /// 文档服务实现
 /// </summary>
-public class DocumentService : IDocumentService
+public class DocumentService : IDocumentService, ICadDatabaseAccessor
 {
     public Database? GetCurrentDatabase()
     {

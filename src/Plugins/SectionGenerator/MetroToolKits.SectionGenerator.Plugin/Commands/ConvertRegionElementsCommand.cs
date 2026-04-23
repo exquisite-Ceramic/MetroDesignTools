@@ -1,9 +1,11 @@
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
+using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.Foundation.Core.Hosting;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.UseCases;
+using MetroToolKits.SectionGenerator.Core.Sections;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace MetroToolKits.SectionGenerator.Plugin.Commands;
@@ -15,13 +17,19 @@ namespace MetroToolKits.SectionGenerator.Plugin.Commands;
 public class ConvertRegionElementsCommand
 {
     private readonly IElementTypeCatalog _typeCatalog;
+    private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
+    private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly IElementConversionUseCase _conversionUseCase;
 
     public ConvertRegionElementsCommand(
         IElementTypeCatalog typeCatalog,
+        IWallAssemblyTemplateCatalog wallTemplateCatalog,
+        ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         IElementConversionUseCase conversionUseCase)
     {
         _typeCatalog = typeCatalog;
+        _wallTemplateCatalog = wallTemplateCatalog;
+        _slabTemplateCatalog = slabTemplateCatalog;
         _conversionUseCase = conversionUseCase;
     }
 
@@ -78,7 +86,7 @@ public class ConvertRegionElementsCommand
         }
 
         // 3. 逐层高亮预览并等待用户输入快捷字母
-        var layerMappings = new Dictionary<string, string>();
+        var layerMappings = new Dictionary<string, LayerTypeAssignment>();
 
         using var lockDoc = doc.LockDocument();
         using var tr = db.TransactionManager.StartTransaction();
@@ -120,8 +128,48 @@ public class ConvertRegionElementsCommand
 
                 if (matchedType != null)
                 {
-                    layerMappings[layerName] = matchedType.TypeId;
-                    ed.WriteMessage($" → {matchedType.TypeName}");
+                    var assignment = new LayerTypeAssignment
+                    {
+                        SourceLayerName = layerName,
+                        TypeId = matchedType.TypeId
+                    };
+
+                    if (string.Equals(matchedType.TypeId, "Wall", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var selectedTemplate = PromptWallTemplate(ed);
+                        if (selectedTemplate.Cancelled)
+                        {
+                            ed.WriteMessage(" 已取消模板选择");
+                            UnhighlightLayerEntities(tr, db, selection, layerName);
+                            continue;
+                        }
+
+                        assignment.TemplateId = selectedTemplate.Template?.TemplateId;
+                        ed.WriteMessage(selectedTemplate.Template == null
+                            ? $" → {matchedType.TypeName}[稳定模式]"
+                            : $" → {matchedType.TypeName}[{selectedTemplate.Template.TemplateName}]");
+                    }
+                    else if (string.Equals(matchedType.TypeId, "Slab", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var selectedTemplate = PromptSlabTemplate(ed);
+                        if (selectedTemplate.Cancelled)
+                        {
+                            ed.WriteMessage(" 已取消模板选择");
+                            UnhighlightLayerEntities(tr, db, selection, layerName);
+                            continue;
+                        }
+
+                        assignment.TemplateId = selectedTemplate.Template?.TemplateId;
+                        ed.WriteMessage(selectedTemplate.Template == null
+                            ? $" → {matchedType.TypeName}[稳定模式]"
+                            : $" → {matchedType.TypeName}[{selectedTemplate.Template.TemplateName}]");
+                    }
+                    else
+                    {
+                        ed.WriteMessage($" → {matchedType.TypeName}");
+                    }
+
+                    layerMappings[layerName] = assignment;
                 }
                 else
                 {
@@ -147,10 +195,11 @@ public class ConvertRegionElementsCommand
                         ApplyToEntireDrawing = false,
                         EntityHandles = selectedHandles,
                         LayerMappings = layerMappings
-                            .Select(static mapping => new LayerTypeAssignment
+                            .Select(mapping => new LayerTypeAssignment
                             {
                                 SourceLayerName = mapping.Key,
-                                TypeId = mapping.Value
+                                TypeId = mapping.Value.TypeId,
+                                TemplateId = mapping.Value.TemplateId
                             })
                             .ToList()
                     });
@@ -221,5 +270,86 @@ public class ConvertRegionElementsCommand
         if (result.Status != PromptStatus.OK) return null;
 
         return result.StringResult?.Trim().ToUpper();
+    }
+
+    private TemplateSelectionResult<WallAssemblyTemplate> PromptWallTemplate(Editor editor)
+    {
+        return PromptTemplate(
+            editor,
+            "墙体模板",
+            _wallTemplateCatalog.GetAllTemplates(),
+            template => template.TemplateName);
+    }
+
+    private TemplateSelectionResult<SlabAssemblyTemplate> PromptSlabTemplate(Editor editor)
+    {
+        return PromptTemplate(
+            editor,
+            "楼板模板",
+            _slabTemplateCatalog.GetAllTemplates(),
+            template => template.TemplateName);
+    }
+
+    private static TemplateSelectionResult<TTemplate> PromptTemplate<TTemplate>(
+        Editor editor,
+        string templateKindName,
+        IReadOnlyList<TTemplate> templates,
+        Func<TTemplate, string> displaySelector)
+        where TTemplate : class
+    {
+        if (templates.Count == 0)
+        {
+            editor.WriteMessage($"\n未配置任何{templateKindName}，本次将沿用稳定模式。");
+            return new TemplateSelectionResult<TTemplate> { Cancelled = false };
+        }
+
+        editor.WriteMessage($"\n可用{templateKindName}:");
+        editor.WriteMessage("\n  0. 不绑定模板（沿用稳定模式）");
+        for (int i = 0; i < templates.Count; i++)
+        {
+            editor.WriteMessage($"\n  {i + 1}. {displaySelector(templates[i])}");
+        }
+
+        var result = editor.GetString(new PromptStringOptions("\n输入模板序号（回车默认 0）: ")
+        {
+            AllowSpaces = false,
+            UseDefaultValue = true,
+            DefaultValue = "0"
+        });
+
+        if (result.Status == PromptStatus.Cancel)
+        {
+            return new TemplateSelectionResult<TTemplate> { Cancelled = true };
+        }
+
+        if (result.Status != PromptStatus.OK || string.IsNullOrWhiteSpace(result.StringResult))
+        {
+            return new TemplateSelectionResult<TTemplate> { Cancelled = false };
+        }
+
+        if (!int.TryParse(result.StringResult.Trim(), out var index) || index < 0 || index > templates.Count)
+        {
+            editor.WriteMessage("\n模板序号无效，本次将沿用稳定模式。");
+            return new TemplateSelectionResult<TTemplate> { Cancelled = false };
+        }
+
+        if (index == 0)
+        {
+            return new TemplateSelectionResult<TTemplate> { Cancelled = false };
+        }
+
+        return new TemplateSelectionResult<TTemplate>
+        {
+            Cancelled = false,
+            Template = templates[index - 1]
+        };
+    }
+
+    private sealed class TemplateSelectionResult<TTemplate>
+        where TTemplate : class
+    {
+        public bool Cancelled { get; init; }
+
+        public TTemplate? Template { get; init; }
     }
 }

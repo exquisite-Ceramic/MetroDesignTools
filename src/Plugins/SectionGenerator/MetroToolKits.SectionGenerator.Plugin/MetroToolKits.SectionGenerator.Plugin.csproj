@@ -31,6 +31,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\Shared\MetroToolKits.Foundation.Core\MetroToolKits.Foundation.Core.csproj" />
     <ProjectReference Include="..\..\..\Shared\MetroToolKits.Foundation.Cad\MetroToolKits.Foundation.Cad.csproj" />
+    <ProjectReference Include="..\..\..\Shared\MetroToolKits.Foundation.Cad.Layering\MetroToolKits.Foundation.Cad.Layering.csproj" />
     <ProjectReference Include="..\..\..\Shared\MetroToolKits.Foundation.Building\MetroToolKits.Foundation.Building.csproj" />
     <ProjectReference Include="..\MetroToolKits.SectionGenerator.Core\MetroToolKits.SectionGenerator.Core.csproj" />
     <ProjectReference Include="..\MetroToolKits.SectionGenerator.App\MetroToolKits.SectionGenerator.App.csproj" />
@@ -49,6 +50,18 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
+    <Content Include="..\Resources\WallAssemblyTemplates.json">
+      <Link>WallAssemblyTemplates.json</Link>
+      <TargetPath>WallAssemblyTemplates.json</TargetPath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+    <Content Include="..\Resources\SlabAssemblyTemplates.json">
+      <Link>SlabAssemblyTemplates.json</Link>
+      <TargetPath>SlabAssemblyTemplates.json</TargetPath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
   <Target Name="CopyMicrosoftExtensionsRuntimeAssembliesToBuildOutput" AfterTargets="Build">

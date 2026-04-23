@@ -1,0 +1,156 @@
+<Window x:Class="MetroToolKits.SectionGenerator.Plugin.UI.GenerateSectionWizardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="剖面生成向导"
+        Width="820"
+        Height="640"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResize">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="#EEF5FF" BorderBrush="#C8D7F0" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,0,0,8">
+            <StackPanel>
+                <TextBlock x:Name="StepTitleText" FontSize="16" FontWeight="SemiBold"/>
+                <TextBlock x:Name="StepHintText" Margin="0,4,0,0" Foreground="#3A5170" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid x:Name="PreflightPanel">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <GroupBox Header="配置状态" Grid.Row="0" Margin="0,0,0,8">
+                    <StackPanel Margin="8">
+                        <TextBlock x:Name="ConfigSourceText" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="ConfigStatusText" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="缺失项" Grid.Row="1" Margin="0,0,0,8">
+                    <ListBox x:Name="MissingRequirementsList" MinHeight="100"/>
+                </GroupBox>
+
+                <GroupBox Header="已有剖面状态" Grid.Row="2" Margin="0,0,0,8">
+                    <StackPanel Margin="8">
+                        <TextBlock x:Name="ExistingSectionSummaryText" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </GroupBox>
+
+                <TextBlock Grid.Row="3" x:Name="PreflightHintText" Foreground="Gray" TextWrapping="Wrap" Margin="4,4,4,0"/>
+
+                <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                    <Button Content="配置楼层..." Width="100" Height="30" Margin="0,0,8,0" Click="OpenFloorConfig_Click"/>
+                    <Button x:Name="ViewUpdatesButton" Content="查看更新详情..." Width="120" Height="30" Click="ViewUpdates_Click"/>
+                </StackPanel>
+            </Grid>
+
+            <Grid x:Name="ParametersPanel" Visibility="Collapsed">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="140"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Label Grid.Row="0" Grid.Column="0" Content="视图深度 (mm):"/>
+                    <TextBox Grid.Row="0" Grid.Column="1" x:Name="ViewDepthBox" Margin="0,2"/>
+
+                    <Label Grid.Row="1" Grid.Column="0" Content="生成范围:" VerticalAlignment="Top"/>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,2">
+                        <RadioButton x:Name="AllFloorsRadio" Content="全部楼层" Margin="0,0,0,4" Checked="GenerationModeChanged"/>
+                        <RadioButton x:Name="SingleFloorRadio" Content="单楼层" Checked="GenerationModeChanged"/>
+                    </StackPanel>
+
+                    <Label Grid.Row="2" Grid.Column="0" Content="目标楼层:"/>
+                    <ComboBox Grid.Row="2" Grid.Column="1" x:Name="TargetFloorComboBox" Margin="0,2" DisplayMemberPath="Name"/>
+
+                    <Label Grid.Row="3" Grid.Column="0" Content="局部范围:"/>
+                    <CheckBox Grid.Row="3" Grid.Column="1" x:Name="UseLocalScopeCheckBox" Content="本次生成只使用局部范围" Margin="0,2" Checked="UseLocalScopeChanged" Unchecked="UseLocalScopeChanged"/>
+                </Grid>
+            </Grid>
+
+            <Grid x:Name="CadSelectionPanel" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <GroupBox Header="剖切线" Grid.Row="0" Margin="0,0,0,8">
+                    <DockPanel Margin="8">
+                        <Button Content="选择剖切线" Width="110" Height="30" DockPanel.Dock="Right" Margin="8,0,0,0" Click="PickCutLine_Click"/>
+                        <TextBlock x:Name="CutLineStatusText" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    </DockPanel>
+                </GroupBox>
+
+                <GroupBox Header="局部范围" Grid.Row="1" Margin="0,0,0,8">
+                    <DockPanel Margin="8">
+                        <Button x:Name="PickLocalScopeButton" Content="选择局部范围图元" Width="130" Height="30" DockPanel.Dock="Right" Margin="8,0,0,0" Click="PickLocalScope_Click"/>
+                        <TextBlock x:Name="LocalScopeStatusText" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    </DockPanel>
+                </GroupBox>
+
+                <GroupBox Header="插入点" Grid.Row="2" Margin="0,0,0,8">
+                    <DockPanel Margin="8">
+                        <Button Content="选择插入点" Width="110" Height="30" DockPanel.Dock="Right" Margin="8,0,0,0" Click="PickInsertionPoint_Click"/>
+                        <TextBlock x:Name="InsertionPointStatusText" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    </DockPanel>
+                </GroupBox>
+            </Grid>
+
+            <Grid x:Name="ConfirmPanel" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <GroupBox Header="预检摘要" Grid.Row="0" Margin="0,0,0,8">
+                    <TextBlock x:Name="ConfirmPreflightText" Margin="8" TextWrapping="Wrap"/>
+                </GroupBox>
+
+                <GroupBox Header="本次生成参数" Grid.Row="1" Margin="0,0,0,8">
+                    <TextBlock x:Name="ConfirmParametersText" Margin="8" TextWrapping="Wrap"/>
+                </GroupBox>
+
+                <GroupBox Header="CAD 选取摘要" Grid.Row="2" Margin="0,0,0,8">
+                    <TextBlock x:Name="ConfirmCadSelectionText" Margin="8" TextWrapping="Wrap"/>
+                </GroupBox>
+
+                <GroupBox Header="输出配置摘要" Grid.Row="3" Margin="0,0,0,8">
+                    <TextBlock x:Name="ConfirmOutputText" Margin="8" TextWrapping="Wrap"/>
+                </GroupBox>
+            </Grid>
+        </Grid>
+
+        <DockPanel Grid.Row="2" Margin="0,8,0,0">
+            <TextBlock x:Name="StepProgressText" VerticalAlignment="Center" Foreground="Gray"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
+                <Button x:Name="PrevButton" Content="上一步" Width="90" Height="30" Margin="0,0,8,0" Click="Prev_Click"/>
+                <Button x:Name="NextButton" Content="下一步" Width="90" Height="30" Margin="0,0,8,0" Click="Next_Click"/>
+                <Button x:Name="GenerateButton" Content="生成" Width="90" Height="30" Margin="0,0,8,0" Click="Generate_Click"/>
+                <Button Content="取消" Width="90" Height="30" IsCancel="True" Click="Cancel_Click"/>
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</Window>

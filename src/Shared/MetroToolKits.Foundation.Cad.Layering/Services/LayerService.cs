@@ -1,24 +1,23 @@
-using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.Colors;
 using Autodesk.AutoCAD.DatabaseServices;
 
-namespace MetroToolKits.Foundation.Cad.Services;
+namespace MetroToolKits.Foundation.Cad.Layering.Services;
 
 /// <summary>
 /// 图层服务实现
 /// </summary>
 public class LayerService : ILayerService
 {
-    private readonly IDocumentService _documentService;
+    private readonly ICadDatabaseAccessor _databaseAccessor;
 
-    public LayerService(IDocumentService documentService)
+    public LayerService(ICadDatabaseAccessor databaseAccessor)
     {
-        _documentService = documentService;
+        _databaseAccessor = databaseAccessor;
     }
 
     public ObjectId GetOrCreateLayer(string layerName)
     {
-        var db = _documentService.GetCurrentDatabase();
+        var db = _databaseAccessor.GetCurrentDatabase();
         if (db == null) return ObjectId.Null;
 
         using var tr = db.TransactionManager.StartTransaction();
@@ -29,7 +28,6 @@ public class LayerService : ILayerService
             return layerTable[layerName];
         }
 
-        // 创建新图层
         layerTable.UpgradeOpen();
         var layer = new LayerTableRecord { Name = layerName };
         layerTable.Add(layer);
@@ -52,7 +50,7 @@ public class LayerService : ILayerService
 
     public void SetLayerColor(string layerName, short colorIndex)
     {
-        var db = _documentService.GetCurrentDatabase();
+        var db = _databaseAccessor.GetCurrentDatabase();
         if (db == null) return;
 
         using var tr = db.TransactionManager.StartTransaction();
@@ -68,7 +66,7 @@ public class LayerService : ILayerService
 
     public void SetLayerLinetype(string layerName, string linetypeName)
     {
-        var db = _documentService.GetCurrentDatabase();
+        var db = _databaseAccessor.GetCurrentDatabase();
         if (db == null) return;
 
         using var tr = db.TransactionManager.StartTransaction();
@@ -84,7 +82,7 @@ public class LayerService : ILayerService
 
     public IEnumerable<string> GetAllLayerNames()
     {
-        var db = _documentService.GetCurrentDatabase();
+        var db = _databaseAccessor.GetCurrentDatabase();
         if (db == null) return Enumerable.Empty<string>();
 
         using var tr = db.TransactionManager.StartTransaction();
@@ -97,7 +95,7 @@ public class LayerService : ILayerService
 
     public bool LayerExists(string layerName)
     {
-        var db = _documentService.GetCurrentDatabase();
+        var db = _databaseAccessor.GetCurrentDatabase();
         if (db == null) return false;
 
         using var tr = db.TransactionManager.StartTransaction();
@@ -105,7 +103,7 @@ public class LayerService : ILayerService
         return layerTable.Has(layerName);
     }
 
-    private ObjectId GetLinetypeId(Transaction tr, Database db, string linetypeName)
+    private static ObjectId GetLinetypeId(Transaction tr, Database db, string linetypeName)
     {
         var ltTable = (LinetypeTable)tr.GetObject(db.LinetypeTableId, OpenMode.ForRead);
         return ltTable.Has(linetypeName) ? ltTable[linetypeName] : ObjectId.Null;
