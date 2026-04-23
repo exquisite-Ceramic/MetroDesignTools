@@ -5,6 +5,7 @@ using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Diagnostics;
+using MetroToolKits.SectionGenerator.App.Models;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Core.Sections;
 using NSubstitute;
@@ -25,9 +26,10 @@ public class CheckSectionUpdatesUseCaseTests
     public void Execute_NoBlocks_ReturnsSuccessWithEmptyItems()
     {
         var snapshotRepo = Substitute.For<ISectionSnapshotRepository>();
-        snapshotRepo.FindAllSectionBlockHandles().Returns(Array.Empty<string>());
+        var blockQueryService = Substitute.For<ISectionBlockQueryService>();
+        blockQueryService.FindAllSectionBlockHandles().Returns(Array.Empty<string>());
 
-        var result = BuildUseCase(snapshotRepo).Execute();
+        var result = BuildUseCase(snapshotRepo, blockQueryService: blockQueryService).Execute();
 
         result.Status.Should().Be(OperationStatus.Success);
         result.Items.Should().BeEmpty();
@@ -37,10 +39,11 @@ public class CheckSectionUpdatesUseCaseTests
     public void Execute_BlockWithNoSnapshot_ReturnsUnknownStatus()
     {
         var snapshotRepo = Substitute.For<ISectionSnapshotRepository>();
-        snapshotRepo.FindAllSectionBlockHandles().Returns(new[] { "HANDLE1" });
+        var blockQueryService = Substitute.For<ISectionBlockQueryService>();
+        blockQueryService.FindAllSectionBlockHandles().Returns(new[] { "HANDLE1" });
         snapshotRepo.Load("HANDLE1").Returns((SectionSnapshot?)null);
 
-        var result = BuildUseCase(snapshotRepo).Execute();
+        var result = BuildUseCase(snapshotRepo, blockQueryService: blockQueryService).Execute();
 
         result.Items.Should().HaveCount(1);
         result.Items[0].Status.Should().Be(SectionUpdateStatus.Unknown);
@@ -51,14 +54,14 @@ public class CheckSectionUpdatesUseCaseTests
     {
         var snapshotRepo = SnapshotRepoWithSingleSnapshot();
         var configRepo = Substitute.For<IFloorConfigRepository>();
-        configRepo.Load().Returns(new SectionConfig
+        configRepo.Load().Returns(LoadedConfig(new SectionConfig
         {
             Floors = new List<FloorConfig>
             {
                 DefaultFloor("F1"),
                 DefaultFloor("F2")
             }
-        });
+        }));
 
         var result = BuildUseCase(snapshotRepo, configRepo: configRepo).Execute();
 
@@ -79,10 +82,10 @@ public class CheckSectionUpdatesUseCaseTests
             .Returns(new ElementRecognitionResult { Elements = elements });
 
         var configRepo = Substitute.For<IFloorConfigRepository>();
-        configRepo.Load().Returns(new SectionConfig
+        configRepo.Load().Returns(LoadedConfig(new SectionConfig
         {
             Floors = new List<FloorConfig> { DefaultFloor("F1") }
-        });
+        }));
 
         var result = BuildUseCase(snapshotRepo, recognizer, configRepo).Execute();
 
@@ -101,10 +104,10 @@ public class CheckSectionUpdatesUseCaseTests
             .Returns(new ElementRecognitionResult { Elements = new[] { MakeWall() } });
 
         var configRepo = Substitute.For<IFloorConfigRepository>();
-        configRepo.Load().Returns(new SectionConfig
+        configRepo.Load().Returns(LoadedConfig(new SectionConfig
         {
             Floors = new List<FloorConfig> { DefaultFloor("F1") }
-        });
+        }));
 
         var result = BuildUseCase(snapshotRepo, recognizer, configRepo).Execute();
 
@@ -132,7 +135,8 @@ public class CheckSectionUpdatesUseCaseTests
         };
 
         var snapshotRepo = Substitute.For<ISectionSnapshotRepository>();
-        snapshotRepo.FindAllSectionBlockHandles().Returns(new[] { "H1" });
+        var blockQueryService = Substitute.For<ISectionBlockQueryService>();
+        blockQueryService.FindAllSectionBlockHandles().Returns(new[] { "H1" });
         snapshotRepo.Load("H1").Returns(snapshot);
 
         var lineResolver = Substitute.For<ISectionLineResolver>();
@@ -143,7 +147,7 @@ public class CheckSectionUpdatesUseCaseTests
             .Returns(new ElementRecognitionResult { Elements = elements });
 
         var configRepo = Substitute.For<IFloorConfigRepository>();
-        configRepo.Load().Returns(new SectionConfig
+        configRepo.Load().Returns(LoadedConfig(new SectionConfig
         {
             AlignmentBaseFloorName = "F1",
             Floors = new List<FloorConfig>
@@ -154,9 +158,9 @@ public class CheckSectionUpdatesUseCaseTests
                     new Point3D(0, 10, 0)),
                 DefaultFloor("F2")
             }
-        });
+        }));
 
-        var result = BuildUseCase(snapshotRepo, recognizer, configRepo, lineResolver).Execute();
+        var result = BuildUseCase(snapshotRepo, recognizer, configRepo, lineResolver, blockQueryService).Execute();
 
         result.Status.Should().Be(OperationStatus.PartialSuccess);
         result.Diagnostics.Should().Contain(d => d.Code == SectionGenerationErrorCodes.AlignmentPointsMissing);
@@ -185,7 +189,8 @@ public class CheckSectionUpdatesUseCaseTests
         };
 
         var snapshotRepo = Substitute.For<ISectionSnapshotRepository>();
-        snapshotRepo.FindAllSectionBlockHandles().Returns(new[] { "H1" });
+        var blockQueryService = Substitute.For<ISectionBlockQueryService>();
+        blockQueryService.FindAllSectionBlockHandles().Returns(new[] { "H1" });
         snapshotRepo.Load("H1").Returns(snapshot);
 
         var lineResolver = Substitute.For<ISectionLineResolver>();
@@ -196,7 +201,7 @@ public class CheckSectionUpdatesUseCaseTests
             .Returns(new ElementRecognitionResult { Elements = elements });
 
         var configRepo = Substitute.For<IFloorConfigRepository>();
-        configRepo.Load().Returns(new SectionConfig
+        configRepo.Load().Returns(LoadedConfig(new SectionConfig
         {
             AlignmentBaseFloorName = "F1",
             Floors = new List<FloorConfig>
@@ -211,9 +216,9 @@ public class CheckSectionUpdatesUseCaseTests
                     new Point3D(110, 0, 0),
                     new Point3D(100, 10, 0))
             }
-        });
+        }));
 
-        var result = BuildUseCase(snapshotRepo, recognizer, configRepo, lineResolver).Execute();
+        var result = BuildUseCase(snapshotRepo, recognizer, configRepo, lineResolver, blockQueryService).Execute();
 
         result.Status.Should().Be(OperationStatus.PartialSuccess);
         result.Items[0].Status.Should().Be(SectionUpdateStatus.Unknown);
@@ -239,7 +244,8 @@ public class CheckSectionUpdatesUseCaseTests
         };
 
         var snapshotRepo = Substitute.For<ISectionSnapshotRepository>();
-        snapshotRepo.FindAllSectionBlockHandles().Returns(new[] { "H1" });
+        var blockQueryService = Substitute.For<ISectionBlockQueryService>();
+        blockQueryService.FindAllSectionBlockHandles().Returns(new[] { "H1" });
         snapshotRepo.Load("H1").Returns(snapshot);
 
         var lineResolver = Substitute.For<ISectionLineResolver>();
@@ -250,7 +256,7 @@ public class CheckSectionUpdatesUseCaseTests
             .Returns(new ElementRecognitionResult { Elements = elements });
 
         var configRepo = Substitute.For<IFloorConfigRepository>();
-        configRepo.Load().Returns(new SectionConfig
+        configRepo.Load().Returns(LoadedConfig(new SectionConfig
         {
             AlignmentBaseFloorName = "F1",
             Floors = new List<FloorConfig>
@@ -264,9 +270,9 @@ public class CheckSectionUpdatesUseCaseTests
                     new Point3D(110, 0, 0),
                     new Point3D(100, 10, 0))
             }
-        });
+        }));
 
-        var result = BuildUseCase(snapshotRepo, recognizer, configRepo, lineResolver).Execute();
+        var result = BuildUseCase(snapshotRepo, recognizer, configRepo, lineResolver, blockQueryService).Execute();
 
         result.Items[0].Status.Should().Be(SectionUpdateStatus.UpToDate);
         result.Items[0].OutdatedFloors.Should().BeEmpty();
@@ -276,23 +282,26 @@ public class CheckSectionUpdatesUseCaseTests
         ISectionSnapshotRepository? snapshotRepo = null,
         IElementRecognizer? recognizer = null,
         IFloorConfigRepository? configRepo = null,
-        ISectionLineResolver? lineResolver = null)
+        ISectionLineResolver? lineResolver = null,
+        ISectionBlockQueryService? blockQueryService = null)
     {
         snapshotRepo ??= Substitute.For<ISectionSnapshotRepository>();
         recognizer ??= Substitute.For<IElementRecognizer>();
         lineResolver ??= Substitute.For<ISectionLineResolver>();
+        blockQueryService ??= Substitute.For<ISectionBlockQueryService>();
 
         if (configRepo == null)
         {
             configRepo = Substitute.For<IFloorConfigRepository>();
-            configRepo.Load().Returns(new SectionConfig
+            configRepo.Load().Returns(LoadedConfig(new SectionConfig
             {
                 Floors = new List<FloorConfig> { DefaultFloor("F1") }
-            });
+            }));
         }
 
         return new CheckSectionUpdatesUseCase(
             snapshotRepo,
+            blockQueryService,
             lineResolver,
             recognizer,
             configRepo,
@@ -303,7 +312,6 @@ public class CheckSectionUpdatesUseCaseTests
     private static ISectionSnapshotRepository SnapshotRepoWithSingleSnapshot(string? geometryHash = null)
     {
         var repo = Substitute.For<ISectionSnapshotRepository>();
-        repo.FindAllSectionBlockHandles().Returns(new[] { "H1" });
         repo.Load("H1").Returns(new SectionSnapshot
         {
             BlockName = "MK_剖面_F1",
@@ -336,5 +344,11 @@ public class CheckSectionUpdatesUseCaseTests
         TopSlabThickness = 600,
         ScopeBounds = scopeBounds,
         AlignmentPoints = alignmentPoints.ToList()
+    };
+
+    private static LoadedSectionConfig LoadedConfig(SectionConfig config) => new()
+    {
+        Config = config,
+        OutputConfig = new SectionOutputConfig()
     };
 }

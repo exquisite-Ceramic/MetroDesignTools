@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace MetroToolKits.Bootstrap;
+namespace MetroToolKits.Foundation.Core.Hosting;
 
 /// <summary>
 /// 声明命令类对外暴露的命令绑定。

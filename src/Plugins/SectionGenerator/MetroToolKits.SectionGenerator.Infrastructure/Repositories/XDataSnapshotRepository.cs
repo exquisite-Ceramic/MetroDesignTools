@@ -16,7 +16,7 @@ namespace MetroToolKits.SectionGenerator.Infrastructure.Repositories;
 /// 基于 XData 的剖面快照仓储
 /// 快照序列化为 JSON 字符串存入块参照的扩展数据
 /// </summary>
-public sealed class XDataSnapshotRepository : ISectionSnapshotRepository
+public sealed class XDataSnapshotRepository : ISectionSnapshotRepository, ISectionBlockQueryService, ISectionGeometryRecoveryService
 {
     private const string AppName = "MK_SectionSnapshot_V2";
     private static readonly JsonSerializerOptions ReadOptions = new()

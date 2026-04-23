@@ -13,6 +13,7 @@ namespace MetroToolKits.SectionGenerator.App.UseCases;
 public sealed class UpdateSectionUseCase : IUpdateSectionUseCase
 {
     private readonly ISectionSnapshotRepository _snapshotRepo;
+    private readonly ISectionGeometryRecoveryService _sectionGeometryRecoveryService;
     private readonly ISectionLineResolver _sectionLineResolver;
     private readonly IGenerateSectionUseCase _generateUseCase;
     private readonly IBlockEraseService _blockEraseService;
@@ -21,6 +22,7 @@ public sealed class UpdateSectionUseCase : IUpdateSectionUseCase
 
     public UpdateSectionUseCase(
         ISectionSnapshotRepository snapshotRepo,
+        ISectionGeometryRecoveryService sectionGeometryRecoveryService,
         ISectionLineResolver sectionLineResolver,
         IGenerateSectionUseCase generateUseCase,
         IBlockEraseService blockEraseService,
@@ -28,6 +30,7 @@ public sealed class UpdateSectionUseCase : IUpdateSectionUseCase
         IUserLogger userLogger)
     {
         _snapshotRepo     = snapshotRepo;
+        _sectionGeometryRecoveryService = sectionGeometryRecoveryService;
         _sectionLineResolver = sectionLineResolver;
         _generateUseCase  = generateUseCase;
         _blockEraseService = blockEraseService;
@@ -83,9 +86,7 @@ public sealed class UpdateSectionUseCase : IUpdateSectionUseCase
             EnsureSnapshotCompatibilityFields(request.BlockHandle, snapshot, geometryAnchorX, snapshotDirection);
 
             // 2. 重新生成（使用快照中记录的插入点）
-            var includedFloorNames = snapshot.GeneratedFloorNames.Count > 0
-                ? snapshot.GeneratedFloorNames
-                : snapshot.FloorSnapshots.Select(floor => floor.FloorName).ToList();
+            var includedFloorNames = ResolveIncludedFloorNames(snapshot);
 
             var genResult = _generateUseCase.Execute(new GenerateSectionRequest
             {
@@ -166,7 +167,7 @@ public sealed class UpdateSectionUseCase : IUpdateSectionUseCase
             return snapshot.GeometryAnchorX.Value;
         }
 
-        var resolvedAnchor = _snapshotRepo.ResolveBlockGeometryAnchorX(blockHandle);
+        var resolvedAnchor = _sectionGeometryRecoveryService.ResolveBlockGeometryAnchorX(blockHandle);
         return resolvedAnchor ?? 0;
     }
 
@@ -185,6 +186,22 @@ public sealed class UpdateSectionUseCase : IUpdateSectionUseCase
 
     private static Vector3D ResolveVector(Point3D direction)
         => new(direction.X, direction.Y, direction.Z);
+
+    private static IReadOnlyList<string> ResolveIncludedFloorNames(SectionSnapshot snapshot)
+    {
+        if (snapshot.ExecutionFloorNames.Count > 0)
+        {
+            return snapshot.ExecutionFloorNames;
+        }
+
+        // 旧快照没有记录执行楼层集合时，让多楼层全局剖面回退到“当前配置的全部楼层”。
+        // 单楼层定向剖面仍由 TargetFloorName 驱动，不在这里强行注入楼层集合。
+        return string.IsNullOrWhiteSpace(snapshot.TargetFloorName)
+            ? Array.Empty<string>()
+            : snapshot.GeneratedFloorNames.Count > 0
+                ? snapshot.GeneratedFloorNames
+                : snapshot.FloorSnapshots.Select(floor => floor.FloorName).ToList();
+    }
 
     private static Line3D AlignToSnapshotDirection(Line3D currentLine, Vector3D snapshotDirection)
     {

@@ -6,7 +6,7 @@
 .DESCRIPTION
     The script copies plugin output into an ASCII-only temp folder and then:
     1. NETLOAD MetroToolKits.Bootstrap.dll
-    2. Run SectionHostAcceptance
+    2. Run the internal host acceptance command
     3. Check the log for SECTION_HOST_ACCEPTANCE:OK
 
     This validates the Generate -> Snapshot -> FindRelated -> LocateSource ->
@@ -64,7 +64,8 @@ if ($PSVersionTable.PSEdition -ne "Core") {
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$pluginOutput = Join-Path $repoRoot "src\Plugins\SectionGenerator\MetroToolKits.SectionGenerator.Plugin\bin\$Configuration\net8.0-windows"
+$packageOutput = Join-Path $repoRoot "publish\SectionGenerator"
+$hostBootstrapOutput = Join-Path $repoRoot "publish\HostAutomationBootstrap"
 $scriptPath = Join-Path $WorkingDirectory "section-host-acceptance.scr"
 $logPath = Join-Path $WorkingDirectory "accoreconsole-host-acceptance.log"
 $netloadPath = (Join-Path $WorkingDirectory "MetroToolKits.Bootstrap.dll").Replace('\', '/')
@@ -75,6 +76,26 @@ if ([string]::IsNullOrWhiteSpace($IsolateUserDataFolder)) {
 
 function Write-Step([string]$message) {
     Write-Host "`n==> $message" -ForegroundColor Cyan
+}
+
+function Find-PluginLogSuccess([string]$token, [datetime]$startedAt) {
+    $packagesRoot = Join-Path $env:LOCALAPPDATA "MetroToolKits\Packages"
+    if (-not (Test-Path $packagesRoot)) {
+        return $false
+    }
+
+    $candidateLogs = Get-ChildItem -Path $packagesRoot -Recurse -Filter "MetroToolKits.log" -File |
+        Where-Object { $_.LastWriteTime -ge $startedAt.AddMinutes(-1) } |
+        Sort-Object LastWriteTime -Descending
+
+    foreach ($logFile in $candidateLogs) {
+        $content = Get-Content -LiteralPath $logFile.FullName -Raw -ErrorAction SilentlyContinue
+        if ($null -ne $content -and $content.Contains($token)) {
+            return $true
+        }
+    }
+
+    return $false
 }
 
 function Test-BytePattern([byte[]]$Haystack, [byte[]]$Needle) {
@@ -103,8 +124,12 @@ if (-not (Test-Path $DwgPath)) {
     throw "DWG file was not found: $DwgPath"
 }
 
-if (-not (Test-Path $pluginOutput)) {
-    throw "Plugin output folder was not found: $pluginOutput`nRun dotnet build first."
+if (-not (Test-Path $packageOutput)) {
+    throw "Publish output folder was not found: $packageOutput`nRun build.ps1 publish first."
+}
+
+if (-not (Test-Path $hostBootstrapOutput)) {
+    throw "Host automation Bootstrap output was not found: $hostBootstrapOutput`nRun build.ps1 publish first."
 }
 
 Write-Step "Preparing host acceptance directory"
@@ -114,16 +139,18 @@ if (Test-Path $WorkingDirectory) {
 
 New-Item -ItemType Directory -Path $WorkingDirectory | Out-Null
 New-Item -ItemType Directory -Path $IsolateUserDataFolder -Force | Out-Null
-Copy-Item -Path (Join-Path $pluginOutput "*") -Destination $WorkingDirectory -Recurse -Force
+Copy-Item -Path (Join-Path $packageOutput "*") -Destination $WorkingDirectory -Recurse -Force
+Copy-Item -Path (Join-Path $hostBootstrapOutput "*") -Destination $WorkingDirectory -Recurse -Force
 
 @"
 (setvar "SECURELOAD" 0)
 (command "_.NETLOAD" "$netloadPath")
-SectionHostAcceptance
+(command "MKSectionHostAcceptanceInternal")
 (princ)
 "@ | Set-Content -LiteralPath $scriptPath -Encoding ASCII
 
 Write-Step "Running accoreconsole host acceptance"
+$startedAt = Get-Date
 & $AcadConsolePath /i $DwgPath /s $scriptPath /isolate $IsolateUserId $IsolateUserDataFolder *> $logPath
 if ($LASTEXITCODE -ne 0) {
     throw "accoreconsole failed with exit code: $LASTEXITCODE"
@@ -136,6 +163,11 @@ $okAscii = [System.Text.Encoding]::ASCII.GetBytes("SECTION_HOST_ACCEPTANCE:OK")
 
 if ((Test-BytePattern $logBytes $okUtf16) -or (Test-BytePattern $logBytes $okAscii)) {
     Write-Host "Host acceptance passed: SectionHostAcceptance returned OK" -ForegroundColor Green
+    return
+}
+
+if (Find-PluginLogSuccess -token "SECTION_HOST_ACCEPTANCE:OK" -startedAt $startedAt) {
+    Write-Host "Host acceptance passed: SectionHostAcceptance returned OK (from plugin log)" -ForegroundColor Green
     return
 }
 

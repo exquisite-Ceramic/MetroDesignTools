@@ -1,7 +1,7 @@
 using MetroToolKits.Foundation.Core.Logging;
 using Microsoft.Extensions.Logging;
-using MetroToolKits.Bootstrap;
-using MetroToolKits.Bootstrap.Logging;
+using MetroToolKits.Foundation.Core.Hosting;
+using MetroToolKits.SectionGenerator.App.Support;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Plugin.UI;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;

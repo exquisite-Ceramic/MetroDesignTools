@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace MetroToolKits.Bootstrap;
+namespace MetroToolKits.Foundation.Core.Runtime;
 
 /// <summary>
 /// 解析运行期可写目录，避免把状态写回安装目录。

@@ -1,9 +1,11 @@
 using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using MetroToolKits.Bootstrap;
+using MetroToolKits.Foundation.Core.Hosting;
+using MetroToolKits.Foundation.Core.Runtime;
 using MetroToolKits.Foundation.Cad.Services;
 using MetroToolKits.SectionGenerator.App.Abstractions;
+using MetroToolKits.SectionGenerator.App.Support;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Infrastructure.Recognition;
 using MetroToolKits.SectionGenerator.Infrastructure.Repositories;
@@ -59,9 +61,12 @@ public class SectionGeneratorPlugin : IPlugin
         services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.SectionComposer>();
         services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.MultiFloorSectionComposer>();
         services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.FloorGeometryHasher>();
+        services.AddSingleton<OperationFeedbackPresenter>();
 
         // 快照仓储 + 块删除服务
         services.AddSingleton<ISectionSnapshotRepository, XDataSnapshotRepository>();
+        services.AddSingleton<ISectionBlockQueryService, XDataSnapshotRepository>();
+        services.AddSingleton<ISectionGeometryRecoveryService, XDataSnapshotRepository>();
         services.AddSingleton<ISectionReferenceRepository, XDataSectionReferenceRepository>();
         services.AddSingleton<IBlockEraseService, CadBlockEraseService>();
         services.AddSingleton<IEntityNavigationService, CadNavigationService>();

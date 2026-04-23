@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Logging;
 
-namespace MetroToolKits.Bootstrap.Logging;
+namespace MetroToolKits.SectionGenerator.App.Support;
 
 /// <summary>
 /// 统一操作结果反馈适配器。

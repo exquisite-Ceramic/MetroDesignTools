@@ -14,27 +14,44 @@ public sealed class FloorVerticalProfileBuilder
         double baseElevation)
     {
         var topSlope = ResolveTopSlope(floor);
+        var topSlopeTarget = ResolveTopSlopeTarget(floor);
         var bottomSlope = ResolveBottomSlope(floor);
+        var bottomSlopeTarget = ResolveBottomSlopeTarget(floor);
+
+        var topStructuralSlope = string.Equals(topSlopeTarget, "FinishLayer", StringComparison.OrdinalIgnoreCase)
+            ? 0d
+            : topSlope;
+        var topFinishSlope = string.Equals(topSlopeTarget, "FinishLayer", StringComparison.OrdinalIgnoreCase)
+            ? topSlope
+            : 0d;
+        var bottomStructuralSlope = string.Equals(bottomSlopeTarget, "FinishLayer", StringComparison.OrdinalIgnoreCase)
+            ? 0d
+            : bottomSlope;
+        var bottomBoundarySlope = string.Equals(bottomSlopeTarget, "FinishLayer", StringComparison.OrdinalIgnoreCase)
+            ? bottomSlope
+            : bottomStructuralSlope;
 
         var bottomStructuralTopStart = baseElevation;
-        var bottomStructuralTopEnd = baseElevation + (sectionLength * bottomSlope);
+        var bottomStructuralTopEnd = baseElevation + (sectionLength * bottomStructuralSlope);
         var bottomStructuralBottomStart = bottomStructuralTopStart - floor.BottomSlabThickness;
         var bottomStructuralBottomEnd = bottomStructuralTopEnd - floor.BottomSlabThickness;
+        var bottomBoundaryBottomStart = bottomStructuralBottomStart;
+        var bottomBoundaryBottomEnd = bottomStructuralBottomStart + (sectionLength * bottomBoundarySlope);
 
         var topStructuralBottomStart = baseElevation + floor.Height;
-        var topStructuralBottomEnd = topStructuralBottomStart + (sectionLength * topSlope);
+        var topStructuralBottomEnd = topStructuralBottomStart + (sectionLength * topStructuralSlope);
         var topStructuralTopStart = topStructuralBottomStart + floor.TopSlabThickness;
         var topStructuralTopEnd = topStructuralBottomEnd + floor.TopSlabThickness;
 
         var topBoundaryTopStart = topStructuralTopStart + floor.FinishThickness;
-        var topBoundaryTopEnd = topStructuralTopEnd + floor.FinishThickness;
+        var topBoundaryTopEnd = topStructuralTopEnd + floor.FinishThickness + (sectionLength * topFinishSlope);
 
         return new FloorVerticalProfile
         {
             SectionLength = sectionLength,
             BottomStructuralBottom = new ProfileEdge(0, sectionLength, bottomStructuralBottomStart, bottomStructuralBottomEnd),
             BottomStructuralTop = new ProfileEdge(0, sectionLength, bottomStructuralTopStart, bottomStructuralTopEnd),
-            BottomBoundaryBottom = new ProfileEdge(0, sectionLength, bottomStructuralBottomStart, bottomStructuralBottomEnd),
+            BottomBoundaryBottom = new ProfileEdge(0, sectionLength, bottomBoundaryBottomStart, bottomBoundaryBottomEnd),
             BottomBoundaryTop = new ProfileEdge(0, sectionLength, bottomStructuralTopStart, bottomStructuralTopEnd),
             TopStructuralBottom = new ProfileEdge(0, sectionLength, topStructuralBottomStart, topStructuralBottomEnd),
             TopStructuralTop = new ProfileEdge(0, sectionLength, topStructuralTopStart, topStructuralTopEnd),
@@ -126,6 +143,26 @@ public sealed class FloorVerticalProfileBuilder
         => floor.BottomBoundarySlab.SlopeEnabled
             ? floor.BottomBoundarySlab.SlopeValue
             : 0d;
+
+    private static string ResolveTopSlopeTarget(FloorConfig floor)
+    {
+        if (floor.TopBoundarySlab.SlopeEnabled)
+        {
+            return floor.TopBoundarySlab.SlopeTarget;
+        }
+
+        if (floor.HasSlope)
+        {
+            return floor.SlopeTarget;
+        }
+
+        return "StructuralSlab";
+    }
+
+    private static string ResolveBottomSlopeTarget(FloorConfig floor)
+        => floor.BottomBoundarySlab.SlopeEnabled
+            ? floor.BottomBoundarySlab.SlopeTarget
+            : "StructuralSlab";
 
     private static SectionLineSegment CreateStructuralSegment(Line3D line)
         => new()

@@ -7,6 +7,8 @@ using MetroToolKits.Foundation.Core.Logging;
 using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Diagnostics;
+using MetroToolKits.SectionGenerator.App.Models;
+using MetroToolKits.SectionGenerator.App.Support;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
 namespace MetroToolKits.SectionGenerator.App.UseCases;
@@ -57,27 +59,30 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
 
         try
         {
-            var sourceConfig = request.FloorConfig == null
+            var sourceDocument = request.FloorConfig == null
                 ? _configRepo.Load()
-                : new SectionConfig
+                : new LoadedSectionConfig
                 {
-                    AlignmentBaseFloorName = request.FloorConfig.Name,
-                    Floors = new List<FloorConfig> { request.FloorConfig }
+                    Config = new SectionConfig
+                    {
+                        AlignmentBaseFloorName = request.FloorConfig.Name,
+                        Floors = new List<FloorConfig> { request.FloorConfig }
+                    }
                 };
 
-            if (request.FloorConfig == null && sourceConfig.RuntimeState.Source == SectionConfigStorageSource.Missing)
+            if (request.FloorConfig == null && sourceDocument.RuntimeState.Source == SectionConfigStorageSource.Missing)
             {
                 diagnostics.Add(SectionGenerationDiagnosticFactory.FloorConfigMissing());
                 _logger.LogWarning(
                     "当前图纸 {DrawingName} 未配置楼层参数，回退到默认楼层配置",
-                    sourceConfig.RuntimeState.DrawingDisplayName);
+                    sourceDocument.RuntimeState.DrawingDisplayName);
             }
 
             if (!SectionExecutionConfigBuilder.TryBuild(
-                    sourceConfig,
+                    sourceDocument,
                     request.IncludedFloorNames,
                     request.TargetFloorName,
-                    out var config,
+                    out var configDocument,
                     out var configError))
             {
                 return BuildFailedResult(
@@ -86,7 +91,9 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
                     sw);
             }
 
-            diagnostics.AddRange(config.RuntimeDiagnostics);
+            diagnostics.AddRange(configDocument.RuntimeDiagnostics);
+            var config = configDocument.Config;
+            var outputConfig = configDocument.OutputConfig;
             var floors = config.Floors;
 
             if (floors.Count == 0)
@@ -290,7 +297,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
                 multiData,
                 request.InsertionPoint,
                 participatingFloors,
-                config.OutputConfig,
+                outputConfig,
                 geometryAnchorX);
 
             // 写入快照（含各楼层哈希）
@@ -298,9 +305,10 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
             var snapshot = BuildSnapshot(
                 drawResult.BlockName,
                 request,
-                participatingFloors,
+                floors,
                 floorElements,
                 multiData,
+                outputConfig,
                 effectiveLocalScopeFloorName,
                 geometryAnchorX,
                 sectionLine.Direction.Normalized);
@@ -370,6 +378,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
         IReadOnlyList<FloorConfig> floors,
         IReadOnlyDictionary<string, IReadOnlyList<BuildingElement>> floorElements,
         MultiFloorSectionData multiData,
+        SectionOutputConfig outputConfig,
         string? localScopeFloorName,
         double geometryAnchorX,
         Vector3D sectionDirection)
@@ -396,7 +405,9 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
             return new FloorSnapshot
             {
                 FloorName    = f.Name,
-                GeometryHash = _hasher.ComputeHash(elements, f, floorGeometry?.VerticalProfile),
+                GeometryHash = SectionOutputConfigHasher.Combine(
+                    _hasher.ComputeHash(elements, f, floorGeometry?.VerticalProfile),
+                    outputConfig),
                 ElementCount = elements.Count,
                 SourceElementHandles = sourceHandles
             };
@@ -417,6 +428,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
             LocalScopeBounds      = request.LocalScopeBounds,
             LocalScopeFloorName   = localScopeFloorName,
             TotalHeight           = multiData.TotalHeight,
+            ExecutionFloorNames   = floors.Select(floor => floor.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             GeneratedFloorNames   = generatedFloorNames,
             FloorSnapshots        = floorSnapshots
         };

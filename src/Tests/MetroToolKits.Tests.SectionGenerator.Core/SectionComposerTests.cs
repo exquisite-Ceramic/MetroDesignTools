@@ -86,4 +86,39 @@ public class SectionComposerTests
         bottomLine.Start.X.Should().BeApproximately(0, 1e-6);
         bottomLine.End.X.Should().BeApproximately(5000, 1e-6);
     }
+
+    [Fact]
+    public void Generate_LegacySlabStructuralCore_RemainsContinuousThroughWallFace()
+    {
+        var composer = new SectionComposer();
+        var sectionLine = new Line3D(new Point3D(0, 2500, 0), new Point3D(6000, 2500, 0));
+        var wall = new Wall
+        {
+            StartPoint = new Point3D(3000, 0, 0),
+            EndPoint = new Point3D(3000, 5000, 0),
+            Height = 3000,
+            Thickness = 200,
+            BaseElevation = 0
+        };
+        var slab = new Slab
+        {
+            Outline = new List<Point3D>
+            {
+                new(0, 0, 0),
+                new(6000, 0, 0),
+                new(6000, 5000, 0),
+                new(0, 5000, 0)
+            },
+            TopElevation = 0,
+            Thickness = 200
+        };
+
+        var data = composer.Generate(sectionLine, ViewDirection, new BuildingElement[] { wall, slab }, DefaultFloor());
+        var slabData = data.Elements.Single(element => element.ElementType == "Slab");
+
+        slabData.CutLines.Should().HaveCount(2);
+        slabData.CutLines.Should().OnlyContain(line =>
+            Math.Abs(line.Start.X) < 1e-6 &&
+            Math.Abs(line.End.X - 6000) < 1e-6);
+    }
 }

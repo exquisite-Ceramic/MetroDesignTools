@@ -1,4 +1,4 @@
-using MetroToolKits.Bootstrap;
+using MetroToolKits.Foundation.Core.Hosting;
 using MetroToolKits.SectionGenerator.Plugin.UI;
 
 namespace MetroToolKits.SectionGenerator.Plugin.Commands;

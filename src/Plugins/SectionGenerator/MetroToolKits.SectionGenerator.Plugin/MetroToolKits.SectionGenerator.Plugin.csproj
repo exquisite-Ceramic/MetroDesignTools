@@ -29,7 +29,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\Bootstrap\MetroToolKits.Bootstrap\MetroToolKits.Bootstrap.csproj" />
     <ProjectReference Include="..\..\..\Shared\MetroToolKits.Foundation.Core\MetroToolKits.Foundation.Core.csproj" />
     <ProjectReference Include="..\..\..\Shared\MetroToolKits.Foundation.Cad\MetroToolKits.Foundation.Cad.csproj" />
     <ProjectReference Include="..\..\..\Shared\MetroToolKits.Foundation.Building\MetroToolKits.Foundation.Building.csproj" />

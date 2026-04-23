@@ -1,13 +1,15 @@
 using MetroToolKits.Foundation.Core.Logging;
 using MetroToolKits.SectionGenerator.App.Abstractions;
+using MetroToolKits.SectionGenerator.App.Models;
 using Autodesk.AutoCAD.EditorInput;
 using Microsoft.Extensions.Logging;
-using MetroToolKits.Bootstrap;
+using MetroToolKits.Foundation.Core.Hosting;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Core.Sections;
 using MetroToolKits.SectionGenerator.Plugin.Selection;
 using MetroToolKits.SectionGenerator.Plugin.UI;
+using System.Windows;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace MetroToolKits.SectionGenerator.Plugin.Commands;
@@ -36,21 +38,21 @@ public sealed class FloorConfigCommand
     {
         _userLogger.CommandStarted("FloorConfig");
         _logger.LogInformation("打开楼层配置窗口");
-        var config = _floorConfigUseCase.Load();
-        _userLogger.FloorConfigLoaded(config.Floors.Count, config.Floors.Select(f => f.Name).ToArray());
+        var configDocument = _floorConfigUseCase.Load();
+        _userLogger.FloorConfigLoaded(configDocument.Config.Floors.Count, configDocument.Config.Floors.Select(f => f.Name).ToArray());
 
         while (true)
         {
             var window = new FloorConfigWindow(
-                config,
+                configDocument,
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<FloorConfigWindow>.Instance);
 
             Application.ShowModalWindow(window);
-            config = window.CurrentConfig;
+            configDocument = window.CurrentDocument;
 
             if (window.Tag is ("PickAlignment", FloorConfig floor))
             {
-                PickAlignmentPoints(config, floor);
+                PickAlignmentPoints(configDocument.Config, floor);
                 continue;
             }
 
@@ -62,8 +64,17 @@ public sealed class FloorConfigCommand
 
             if (window.DialogResult == true)
             {
-                _floorConfigUseCase.Save(config);
-                _userLogger.FloorConfigSaved(config.Floors.Count, config.Floors.Select(f => f.Name).ToArray());
+                var saveResult = _floorConfigUseCase.Save(configDocument);
+                if (!saveResult.Success)
+                {
+                    var message = saveResult.ErrorMessage ?? "楼层配置保存失败。";
+                    MessageBox.Show(message, "保存失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    continue;
+                }
+
+                _userLogger.FloorConfigSaved(
+                    configDocument.Config.Floors.Count,
+                    configDocument.Config.Floors.Select(f => f.Name).ToArray());
             }
 
             break;

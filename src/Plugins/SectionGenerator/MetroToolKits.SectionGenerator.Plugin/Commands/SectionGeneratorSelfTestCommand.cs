@@ -1,16 +1,17 @@
 using Autodesk.AutoCAD.ApplicationServices;
 using Microsoft.Extensions.Logging;
-using MetroToolKits.Bootstrap;
+using MetroToolKits.Foundation.Core.Hosting;
 using MetroToolKits.Foundation.Core.Logging;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.UseCases;
+using System.Diagnostics;
 
 namespace MetroToolKits.SectionGenerator.Plugin.Commands;
 
 /// <summary>
 /// 宿主内自检命令，用于验证 Bootstrap、DI 和关键服务解析是否正常。
 /// </summary>
-[CommandBinding(SectionGeneratorCommandNames.SectionSelfTest)]
+[CommandBinding(SectionGeneratorCommandNames.SectionSelfTestInternal)]
 public sealed class SectionGeneratorSelfTestCommand
 {
     private readonly IFloorConfigRepository _floorConfigRepository;
@@ -59,6 +60,13 @@ public sealed class SectionGeneratorSelfTestCommand
         var doc = Application.DocumentManager.MdiActiveDocument;
         var ed = doc?.Editor;
 
+        if (!IsHostAutomationContext())
+        {
+            ed?.WriteMessage("\nSectionSelfTest 仅供宿主自动化验证使用，请通过构建脚本在 accoreconsole 中运行。");
+            _logger.LogWarning("SectionSelfTest was blocked outside host automation context.");
+            return;
+        }
+
         var lines = new[]
         {
             "=== MetroToolKits SectionGenerator Self Test ===",
@@ -80,9 +88,22 @@ public sealed class SectionGeneratorSelfTestCommand
         foreach (var line in lines)
             ed?.WriteMessage($"\n{line}");
 
+        _logger.LogInformation("SECTION_SELF_TEST:OK");
         _logger.LogInformation("SectionGenerator 宿主自检通过");
     }
 
     private static string Describe(object service)
         => service.GetType().FullName ?? service.GetType().Name;
+
+    private static bool IsHostAutomationContext()
+    {
+        var processName = Process.GetCurrentProcess().ProcessName;
+        if (string.Equals(processName, "accoreconsole", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return string.Equals(
+            Environment.GetEnvironmentVariable("METROTOOLKITS_ALLOW_HOST_TEST_COMMANDS"),
+            "1",
+            StringComparison.OrdinalIgnoreCase);
+    }
 }

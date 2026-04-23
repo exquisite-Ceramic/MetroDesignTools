@@ -6,6 +6,7 @@ using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.Foundation.Core.Logging;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Diagnostics;
+using MetroToolKits.SectionGenerator.App.Models;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Core.Sections;
 using NSubstitute;
@@ -18,25 +19,9 @@ public class GenerateSectionUseCaseTests
     public void Execute_UsesResolvedAlignmentForEachParticipatingFloorRecognition()
     {
         var configRepo = Substitute.For<IFloorConfigRepository>();
-        configRepo.Load().Returns(new SectionConfig
+        configRepo.Load().Returns(LoadedConfig(new SectionConfig
         {
             AlignmentBaseFloorName = "F1",
-            OutputConfig = new SectionOutputConfig
-            {
-                AnnotationOptions = new AnnotationOptions
-                {
-                    GenerateAnnotations = false
-                },
-                HatchOptions = new HatchOptions
-                {
-                    Enabled = true
-                },
-                LayerOptions = new LayerOptions
-                {
-                    StructuralLayer = "T_STRUCT",
-                    FinishLayer = "T_FINISH"
-                }
-            },
             Floors = new List<FloorConfig>
             {
                 DefaultFloor(
@@ -50,7 +35,23 @@ public class GenerateSectionUseCaseTests
                     new Point3D(110, 0, 0),
                     new Point3D(100, 10, 0))
             }
-        });
+        },
+        new SectionOutputConfig
+        {
+            AnnotationOptions = new AnnotationOptions
+            {
+                GenerateAnnotations = false
+            },
+            HatchOptions = new HatchOptions
+            {
+                Enabled = true
+            },
+            LayerOptions = new LayerOptions
+            {
+                StructuralLayer = "T_STRUCT",
+                FinishLayer = "T_FINISH"
+            }
+        }));
 
         var recognizer = Substitute.For<IElementRecognizer>();
         recognizer.RecognizeElements(Arg.Any<Line3D>(), Arg.Any<double>())
@@ -118,21 +119,22 @@ public class GenerateSectionUseCaseTests
                 snapshot.SourceCutLineHandle == "10" &&
                 snapshot.GeometryAnchorX == 0 &&
                 snapshot.SectionDirection.HasValue &&
-                snapshot.FloorSnapshots.Count == 2));
+                snapshot.FloorSnapshots.Count == 2 &&
+                snapshot.ExecutionFloorNames.SequenceEqual(new[] { "F1", "F2" })));
     }
 
     [Fact]
     public void Execute_BaseFloorMissing_ReturnsFailed()
     {
         var configRepo = Substitute.For<IFloorConfigRepository>();
-        configRepo.Load().Returns(new SectionConfig
+        configRepo.Load().Returns(LoadedConfig(new SectionConfig
         {
             Floors = new List<FloorConfig>
             {
                 DefaultFloor("F1"),
                 DefaultFloor("F2")
             }
-        });
+        }));
 
         var useCase = BuildUseCase(configRepo: configRepo);
         var result = useCase.Execute(CreateRequest());
@@ -145,7 +147,7 @@ public class GenerateSectionUseCaseTests
     public void Execute_SomeFloorsMissingAlignment_ReturnsPartialSuccess()
     {
         var configRepo = Substitute.For<IFloorConfigRepository>();
-        configRepo.Load().Returns(new SectionConfig
+        configRepo.Load().Returns(LoadedConfig(new SectionConfig
         {
             AlignmentBaseFloorName = "F1",
             Floors = new List<FloorConfig>
@@ -157,7 +159,7 @@ public class GenerateSectionUseCaseTests
                     new Point3D(0, 10, 0)),
                 DefaultFloor("F2")
             }
-        });
+        }));
 
         var recognizer = Substitute.For<IElementRecognizer>();
         recognizer.RecognizeElements(Arg.Any<Line3D>(), Arg.Any<double>())
@@ -176,7 +178,7 @@ public class GenerateSectionUseCaseTests
     public void Execute_SomeFloorsMissingScope_ReturnsPartialSuccess()
     {
         var configRepo = Substitute.For<IFloorConfigRepository>();
-        configRepo.Load().Returns(new SectionConfig
+        configRepo.Load().Returns(LoadedConfig(new SectionConfig
         {
             AlignmentBaseFloorName = "F1",
             Floors = new List<FloorConfig>
@@ -192,7 +194,7 @@ public class GenerateSectionUseCaseTests
                     new Point3D(110, 0, 0),
                     new Point3D(100, 10, 0))
             }
-        });
+        }));
 
         var recognizer = Substitute.For<IElementRecognizer>();
         recognizer.RecognizeElements(Arg.Any<Line3D>(), Arg.Any<double>(), Arg.Any<ScopeBounds2D?>())
@@ -322,7 +324,7 @@ public class GenerateSectionUseCaseTests
         if (configRepo == null)
         {
             configRepo = Substitute.For<IFloorConfigRepository>();
-            configRepo.Load().Returns(new SectionConfig
+            configRepo.Load().Returns(LoadedConfig(new SectionConfig
             {
                 AlignmentBaseFloorName = "F1",
                 Floors = new List<FloorConfig>
@@ -333,7 +335,7 @@ public class GenerateSectionUseCaseTests
                         new Point3D(10, 0, 0),
                         new Point3D(0, 10, 0))
                 }
-            });
+            }));
         }
 
         recognizer ??= RecognitionSubstitute(RecognitionResult(MakeWallAtX(0)));
@@ -428,5 +430,13 @@ public class GenerateSectionUseCaseTests
         Thickness = 200,
         SourceHandle = handle,
         SourceLayer = "MK_结构墙"
+    };
+
+    private static LoadedSectionConfig LoadedConfig(
+        SectionConfig config,
+        SectionOutputConfig? outputConfig = null) => new()
+    {
+        Config = config,
+        OutputConfig = outputConfig ?? new SectionOutputConfig()
     };
 }

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using MetroToolKits.Foundation.Core.Hosting;
 
 namespace MetroToolKits.Bootstrap;
 
@@ -65,29 +66,3 @@ public class CommandRegistry : ICommandRegistry
 /// 命令注册项。
 /// </summary>
 public sealed record CommandRegistration(Type CommandType, string MethodName);
-
-/// <summary>
-/// 命令基类 - 所有插件命令应继承此类
-/// </summary>
-public abstract class CommandBase
-{
-    /// <summary>
-    /// 执行命令
-    /// </summary>
-    public abstract void Execute();
-}
-
-/// <summary>
-/// 命令方法特性 - 标记命令入口
-/// </summary>
-[AttributeUsage(AttributeTargets.Method)]
-public class CommandMethodAttribute : Attribute
-{
-    public string CommandName { get; }
-    public string? GroupName { get; set; }
-
-    public CommandMethodAttribute(string commandName)
-    {
-        CommandName = commandName;
-    }
-}

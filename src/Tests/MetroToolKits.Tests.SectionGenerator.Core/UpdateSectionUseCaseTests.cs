@@ -40,6 +40,7 @@ public class UpdateSectionUseCaseTests
 
         var snapshotRepo = Substitute.For<ISectionSnapshotRepository>();
         snapshotRepo.Load("85").Returns(snapshot);
+        var geometryRecoveryService = Substitute.For<ISectionGeometryRecoveryService>();
 
         var lineResolver = Substitute.For<ISectionLineResolver>();
         lineResolver.ResolveCurrentLine("71").Returns(resolvedLine);
@@ -58,6 +59,7 @@ public class UpdateSectionUseCaseTests
 
         var useCase = new UpdateSectionUseCase(
             snapshotRepo,
+            geometryRecoveryService,
             lineResolver,
             generateUseCase,
             eraseService,
@@ -95,6 +97,7 @@ public class UpdateSectionUseCaseTests
 
         var snapshotRepo = Substitute.For<ISectionSnapshotRepository>();
         snapshotRepo.Load("85").Returns(snapshot);
+        var geometryRecoveryService = Substitute.For<ISectionGeometryRecoveryService>();
 
         var lineResolver = Substitute.For<ISectionLineResolver>();
         lineResolver.ResolveCurrentLine("71").Returns((Line3D?)null);
@@ -105,6 +108,7 @@ public class UpdateSectionUseCaseTests
 
         var useCase = new UpdateSectionUseCase(
             snapshotRepo,
+            geometryRecoveryService,
             lineResolver,
             generateUseCase,
             eraseService,
@@ -136,6 +140,7 @@ public class UpdateSectionUseCaseTests
 
         var snapshotRepo = Substitute.For<ISectionSnapshotRepository>();
         snapshotRepo.Load("85").Returns(snapshot);
+        var geometryRecoveryService = Substitute.For<ISectionGeometryRecoveryService>();
 
         var lineResolver = Substitute.For<ISectionLineResolver>();
         lineResolver.ResolveCurrentLine("71").Returns(resolvedLine);
@@ -157,6 +162,7 @@ public class UpdateSectionUseCaseTests
 
         var useCase = new UpdateSectionUseCase(
             snapshotRepo,
+            geometryRecoveryService,
             lineResolver,
             generateUseCase,
             eraseService,
@@ -186,7 +192,8 @@ public class UpdateSectionUseCaseTests
         var resolvedLine = new Line3D(new Point3D(50, 0, 0), new Point3D(50, 20, 0));
         var snapshotRepo = Substitute.For<ISectionSnapshotRepository>();
         snapshotRepo.Load("85").Returns(snapshot);
-        snapshotRepo.ResolveBlockGeometryAnchorX("85").Returns(0d);
+        var geometryRecoveryService = Substitute.For<ISectionGeometryRecoveryService>();
+        geometryRecoveryService.ResolveBlockGeometryAnchorX("85").Returns(0d);
 
         var lineResolver = Substitute.For<ISectionLineResolver>();
         lineResolver.ResolveCurrentLine("71").Returns(resolvedLine);
@@ -205,6 +212,7 @@ public class UpdateSectionUseCaseTests
 
         var useCase = new UpdateSectionUseCase(
             snapshotRepo,
+            geometryRecoveryService,
             lineResolver,
             generateUseCase,
             eraseService,
@@ -214,8 +222,61 @@ public class UpdateSectionUseCaseTests
         var result = useCase.Execute(new UpdateSectionRequest { BlockHandle = "85" });
 
         result.Success.Should().BeTrue();
-        snapshotRepo.Received(1).ResolveBlockGeometryAnchorX("85");
+        geometryRecoveryService.Received(1).ResolveBlockGeometryAnchorX("85");
         generateUseCase.Received(1).Execute(Arg.Is<GenerateSectionRequest>(request =>
             request.GeometryAnchorX == 0));
+    }
+
+    [Fact]
+    public void Execute_PrefersExecutionFloorNamesOverGeneratedFloorNames()
+    {
+        var snapshot = new SectionSnapshot
+        {
+            BlockName = "MK_剖面_F1_F3",
+            SourceCutLineHandle = "71",
+            CutLineStart = new Point3D(0, 0, 0),
+            CutLineEnd = new Point3D(0, 20, 0),
+            InsertionPoint = new Point3D(100, 200, 0),
+            GeometryAnchorX = 0,
+            SectionDirection = new Point3D(0, 1, 0),
+            ViewDepth = 3000,
+            ExecutionFloorNames = new List<string> { "F1", "F2", "F3" },
+            GeneratedFloorNames = new List<string> { "F1", "F3" }
+        };
+
+        var resolvedLine = new Line3D(new Point3D(50, 0, 0), new Point3D(50, 20, 0));
+        var snapshotRepo = Substitute.For<ISectionSnapshotRepository>();
+        snapshotRepo.Load("85").Returns(snapshot);
+        var geometryRecoveryService = Substitute.For<ISectionGeometryRecoveryService>();
+
+        var lineResolver = Substitute.For<ISectionLineResolver>();
+        lineResolver.ResolveCurrentLine("71").Returns(resolvedLine);
+
+        var generateUseCase = Substitute.For<IGenerateSectionUseCase>();
+        generateUseCase.Execute(Arg.Any<GenerateSectionRequest>())
+            .Returns(new GenerateSectionResult
+            {
+                Status = Foundation.Core.Diagnostics.OperationStatus.Success,
+                BlockName = "MK_剖面_F1_F3_updated",
+                BlockHandle = "90"
+            });
+
+        var eraseService = Substitute.For<IBlockEraseService>();
+        var userLogger = Substitute.For<IUserLogger>();
+
+        var useCase = new UpdateSectionUseCase(
+            snapshotRepo,
+            geometryRecoveryService,
+            lineResolver,
+            generateUseCase,
+            eraseService,
+            NullLogger<UpdateSectionUseCase>.Instance,
+            userLogger);
+
+        var result = useCase.Execute(new UpdateSectionRequest { BlockHandle = "85" });
+
+        result.Success.Should().BeTrue();
+        generateUseCase.Received(1).Execute(Arg.Is<GenerateSectionRequest>(request =>
+            request.IncludedFloorNames.SequenceEqual(new[] { "F1", "F2", "F3" })));
     }
 }

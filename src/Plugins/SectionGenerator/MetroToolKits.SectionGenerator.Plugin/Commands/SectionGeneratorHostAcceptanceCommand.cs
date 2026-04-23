@@ -2,12 +2,14 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Microsoft.Extensions.Logging;
 using MetroToolKits.Foundation.Building.Types;
-using MetroToolKits.Bootstrap;
+using MetroToolKits.Foundation.Core.Hosting;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.App.Abstractions;
+using MetroToolKits.SectionGenerator.App.Models;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Core.Sections;
 using MetroToolKits.SectionGenerator.Infrastructure.Services;
+using System.Diagnostics;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 using AcadLine = Autodesk.AutoCAD.DatabaseServices.Line;
 using AcadPoint3d = Autodesk.AutoCAD.Geometry.Point3d;
@@ -19,10 +21,12 @@ namespace MetroToolKits.SectionGenerator.Plugin.Commands;
 /// 宿主内完整验收命令。
 /// 在当前图纸中创建最小样例，串行验证生成、快照、关联查询、源定位、变更检测和更新链路。
 /// </summary>
-[CommandBinding(SectionGeneratorCommandNames.SectionHostAcceptance)]
+[CommandBinding(SectionGeneratorCommandNames.SectionHostAcceptanceInternal)]
 public sealed class SectionGeneratorHostAcceptanceCommand
 {
     private const string SectionSourceRefAppName = "MK_SectionSourceRef";
+    private const string FloorConfigDictionaryName = "MK_SectionGenerator";
+    private const string FloorConfigRecordName = "FloorConfig";
 
     private readonly IFloorConfigRepository _floorConfigRepository;
     private readonly IGenerateSectionUseCase _generateSectionUseCase;
@@ -31,6 +35,7 @@ public sealed class SectionGeneratorHostAcceptanceCommand
     private readonly ILocateSourceElementUseCase _locateSourceElementUseCase;
     private readonly IFindRelatedSectionsUseCase _findRelatedSectionsUseCase;
     private readonly ISectionSnapshotRepository _sectionSnapshotRepository;
+    private readonly ISectionBlockQueryService _sectionBlockQueryService;
     private readonly IElementRecognizer _elementRecognizer;
     private readonly FloorGeometryHasher _floorGeometryHasher;
     private readonly ElementConversionBackupService _elementConversionBackupService;
@@ -44,6 +49,7 @@ public sealed class SectionGeneratorHostAcceptanceCommand
         ILocateSourceElementUseCase locateSourceElementUseCase,
         IFindRelatedSectionsUseCase findRelatedSectionsUseCase,
         ISectionSnapshotRepository sectionSnapshotRepository,
+        ISectionBlockQueryService sectionBlockQueryService,
         IElementRecognizer elementRecognizer,
         FloorGeometryHasher floorGeometryHasher,
         ElementConversionBackupService elementConversionBackupService,
@@ -56,6 +62,7 @@ public sealed class SectionGeneratorHostAcceptanceCommand
         _locateSourceElementUseCase = locateSourceElementUseCase;
         _findRelatedSectionsUseCase = findRelatedSectionsUseCase;
         _sectionSnapshotRepository = sectionSnapshotRepository;
+        _sectionBlockQueryService = sectionBlockQueryService;
         _elementRecognizer = elementRecognizer;
         _floorGeometryHasher = floorGeometryHasher;
         _elementConversionBackupService = elementConversionBackupService;
@@ -69,16 +76,24 @@ public sealed class SectionGeneratorHostAcceptanceCommand
         if (doc == null || ed == null)
             return;
 
+        if (!IsHostAutomationContext())
+        {
+            WriteMessage(ed, "SectionHostAcceptance 仅供宿主自动化验证使用，请通过构建脚本在 accoreconsole 中运行。");
+            _logger.LogWarning("SectionHostAcceptance was blocked outside host automation context.");
+            return;
+        }
+
         var originalConfig = _floorConfigRepository.Load();
 
         try
         {
             WriteMessage(ed, "=== MetroToolKits SectionGenerator Host Acceptance ===");
 
-            ResetModelSpace(doc.Database);
+            var baselineSectionHandles = _sectionBlockQueryService.FindAllSectionBlockHandles()
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
             _floorConfigRepository.Save(BuildAcceptanceConfig());
 
-            var fixture = CreateAcceptanceFixture(doc.Database, _elementConversionBackupService);
+            var fixture = CreateAcceptanceFixture(doc.Database, _elementConversionBackupService, xOffset: 1_000_000);
             WriteMessage(ed, $"Fixture Ready: CutLine={fixture.CutLineHandle}, Wall={fixture.PrimaryWallHandle}");
 
             var generateResult = _generateSectionUseCase.Execute(new GenerateSectionRequest
@@ -108,7 +123,7 @@ public sealed class SectionGeneratorHostAcceptanceCommand
             WriteMessage(ed, "Snapshot OK");
 
             var currentConfig = _floorConfigRepository.Load();
-            var currentFloor = currentConfig.Floors.Single(floor => floor.Name == persistedSnapshot.FloorSnapshots[0].FloorName);
+            var currentFloor = currentConfig.Config.Floors.Single(floor => floor.Name == persistedSnapshot.FloorSnapshots[0].FloorName);
             var currentSectionLine = new Line3D(fixture.CutLineStart, fixture.CutLineEnd);
             var currentHash = _floorGeometryHasher.ComputeHash(
                 _elementRecognizer.RecognizeElements(currentSectionLine, 3000).Elements);
@@ -165,8 +180,10 @@ public sealed class SectionGeneratorHostAcceptanceCommand
 
             Ensure(updateResult.Success, updateResult.ErrorMessage ?? "UpdateSection returned failure.");
 
-            var remainingHandles = _sectionSnapshotRepository.FindAllSectionBlockHandles();
-            Ensure(remainingHandles.Count == 1, $"Expected exactly one section block after update, got {remainingHandles.Count}.");
+            var remainingHandles = _sectionBlockQueryService.FindAllSectionBlockHandles()
+                .Where(handle => !baselineSectionHandles.Contains(handle))
+                .ToList();
+            Ensure(remainingHandles.Count == 1, $"Expected exactly one acceptance section block after update, got {remainingHandles.Count}.");
 
             var updatedHandle = remainingHandles[0];
             var finalCheck = FindCheckResult(updatedHandle, _checkSectionUpdatesUseCase.Execute());
@@ -189,6 +206,7 @@ public sealed class SectionGeneratorHostAcceptanceCommand
 
             WriteMessage(ed, $"UpdateSection OK: NewBlock={updatedHandle}");
             WriteMessage(ed, "SECTION_HOST_ACCEPTANCE:OK");
+            _logger.LogInformation("SECTION_HOST_ACCEPTANCE:OK");
             _logger.LogInformation("SectionGenerator 宿主验收通过");
         }
         catch (Exception ex)
@@ -198,42 +216,45 @@ public sealed class SectionGeneratorHostAcceptanceCommand
         }
         finally
         {
-            _floorConfigRepository.Save(originalConfig);
+            RestoreOriginalConfig(originalConfig, doc.Database);
         }
     }
 
-    private static SectionConfig BuildAcceptanceConfig() => new()
+    private static LoadedSectionConfig BuildAcceptanceConfig() => new()
     {
-        AlignmentBaseFloorName = "F1",
-        Floors = new List<FloorConfig>
+        Config = new SectionConfig
         {
-            new()
+            AlignmentBaseFloorName = "F1",
+            Floors = new List<FloorConfig>
             {
-                Name = "F1",
-                Height = 3000,
-                BottomSlabThickness = 800,
-                TopSlabThickness = 600,
-                FinishThickness = 120,
-                HasSlope = false,
-                SlopeValue = 0,
-                BottomBoundarySlab = new BoundarySlabConfig(),
-                TopBoundarySlab = new BoundarySlabConfig()
+                new()
+                {
+                    Name = "F1",
+                    Height = 3000,
+                    BottomSlabThickness = 800,
+                    TopSlabThickness = 600,
+                    FinishThickness = 120,
+                    HasSlope = false,
+                    SlopeValue = 0,
+                    BottomBoundarySlab = new BoundarySlabConfig(),
+                    TopBoundarySlab = new BoundarySlabConfig()
+                }
             }
         }
     };
 
-    private static AcceptanceFixture CreateAcceptanceFixture(Database db, ElementConversionBackupService backupService)
+    private static AcceptanceFixture CreateAcceptanceFixture(Database db, ElementConversionBackupService backupService, double xOffset)
     {
         using var tr = db.TransactionManager.StartTransaction();
         var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
         var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
         EnsureLayer(tr, db, "MK_结构墙");
 
-        var cutLine = new AcadLine(new AcadPoint3d(0, 0, 0), new AcadPoint3d(0, 2000, 0));
+        var cutLine = new AcadLine(new AcadPoint3d(xOffset, 0, 0), new AcadPoint3d(xOffset, 2000, 0));
         ms.AppendEntity(cutLine);
         tr.AddNewlyCreatedDBObject(cutLine, true);
 
-        var wallLineA = new AcadLine(new AcadPoint3d(-500, 900, 0), new AcadPoint3d(500, 900, 0))
+        var wallLineA = new AcadLine(new AcadPoint3d(xOffset - 500, 900, 0), new AcadPoint3d(xOffset + 500, 900, 0))
         {
             Layer = "MK_结构墙"
         };
@@ -241,7 +262,7 @@ public sealed class SectionGeneratorHostAcceptanceCommand
         tr.AddNewlyCreatedDBObject(wallLineA, true);
         backupService.BackupEntity(tr, wallLineA, "Wall");
 
-        var wallLineB = new AcadLine(new AcadPoint3d(-500, 1100, 0), new AcadPoint3d(500, 1100, 0))
+        var wallLineB = new AcadLine(new AcadPoint3d(xOffset - 500, 1100, 0), new AcadPoint3d(xOffset + 500, 1100, 0))
         {
             Layer = "MK_结构墙"
         };
@@ -257,6 +278,48 @@ public sealed class SectionGeneratorHostAcceptanceCommand
             wallLineB.Handle.ToString(),
             new ToolkitPoint3D(cutLine.StartPoint.X, cutLine.StartPoint.Y, cutLine.StartPoint.Z),
             new ToolkitPoint3D(cutLine.EndPoint.X, cutLine.EndPoint.Y, cutLine.EndPoint.Z));
+    }
+
+    private void RestoreOriginalConfig(LoadedSectionConfig originalConfig, Database db)
+    {
+        if (originalConfig.RuntimeState.Source == SectionConfigStorageSource.Missing &&
+            !string.IsNullOrWhiteSpace(db.Filename))
+        {
+            ClearEmbeddedFloorConfig(db);
+            return;
+        }
+
+        _floorConfigRepository.Save(originalConfig);
+    }
+
+    private static void ClearEmbeddedFloorConfig(Database db)
+    {
+        using var tr = db.TransactionManager.StartTransaction();
+        var nod = (DBDictionary)tr.GetObject(db.NamedObjectsDictionaryId, OpenMode.ForWrite);
+        if (!nod.Contains(FloorConfigDictionaryName))
+        {
+            tr.Commit();
+            return;
+        }
+
+        var configDictionary = (DBDictionary)tr.GetObject(nod.GetAt(FloorConfigDictionaryName), OpenMode.ForWrite);
+        if (configDictionary.Contains(FloorConfigRecordName))
+        {
+            var recordId = configDictionary.GetAt(FloorConfigRecordName);
+            configDictionary.Remove(FloorConfigRecordName);
+            var record = tr.GetObject(recordId, OpenMode.ForWrite);
+            record.Erase();
+        }
+
+        if (configDictionary.Count == 0)
+        {
+            var dictionaryId = nod.GetAt(FloorConfigDictionaryName);
+            nod.Remove(FloorConfigDictionaryName);
+            var dictionary = tr.GetObject(dictionaryId, OpenMode.ForWrite);
+            dictionary.Erase();
+        }
+
+        tr.Commit();
     }
 
     private static void MoveWall(Database db, string wallHandle, double deltaY)
@@ -404,6 +467,18 @@ public sealed class SectionGeneratorHostAcceptanceCommand
 
     private static void WriteMessage(Editor editor, string message)
         => editor.WriteMessage($"\n{message}");
+
+    private static bool IsHostAutomationContext()
+    {
+        var processName = Process.GetCurrentProcess().ProcessName;
+        if (string.Equals(processName, "accoreconsole", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return string.Equals(
+            Environment.GetEnvironmentVariable("METROTOOLKITS_ALLOW_HOST_TEST_COMMANDS"),
+            "1",
+            StringComparison.OrdinalIgnoreCase);
+    }
 
     private sealed record AcceptanceFixture(
         string CutLineHandle,

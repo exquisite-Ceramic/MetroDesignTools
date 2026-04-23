@@ -1,4 +1,4 @@
-namespace MetroToolKits.Bootstrap;
+namespace MetroToolKits.Foundation.Core.Hosting;
 
 /// <summary>
 /// SectionGenerator 插件对外暴露的命令契约。
@@ -16,6 +16,6 @@ public static class SectionGeneratorCommandNames
     public const string RevertConversion = "RevertConversion";
     public const string RevertAllConversions = "RevertAllConversions";
     public const string LayerMapping = "LayerMapping";
-    public const string SectionSelfTest = "SectionSelfTest";
-    public const string SectionHostAcceptance = "SectionHostAcceptance";
+    public const string SectionSelfTestInternal = "MKSectionSelfTestInternal";
+    public const string SectionHostAcceptanceInternal = "MKSectionHostAcceptanceInternal";
 }

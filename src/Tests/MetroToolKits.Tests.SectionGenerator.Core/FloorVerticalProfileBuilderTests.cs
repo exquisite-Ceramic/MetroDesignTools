@@ -58,4 +58,30 @@ public class FloorVerticalProfileBuilderTests
         profile.GetTopStructuralBottom(0).Should().Be(5300);
         profile.GetTopStructuralBottom(1000).Should().Be(5320);
     }
+
+    [Fact]
+    public void Build_FinishLayerSlopeTarget_KeepsTopStructuralFaceHorizontal()
+    {
+        var builder = new FloorVerticalProfileBuilder();
+        var floor = new FloorConfig
+        {
+            Name = "F1",
+            Height = 5200,
+            FinishThickness = 120,
+            BottomSlabThickness = 800,
+            TopSlabThickness = 600,
+            HasSlope = true,
+            SlopeValue = 0.02,
+            SlopeTarget = "FinishLayer",
+            BottomBoundarySlab = new BoundarySlabConfig(),
+            TopBoundarySlab = new BoundarySlabConfig()
+        };
+
+        var profile = builder.Build(floor, sectionLength: 1000, baseElevation: 100);
+
+        profile.GetTopStructuralBottom(0).Should().Be(5300);
+        profile.GetTopStructuralBottom(1000).Should().Be(5300);
+        profile.GetTopBoundaryTop(0).Should().Be(6020);
+        profile.GetTopBoundaryTop(1000).Should().Be(6040);
+    }
 }

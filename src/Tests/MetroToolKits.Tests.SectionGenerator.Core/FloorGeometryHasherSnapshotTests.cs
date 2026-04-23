@@ -1,6 +1,8 @@
 using FluentAssertions;
 using MetroToolKits.Foundation.Building.Elements;
 using MetroToolKits.Foundation.Core.Geometry;
+using MetroToolKits.SectionGenerator.App.Models;
+using MetroToolKits.SectionGenerator.App.Support;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
 namespace MetroToolKits.Tests.SectionGenerator.Core;
@@ -135,5 +137,25 @@ public class FloorGeometryHasherSnapshotTests
         var emptyH   = hasher.ComputeHash(Enumerable.Empty<BuildingElement>());
         var nonEmptyH = hasher.ComputeHash(new[] { MakeWall(0, 0, 0, 5000) });
         emptyH.Should().NotBe(nonEmptyH);
+    }
+
+    [Fact]
+    public void Hash_OutputConfigChanged_DiffersFromSnapshot()
+    {
+        var hasher = new FloorGeometryHasher();
+        var elements = new[] { MakeWall(0, 0, 0, 5000) };
+        var configA = new SectionOutputConfig
+        {
+            AnnotationOptions = new AnnotationOptions { GenerateAnnotations = false }
+        };
+        var configB = new SectionOutputConfig
+        {
+            AnnotationOptions = new AnnotationOptions { GenerateAnnotations = true }
+        };
+
+        var hashA = SectionOutputConfigHasher.Combine(hasher.ComputeHash(elements), configA);
+        var hashB = SectionOutputConfigHasher.Combine(hasher.ComputeHash(elements), configB);
+
+        hashB.Should().NotBe(hashA, "输出配置变化后哈希应变化");
     }
 }

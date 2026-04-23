@@ -35,6 +35,9 @@ if ($PSVersionTable.PSVersion.Major -ge 7) {
 
 $SolutionPath = Join-Path $PSScriptRoot "MetroToolKits.sln"
 $PublishOutput = Join-Path $PSScriptRoot "publish\SectionGenerator"
+$HostBootstrapPublishOutput = Join-Path $PSScriptRoot "publish\HostAutomationBootstrap"
+$BootstrapProject = Join-Path $PSScriptRoot "src\Bootstrap\MetroToolKits.Bootstrap\MetroToolKits.Bootstrap.csproj"
+$BootstrapOutput = Join-Path $PSScriptRoot "src\Bootstrap\MetroToolKits.Bootstrap\bin\Release\net8.0-windows"
 $PluginProject = Join-Path $PSScriptRoot "src\Plugins\SectionGenerator\MetroToolKits.SectionGenerator.Plugin\MetroToolKits.SectionGenerator.Plugin.csproj"
 $PluginAssetsFile = Join-Path $PSScriptRoot "src\Plugins\SectionGenerator\MetroToolKits.SectionGenerator.Plugin\obj\project.assets.json"
 $ReferenceSyncScript = Join-Path $PSScriptRoot "build\sync-autocad-references.ps1"
@@ -124,6 +127,34 @@ function Invoke-PluginBuild([string]$Configuration) {
     Write-Host "编译成功" -ForegroundColor Green
 }
 
+function Invoke-BootstrapBuild {
+    param(
+        [string]$Configuration,
+        [switch]$HostAutomation,
+        [string]$OutputPath
+    )
+
+    $label = if ($HostAutomation) { "Bootstrap 项目 ($Configuration, host automation)" } else { "Bootstrap 项目 ($Configuration)" }
+    Write-Step "编译 $label"
+
+    $arguments = @("build", $BootstrapProject, "-c", $Configuration, "--no-restore")
+    if ($HostAutomation) {
+        $arguments += "-p:HostAutomationEnabled=true"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
+        if (Test-Path -LiteralPath $OutputPath) {
+            Remove-Item -LiteralPath $OutputPath -Recurse -Force
+        }
+
+        $arguments += "-o"
+        $arguments += $OutputPath
+    }
+
+    Invoke-DotnetCommand -Arguments $arguments -FailureMessage "Bootstrap 编译失败"
+    Write-Host "Bootstrap 编译成功" -ForegroundColor Green
+}
+
 function Invoke-SolutionBuild {
     Write-Step "编译解决方案"
     Invoke-DotnetCommand -Arguments @("build", $SolutionPath, "-c", "Debug", "--no-restore") -FailureMessage "解决方案编译失败"
@@ -151,6 +182,46 @@ function Invoke-Publish {
         "-o", $PublishOutput,
         "--no-restore"
     ) -FailureMessage "发布失败"
+
+    Write-Step "补齐 Bootstrap 入口文件"
+    $bootstrapArtifacts = @(
+        "MetroToolKits.Bootstrap.dll",
+        "MetroToolKits.Bootstrap.pdb",
+        "MetroToolKits.Bootstrap.deps.json",
+        "appsettings.json",
+        "appsettings.Development.json"
+    )
+
+    foreach ($artifact in $bootstrapArtifacts) {
+        $source = Join-Path $BootstrapOutput $artifact
+        if (-not (Test-Path -LiteralPath $source)) {
+            throw "缺少 Bootstrap 发布工件: $source"
+        }
+
+        Copy-Item -LiteralPath $source -Destination $PublishOutput -Force
+    }
+
+    Write-Step "导出宿主自动化专用 Bootstrap"
+    Invoke-BootstrapBuild -Configuration "Release" -HostAutomation -OutputPath $HostBootstrapPublishOutput
+    foreach ($artifact in $bootstrapArtifacts) {
+        $source = Join-Path $HostBootstrapPublishOutput $artifact
+        if (-not (Test-Path -LiteralPath $source)) {
+            $fallbackSource = Join-Path $BootstrapOutput $artifact
+            if (-not (Test-Path -LiteralPath $fallbackSource)) {
+                throw "缺少宿主自动化 Bootstrap 工件: $source"
+            }
+
+            Copy-Item -LiteralPath $fallbackSource -Destination $HostBootstrapPublishOutput -Force
+            continue
+        }
+
+        if ([System.IO.Path]::GetFullPath($source) -eq [System.IO.Path]::GetFullPath((Join-Path $HostBootstrapPublishOutput $artifact))) {
+            continue
+        }
+
+        Copy-Item -LiteralPath $source -Destination $HostBootstrapPublishOutput -Force
+    }
+
     Write-Host "发布完成: $PublishOutput" -ForegroundColor Green
 }
 
@@ -164,6 +235,6 @@ switch ($Action) {
     "build"   { Invoke-AutoCADReferenceSync; Invoke-EnsurePluginAssets; Invoke-PluginBuild -Configuration "Debug" }
     "test"    { Invoke-AutoCADReferenceSync; Invoke-RestoreForTests; Invoke-SolutionBuild; Invoke-Test }
     "all"     { Invoke-AutoCADReferenceSync; Invoke-RestoreForTests; Invoke-SolutionBuild; Invoke-Test }
-    "publish" { Invoke-AutoCADReferenceSync; Invoke-EnsurePluginAssets; Invoke-PluginBuild -Configuration "Release"; Invoke-Publish }
+    "publish" { Invoke-AutoCADReferenceSync; Invoke-EnsurePluginAssets; Invoke-BootstrapBuild -Configuration "Release"; Invoke-PluginBuild -Configuration "Release"; Invoke-Publish }
     "clean"   { Invoke-Clean }
 }

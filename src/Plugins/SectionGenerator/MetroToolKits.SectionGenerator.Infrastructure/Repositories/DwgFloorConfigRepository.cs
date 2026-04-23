@@ -5,6 +5,7 @@ using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Microsoft.Extensions.Logging;
 using MetroToolKits.SectionGenerator.App.Abstractions;
+using MetroToolKits.SectionGenerator.App.Models;
 using MetroToolKits.SectionGenerator.Core.Sections;
 using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.Foundation.Core.Geometry;
@@ -33,14 +34,14 @@ public sealed class DwgFloorConfigRepository : IFloorConfigRepository
     };
 
     private readonly ILogger<DwgFloorConfigRepository> _logger;
-    private readonly ConditionalWeakTable<Database, SectionConfig> _transientConfigs = new();
+    private readonly ConditionalWeakTable<Database, LoadedSectionConfig> _transientConfigs = new();
 
     public DwgFloorConfigRepository(ILogger<DwgFloorConfigRepository> logger)
     {
         _logger = logger;
     }
 
-    public SectionConfig Load()
+    public LoadedSectionConfig Load()
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
         if (doc == null)
@@ -51,7 +52,7 @@ public sealed class DwgFloorConfigRepository : IFloorConfigRepository
         var db = doc.Database;
         if (_transientConfigs.TryGetValue(db, out var transientConfig))
         {
-            return Annotate(CloneConfig(transientConfig), doc, SectionConfigStorageSource.TransientUnsavedDrawing, hasPersistedConfig: false);
+            return Annotate(CloneDocument(transientConfig), doc, SectionConfigStorageSource.TransientUnsavedDrawing, hasPersistedConfig: false);
         }
 
         if (!IsDrawingSaved(db))
@@ -68,7 +69,6 @@ public sealed class DwgFloorConfigRepository : IFloorConfigRepository
             if (loaded != null)
             {
                 _logger.LogDebug("已从 DWG 内嵌配置加载楼层配置: {Drawing}", GetDrawingDisplayName(doc));
-                loaded.OutputConfig = NormalizeOutputConfig(loaded.OutputConfig);
                 return Annotate(loaded, doc, SectionConfigStorageSource.EmbeddedDwg, hasPersistedConfig: true);
             }
         }
@@ -82,7 +82,7 @@ public sealed class DwgFloorConfigRepository : IFloorConfigRepository
         return CreateAnnotatedDefaultConfig(doc, SectionConfigStorageSource.Missing, hasPersistedConfig: false);
     }
 
-    public void Save(SectionConfig config)
+    public void Save(LoadedSectionConfig config)
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
         if (doc == null)
@@ -91,7 +91,7 @@ public sealed class DwgFloorConfigRepository : IFloorConfigRepository
         }
 
         var db = doc.Database;
-        var configToSave = CloneConfig(config);
+        var configToSave = CloneDocument(config);
 
         if (!IsDrawingSaved(db))
         {
@@ -137,16 +137,9 @@ public sealed class DwgFloorConfigRepository : IFloorConfigRepository
         return doc.Name;
     }
 
-    private static SectionConfig CreateDefault()
+    private static LoadedSectionConfig CreateDefault()
         => new()
         {
-            GlobalTopSlopeEnabled = true,
-            GlobalTopSlopeValue = 0.002,
-            GlobalTopSlopeTarget = "StructuralSlab",
-            GlobalBottomSlopeEnabled = false,
-            GlobalBottomSlopeValue = 0,
-            GlobalBottomSlopeTarget = "StructuralSlab",
-            AlignmentBaseFloorName = "F1",
             OutputConfig = new SectionOutputConfig
             {
                 AnnotationOptions = new AnnotationOptions
@@ -155,38 +148,48 @@ public sealed class DwgFloorConfigRepository : IFloorConfigRepository
                 },
                 HatchOptions = new HatchOptions
                 {
-                    Enabled = false
+                Enabled = false
                 },
                 LayerOptions = new LayerOptions()
             },
-            Floors = new List<FloorConfig>
+            Config = new SectionConfig
             {
-                new()
+                GlobalTopSlopeEnabled = true,
+                GlobalTopSlopeValue = 0.002,
+                GlobalTopSlopeTarget = "StructuralSlab",
+                GlobalBottomSlopeEnabled = false,
+                GlobalBottomSlopeValue = 0,
+                GlobalBottomSlopeTarget = "StructuralSlab",
+                AlignmentBaseFloorName = "F1",
+                Floors = new List<FloorConfig>
                 {
-                    Name = "F1",
-                    Height = 5200,
-                    FinishThickness = 120,
-                    BottomSlabThickness = 800,
-                    TopSlabThickness = 600,
-                    HasSlope = true,
-                    SlopeValue = 0.002,
-                    BottomBoundarySlab = new BoundarySlabConfig
+                    new()
                     {
-                        SlopeEnabled = false,
-                        SlopeValue = 0,
-                        SlopeTarget = "StructuralSlab"
-                    },
-                    TopBoundarySlab = new BoundarySlabConfig
-                    {
-                        SlopeEnabled = true,
+                        Name = "F1",
+                        Height = 5200,
+                        FinishThickness = 120,
+                        BottomSlabThickness = 800,
+                        TopSlabThickness = 600,
+                        HasSlope = true,
                         SlopeValue = 0.002,
-                        SlopeTarget = "StructuralSlab"
+                        BottomBoundarySlab = new BoundarySlabConfig
+                        {
+                            SlopeEnabled = false,
+                            SlopeValue = 0,
+                            SlopeTarget = "StructuralSlab"
+                        },
+                        TopBoundarySlab = new BoundarySlabConfig
+                        {
+                            SlopeEnabled = true,
+                            SlopeValue = 0.002,
+                            SlopeTarget = "StructuralSlab"
+                        }
                     }
                 }
             }
         };
 
-    private static SectionConfig CreateAnnotatedDefaultConfig(
+    private static LoadedSectionConfig CreateAnnotatedDefaultConfig(
         Document? doc,
         SectionConfigStorageSource source,
         bool hasPersistedConfig)
@@ -194,8 +197,8 @@ public sealed class DwgFloorConfigRepository : IFloorConfigRepository
         return Annotate(CreateDefault(), doc, source, hasPersistedConfig);
     }
 
-    private static SectionConfig Annotate(
-        SectionConfig config,
+    private static LoadedSectionConfig Annotate(
+        LoadedSectionConfig config,
         Document? doc,
         SectionConfigStorageSource source,
         bool hasPersistedConfig)
@@ -211,15 +214,15 @@ public sealed class DwgFloorConfigRepository : IFloorConfigRepository
         return config;
     }
 
-    private static SectionConfig CloneConfig(SectionConfig config)
+    private static LoadedSectionConfig CloneDocument(LoadedSectionConfig config)
     {
         var json = JsonSerializer.Serialize(config, WriteOptions);
-        var cloned = JsonSerializer.Deserialize<SectionConfig>(json, ReadOptions) ?? CreateDefault();
+        var cloned = JsonSerializer.Deserialize<LoadedSectionConfig>(json, ReadOptions) ?? CreateDefault();
         cloned.OutputConfig = NormalizeOutputConfig(cloned.OutputConfig);
         return cloned;
     }
 
-    private static SectionConfig? TryLoadEmbeddedConfig(Transaction tr, Database db)
+    private static LoadedSectionConfig? TryLoadEmbeddedConfig(Transaction tr, Database db)
     {
         var nod = (DBDictionary)tr.GetObject(db.NamedObjectsDictionaryId, OpenMode.ForRead);
         if (!nod.Contains(ConfigDictionaryName))
@@ -253,16 +256,20 @@ public sealed class DwgFloorConfigRepository : IFloorConfigRepository
             return null;
         }
 
-        var config = JsonSerializer.Deserialize<SectionConfig>(json.ToString(), ReadOptions);
-        if (config != null)
+        var storedDocument = JsonSerializer.Deserialize<StoredSectionConfigDocument>(json.ToString(), ReadOptions);
+        if (storedDocument == null)
         {
-            config.OutputConfig = NormalizeOutputConfig(config.OutputConfig);
+            return null;
         }
 
-        return config;
+        return new LoadedSectionConfig
+        {
+            Config = storedDocument.Config ?? CreateDefault().Config,
+            OutputConfig = NormalizeOutputConfig(storedDocument.OutputConfig)
+        };
     }
 
-    private static void SaveEmbeddedConfig(Transaction tr, Database db, SectionConfig config)
+    private static void SaveEmbeddedConfig(Transaction tr, Database db, LoadedSectionConfig config)
     {
         var nod = (DBDictionary)tr.GetObject(db.NamedObjectsDictionaryId, OpenMode.ForRead);
         DBDictionary configDictionary;
@@ -278,7 +285,12 @@ public sealed class DwgFloorConfigRepository : IFloorConfigRepository
             tr.AddNewlyCreatedDBObject(configDictionary, true);
         }
 
-        var json = JsonSerializer.Serialize(config, WriteOptions);
+        var storedDocument = new StoredSectionConfigDocument
+        {
+            Config = config.Config,
+            OutputConfig = NormalizeOutputConfig(config.OutputConfig)
+        };
+        var json = JsonSerializer.Serialize(storedDocument, WriteOptions);
         var buffer = new ResultBuffer(SplitToTypedValues(json).ToArray());
 
         if (configDictionary.Contains(ConfigRecordName))
@@ -322,5 +334,11 @@ public sealed class DwgFloorConfigRepository : IFloorConfigRepository
         outputConfig.HatchOptions.SlabHatch ??= HatchStyleOptions.CreateDefault();
         outputConfig.LayerOptions ??= new LayerOptions();
         return outputConfig;
+    }
+
+    private sealed class StoredSectionConfigDocument
+    {
+        public SectionConfig Config { get; set; } = new();
+        public SectionOutputConfig OutputConfig { get; set; } = new();
     }
 }

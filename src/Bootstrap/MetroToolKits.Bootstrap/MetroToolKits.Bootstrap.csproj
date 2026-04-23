@@ -7,6 +7,11 @@
     <Nullable>enable</Nullable>
     <RootNamespace>MetroToolKits.Bootstrap</RootNamespace>
     <AssemblyName>MetroToolKits.Bootstrap</AssemblyName>
+    <HostAutomationEnabled Condition="'$(HostAutomationEnabled)' == ''">false</HostAutomationEnabled>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(HostAutomationEnabled)' == 'true'">
+    <DefineConstants>$(DefineConstants);HOST_AUTOMATION</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

@@ -225,10 +225,10 @@ public sealed class SectionComposer
             new Point3D(left.X, left.Y, slab.TopElevation - slab.Thickness),
             new Point3D(right.X, right.Y, slab.TopElevation - slab.Thickness)));
 
-        var topSegments = ClipAtWallFaces(topLine, wallIntervals)
+        var topSegments = new[] { topLine }
             .Where(line => !IsDegenerate(line))
             .ToList();
-        var bottomSegments = ClipAtWallFaces(bottomLine, wallIntervals)
+        var bottomSegments = new[] { bottomLine }
             .Where(line => !IsDegenerate(line))
             .ToList();
         var cutLines = topSegments.Concat(bottomSegments).ToList();
@@ -245,20 +245,7 @@ public sealed class SectionComposer
             })
             .ToList();
 
-        var hatchRegions = new[]
-        {
-            new SectionHatchRegion
-            {
-                Category = SectionHatchCategory.Slab,
-                Boundary = new[]
-                {
-                    new Point3D(topLine.Start.X, bottomLine.Start.Y, 0),
-                    new Point3D(topLine.End.X, bottomLine.End.Y, 0),
-                    new Point3D(topLine.End.X, topLine.End.Y, 0),
-                    new Point3D(topLine.Start.X, topLine.Start.Y, 0)
-                }
-            }
-        };
+        var hatchRegions = BuildSlabHatchRegions(topSegments, bottomSegments);
 
         return new ElementSectionData
         {
@@ -459,4 +446,42 @@ public sealed class SectionComposer
 
     private static bool IsDegenerate(Line3D line, double tolerance = 1e-6)
         => line.Start.DistanceTo(line.End) <= tolerance;
+
+    private static IReadOnlyList<SectionHatchRegion> BuildSlabHatchRegions(
+        IReadOnlyList<Line3D> topSegments,
+        IReadOnlyList<Line3D> bottomSegments)
+    {
+        var orderedTop = topSegments
+            .OrderBy(line => Math.Min(line.Start.X, line.End.X))
+            .ToList();
+        var orderedBottom = bottomSegments
+            .OrderBy(line => Math.Min(line.Start.X, line.End.X))
+            .ToList();
+
+        var regions = new List<SectionHatchRegion>();
+        var regionCount = Math.Min(orderedTop.Count, orderedBottom.Count);
+        for (int i = 0; i < regionCount; i++)
+        {
+            var top = orderedTop[i];
+            var bottom = orderedBottom[i];
+            if (IsDegenerate(top) || IsDegenerate(bottom))
+            {
+                continue;
+            }
+
+            regions.Add(new SectionHatchRegion
+            {
+                Category = SectionHatchCategory.Slab,
+                Boundary = new[]
+                {
+                    new Point3D(bottom.Start.X, bottom.Start.Y, 0),
+                    new Point3D(bottom.End.X, bottom.End.Y, 0),
+                    new Point3D(top.End.X, top.End.Y, 0),
+                    new Point3D(top.Start.X, top.Start.Y, 0)
+                }
+            });
+        }
+
+        return regions;
+    }
 }

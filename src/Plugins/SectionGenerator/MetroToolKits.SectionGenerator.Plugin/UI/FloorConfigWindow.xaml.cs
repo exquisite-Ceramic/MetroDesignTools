@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Extensions.Logging;
 using MetroToolKits.Foundation.Building.Types;
+using MetroToolKits.SectionGenerator.App.Models;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
 namespace MetroToolKits.SectionGenerator.Plugin.UI;
@@ -14,17 +15,17 @@ public partial class FloorConfigWindow : Window
 {
     private readonly ILogger<FloorConfigWindow> _logger;
     private readonly ObservableCollection<FloorConfig> _floors = new();
-    private SectionConfig _config = new();
+    private LoadedSectionConfig _document = new();
     private FloorConfig? _currentFloor;
 
-    public SectionConfig CurrentConfig => _config;
+    public LoadedSectionConfig CurrentDocument => _document;
 
     public FloorConfigWindow(
-        SectionConfig config,
+        LoadedSectionConfig document,
         ILogger<FloorConfigWindow> logger)
     {
         InitializeComponent();
-        _config = config;
+        _document = document;
         _logger = logger;
 
         FloorListBox.ItemsSource = _floors;
@@ -35,18 +36,18 @@ public partial class FloorConfigWindow : Window
     private void LoadConfig()
     {
         _floors.Clear();
-        foreach (var floor in _config.Floors)
+        foreach (var floor in _document.Config.Floors)
         {
             _floors.Add(floor);
         }
 
-        ConfigSourceStatus.Text = BuildConfigSourceStatus(_config.RuntimeState);
-        GlobalSlopeCheck.IsChecked = _config.GlobalSlopeEnabled;
-        GlobalSlopeValueBox.Text = (_config.GlobalSlopeValue * 100).ToString("F2");
-        GlobalSlopeTargetBox.SelectedIndex = _config.GlobalSlopeTarget == "FinishLayer" ? 1 : 0;
+        ConfigSourceStatus.Text = BuildConfigSourceStatus(_document.RuntimeState);
+        GlobalSlopeCheck.IsChecked = _document.Config.GlobalSlopeEnabled;
+        GlobalSlopeValueBox.Text = (_document.Config.GlobalSlopeValue * 100).ToString("F2");
+        GlobalSlopeTargetBox.SelectedIndex = _document.Config.GlobalSlopeTarget == "FinishLayer" ? 1 : 0;
         BaseFloorComboBox.SelectedItem = _floors.FirstOrDefault(floor =>
-            string.Equals(floor.Name, _config.AlignmentBaseFloorName, StringComparison.OrdinalIgnoreCase));
-        LoadOutputConfig(_config.OutputConfig);
+            string.Equals(floor.Name, _document.Config.AlignmentBaseFloorName, StringComparison.OrdinalIgnoreCase));
+        LoadOutputConfig(_document.OutputConfig);
 
         if (BaseFloorComboBox.SelectedItem == null && _floors.Count == 1)
         {
@@ -98,29 +99,29 @@ public partial class FloorConfigWindow : Window
 
     private void SaveOutputConfig()
     {
-        _config.OutputConfig ??= new SectionOutputConfig();
-        _config.OutputConfig.AnnotationOptions ??= new AnnotationOptions();
-        _config.OutputConfig.HatchOptions ??= new HatchOptions();
-        _config.OutputConfig.HatchOptions.WallHatch ??= HatchStyleOptions.CreateDefault();
-        _config.OutputConfig.HatchOptions.ColumnHatch ??= HatchStyleOptions.CreateDefault();
-        _config.OutputConfig.HatchOptions.SlabHatch ??= HatchStyleOptions.CreateDefault();
-        _config.OutputConfig.LayerOptions ??= new LayerOptions();
+        _document.OutputConfig ??= new SectionOutputConfig();
+        _document.OutputConfig.AnnotationOptions ??= new AnnotationOptions();
+        _document.OutputConfig.HatchOptions ??= new HatchOptions();
+        _document.OutputConfig.HatchOptions.WallHatch ??= HatchStyleOptions.CreateDefault();
+        _document.OutputConfig.HatchOptions.ColumnHatch ??= HatchStyleOptions.CreateDefault();
+        _document.OutputConfig.HatchOptions.SlabHatch ??= HatchStyleOptions.CreateDefault();
+        _document.OutputConfig.LayerOptions ??= new LayerOptions();
 
-        _config.OutputConfig.AnnotationOptions.GenerateAnnotations = GenerateAnnotationsCheck.IsChecked == true;
-        _config.OutputConfig.HatchOptions.Enabled = EnableHatchCheck.IsChecked == true;
+        _document.OutputConfig.AnnotationOptions.GenerateAnnotations = GenerateAnnotationsCheck.IsChecked == true;
+        _document.OutputConfig.HatchOptions.Enabled = EnableHatchCheck.IsChecked == true;
 
-        SaveHatchStyle(_config.OutputConfig.HatchOptions.WallHatch, WallHatchPatternBox, WallHatchScaleBox, WallHatchAngleBox, WallHatchByLayerCheck);
-        SaveHatchStyle(_config.OutputConfig.HatchOptions.ColumnHatch, ColumnHatchPatternBox, ColumnHatchScaleBox, ColumnHatchAngleBox, ColumnHatchByLayerCheck);
-        SaveHatchStyle(_config.OutputConfig.HatchOptions.SlabHatch, SlabHatchPatternBox, SlabHatchScaleBox, SlabHatchAngleBox, SlabHatchByLayerCheck);
+        SaveHatchStyle(_document.OutputConfig.HatchOptions.WallHatch, WallHatchPatternBox, WallHatchScaleBox, WallHatchAngleBox, WallHatchByLayerCheck);
+        SaveHatchStyle(_document.OutputConfig.HatchOptions.ColumnHatch, ColumnHatchPatternBox, ColumnHatchScaleBox, ColumnHatchAngleBox, ColumnHatchByLayerCheck);
+        SaveHatchStyle(_document.OutputConfig.HatchOptions.SlabHatch, SlabHatchPatternBox, SlabHatchScaleBox, SlabHatchAngleBox, SlabHatchByLayerCheck);
 
-        _config.OutputConfig.LayerOptions.CutLineLayer = CutLineLayerBox.Text.Trim();
-        _config.OutputConfig.LayerOptions.SightLineLayer = SightLineLayerBox.Text.Trim();
-        _config.OutputConfig.LayerOptions.AnnotationLayer = AnnotationLayerBox.Text.Trim();
-        _config.OutputConfig.LayerOptions.WallHatchLayer = WallHatchLayerBox.Text.Trim();
-        _config.OutputConfig.LayerOptions.ColumnHatchLayer = ColumnHatchLayerBox.Text.Trim();
-        _config.OutputConfig.LayerOptions.SlabHatchLayer = SlabHatchLayerBox.Text.Trim();
-        _config.OutputConfig.LayerOptions.StructuralLayer = StructuralLayerBox.Text.Trim();
-        _config.OutputConfig.LayerOptions.FinishLayer = FinishLayerBox.Text.Trim();
+        _document.OutputConfig.LayerOptions.CutLineLayer = CutLineLayerBox.Text.Trim();
+        _document.OutputConfig.LayerOptions.SightLineLayer = SightLineLayerBox.Text.Trim();
+        _document.OutputConfig.LayerOptions.AnnotationLayer = AnnotationLayerBox.Text.Trim();
+        _document.OutputConfig.LayerOptions.WallHatchLayer = WallHatchLayerBox.Text.Trim();
+        _document.OutputConfig.LayerOptions.ColumnHatchLayer = ColumnHatchLayerBox.Text.Trim();
+        _document.OutputConfig.LayerOptions.SlabHatchLayer = SlabHatchLayerBox.Text.Trim();
+        _document.OutputConfig.LayerOptions.StructuralLayer = StructuralLayerBox.Text.Trim();
+        _document.OutputConfig.LayerOptions.FinishLayer = FinishLayerBox.Text.Trim();
     }
 
     private static void SaveHatchStyle(
@@ -358,7 +359,7 @@ public partial class FloorConfigWindow : Window
             return;
         }
 
-        SaveCurrentEdits();
+        SaveFormEdits();
         DialogResult = null;
         Tag = ("PickAlignment", _currentFloor);
         Close();
@@ -384,7 +385,7 @@ public partial class FloorConfigWindow : Window
             return;
         }
 
-        SaveCurrentEdits();
+        SaveFormEdits();
         DialogResult = null;
         Tag = ("PickScope", _currentFloor);
         Close();
@@ -405,22 +406,7 @@ public partial class FloorConfigWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
-        SaveCurrentEdits();
-
-        _config.Floors = _floors.ToList();
-        _config.GlobalSlopeEnabled = GlobalSlopeCheck.IsChecked == true;
-        if (double.TryParse(GlobalSlopeValueBox.Text, out var globalSlope))
-        {
-            _config.GlobalSlopeValue = globalSlope / 100.0;
-        }
-
-        _config.GlobalSlopeTarget = (GlobalSlopeTargetBox.SelectedItem as ComboBoxItem)?.Tag?.ToString()
-                                    ?? "StructuralSlab";
-        _config.GlobalTopSlopeEnabled = _config.GlobalSlopeEnabled;
-        _config.GlobalTopSlopeValue = _config.GlobalSlopeValue;
-        _config.GlobalTopSlopeTarget = _config.GlobalSlopeTarget;
-        _config.AlignmentBaseFloorName = (BaseFloorComboBox.SelectedItem as FloorConfig)?.Name ?? string.Empty;
-        SaveOutputConfig();
+        SaveFormEdits();
 
         if (!ValidateBeforeSave(out var validationMessage))
         {
@@ -428,7 +414,7 @@ public partial class FloorConfigWindow : Window
             return;
         }
 
-        _logger.LogInformation("楼层配置编辑完成，待命令层保存，楼层数: {Count}", _config.Floors.Count);
+        _logger.LogInformation("楼层配置编辑完成，待命令层保存，楼层数: {Count}", _document.Config.Floors.Count);
         DialogResult = true;
         Close();
     }
@@ -442,7 +428,7 @@ public partial class FloorConfigWindow : Window
 
     private bool ValidateBeforeSave(out string message)
     {
-        if (_config.Floors.Count <= 1)
+        if (_document.Config.Floors.Count <= 1)
         {
             message = string.Empty;
             return true;
@@ -474,5 +460,25 @@ public partial class FloorConfigWindow : Window
 
         message = string.Empty;
         return true;
+    }
+
+    private void SaveFormEdits()
+    {
+        SaveCurrentEdits();
+
+        _document.Config.Floors = _floors.ToList();
+        _document.Config.GlobalSlopeEnabled = GlobalSlopeCheck.IsChecked == true;
+        if (double.TryParse(GlobalSlopeValueBox.Text, out var globalSlope))
+        {
+            _document.Config.GlobalSlopeValue = globalSlope / 100.0;
+        }
+
+        _document.Config.GlobalSlopeTarget = (GlobalSlopeTargetBox.SelectedItem as ComboBoxItem)?.Tag?.ToString()
+                                    ?? "StructuralSlab";
+        _document.Config.GlobalTopSlopeEnabled = _document.Config.GlobalSlopeEnabled;
+        _document.Config.GlobalTopSlopeValue = _document.Config.GlobalSlopeValue;
+        _document.Config.GlobalTopSlopeTarget = _document.Config.GlobalSlopeTarget;
+        _document.Config.AlignmentBaseFloorName = (BaseFloorComboBox.SelectedItem as FloorConfig)?.Name ?? string.Empty;
+        SaveOutputConfig();
     }
 }

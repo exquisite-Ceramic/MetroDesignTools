@@ -4,6 +4,7 @@ using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Diagnostics;
+using MetroToolKits.SectionGenerator.App.Models;
 using MetroToolKits.SectionGenerator.Core.Sections;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 

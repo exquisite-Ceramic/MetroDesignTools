@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Diagnostics;
+using MetroToolKits.SectionGenerator.App.Models;
 using MetroToolKits.SectionGenerator.Core.Sections;
 using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
@@ -40,7 +41,7 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
         _logger   = logger;
     }
 
-    public SectionConfig Load()
+    public LoadedSectionConfig Load()
     {
         _logger.LogDebug("加载配置文件: {FilePath}", _filePath);
 
@@ -70,12 +71,11 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
             }
 
             var migrationDiagnostics = new List<OperationDiagnostic>();
-            var config = MapToConfig(document, migrationDiagnostics, out var migratedFromLegacy, out var hasMigrationConflict);
-            config.OutputConfig = NormalizeOutputConfig(config.OutputConfig);
+            var loaded = MapToLoadedConfig(document, migrationDiagnostics, out var migratedFromLegacy, out var hasMigrationConflict);
 
             if (migrationDiagnostics.Count > 0)
             {
-                config.RuntimeDiagnostics.AddRange(migrationDiagnostics);
+                loaded.RuntimeDiagnostics.AddRange(migrationDiagnostics);
                 foreach (var diagnostic in migrationDiagnostics)
                 {
                     _logger.LogWarning(
@@ -87,12 +87,12 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
 
             if (migratedFromLegacy && !hasMigrationConflict)
             {
-                Save(config);
+                Save(loaded);
                 _logger.LogInformation("检测到旧版楼层配置，已自动迁移并保存为新格式: {FilePath}", _filePath);
             }
 
-            _logger.LogDebug("配置加载成功，楼层数: {FloorCount}", config.Floors.Count);
-            return config;
+            _logger.LogDebug("配置加载成功，楼层数: {FloorCount}", loaded.Config.Floors.Count);
+            return loaded;
         }
         catch (Exception ex)
         {
@@ -101,7 +101,7 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
         }
     }
 
-    public void Save(SectionConfig config)
+    public void Save(LoadedSectionConfig config)
     {
         var dir = Path.GetDirectoryName(_filePath);
         if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
@@ -123,15 +123,8 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
         return true;
     }
 
-    private static SectionConfig CreateDefault() => new()
+    private static LoadedSectionConfig CreateDefault() => new()
     {
-        GlobalTopSlopeEnabled = true,
-        GlobalTopSlopeValue   = 0.002,
-        GlobalTopSlopeTarget  = "StructuralSlab",
-        GlobalBottomSlopeEnabled = false,
-        GlobalBottomSlopeValue = 0,
-        GlobalBottomSlopeTarget = "StructuralSlab",
-        AlignmentBaseFloorName = "F1",
         OutputConfig = new SectionOutputConfig
         {
             AnnotationOptions = new AnnotationOptions
@@ -144,34 +137,44 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
             },
             LayerOptions = new LayerOptions()
         },
-        Floors = new List<FloorConfig>
+        Config = new SectionConfig
         {
-            new()
+            GlobalTopSlopeEnabled = true,
+            GlobalTopSlopeValue   = 0.002,
+            GlobalTopSlopeTarget  = "StructuralSlab",
+            GlobalBottomSlopeEnabled = false,
+            GlobalBottomSlopeValue = 0,
+            GlobalBottomSlopeTarget = "StructuralSlab",
+            AlignmentBaseFloorName = "F1",
+            Floors = new List<FloorConfig>
             {
-                Name = "F1",
-                Height = 5200,
-                FinishThickness = 120,
-                BottomSlabThickness = 800,
-                TopSlabThickness = 600,
-                HasSlope = true,
-                SlopeValue = 0.002,
-                BottomBoundarySlab = new BoundarySlabConfig
+                new()
                 {
-                    SlopeEnabled = false,
-                    SlopeValue = 0,
-                    SlopeTarget = "StructuralSlab"
-                },
-                TopBoundarySlab = new BoundarySlabConfig
-                {
-                    SlopeEnabled = true,
+                    Name = "F1",
+                    Height = 5200,
+                    FinishThickness = 120,
+                    BottomSlabThickness = 800,
+                    TopSlabThickness = 600,
+                    HasSlope = true,
                     SlopeValue = 0.002,
-                    SlopeTarget = "StructuralSlab"
+                    BottomBoundarySlab = new BoundarySlabConfig
+                    {
+                        SlopeEnabled = false,
+                        SlopeValue = 0,
+                        SlopeTarget = "StructuralSlab"
+                    },
+                    TopBoundarySlab = new BoundarySlabConfig
+                    {
+                        SlopeEnabled = true,
+                        SlopeValue = 0.002,
+                        SlopeTarget = "StructuralSlab"
+                    }
                 }
             }
         }
     };
 
-    private static SectionConfig MapToConfig(
+    private static LoadedSectionConfig MapToLoadedConfig(
         SectionConfigDocument document,
         ICollection<OperationDiagnostic> migrationDiagnostics,
         out bool migratedFromLegacy,
@@ -192,12 +195,15 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
             GlobalBottomSlopeValue = document.GlobalBottomSlopeValue ?? 0,
             GlobalBottomSlopeTarget = document.GlobalBottomSlopeTarget ?? "StructuralSlab",
             AlignmentBaseFloorName = document.AlignmentBaseFloorName ?? string.Empty,
-            OutputConfig = NormalizeOutputConfig(document.OutputConfig),
             Floors = document.Floors.Select(MapFloor).ToList()
         };
 
         if (!migratedFromLegacy)
-            return config;
+            return new LoadedSectionConfig
+            {
+                Config = config,
+                OutputConfig = NormalizeOutputConfig(document.OutputConfig)
+            };
 
         var canonicalSource = document.Floors
             .Select(f => ClonePoints(f.AlignmentSourcePoints))
@@ -239,25 +245,29 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
             }
         }
 
-        return config;
+        return new LoadedSectionConfig
+        {
+            Config = config,
+            OutputConfig = NormalizeOutputConfig(document.OutputConfig)
+        };
     }
 
-    private static SectionConfigDocument MapToDocument(SectionConfig config)
+    private static SectionConfigDocument MapToDocument(LoadedSectionConfig config)
     {
         return new SectionConfigDocument
         {
-            GlobalSlopeEnabled = config.GlobalSlopeEnabled,
-            GlobalSlopeValue = config.GlobalSlopeValue,
-            GlobalSlopeTarget = config.GlobalSlopeTarget,
-            GlobalTopSlopeEnabled = config.GlobalTopSlopeEnabled,
-            GlobalTopSlopeValue = config.GlobalTopSlopeValue,
-            GlobalTopSlopeTarget = config.GlobalTopSlopeTarget,
-            GlobalBottomSlopeEnabled = config.GlobalBottomSlopeEnabled,
-            GlobalBottomSlopeValue = config.GlobalBottomSlopeValue,
-            GlobalBottomSlopeTarget = config.GlobalBottomSlopeTarget,
-            AlignmentBaseFloorName = config.AlignmentBaseFloorName,
+            GlobalSlopeEnabled = config.Config.GlobalSlopeEnabled,
+            GlobalSlopeValue = config.Config.GlobalSlopeValue,
+            GlobalSlopeTarget = config.Config.GlobalSlopeTarget,
+            GlobalTopSlopeEnabled = config.Config.GlobalTopSlopeEnabled,
+            GlobalTopSlopeValue = config.Config.GlobalTopSlopeValue,
+            GlobalTopSlopeTarget = config.Config.GlobalTopSlopeTarget,
+            GlobalBottomSlopeEnabled = config.Config.GlobalBottomSlopeEnabled,
+            GlobalBottomSlopeValue = config.Config.GlobalBottomSlopeValue,
+            GlobalBottomSlopeTarget = config.Config.GlobalBottomSlopeTarget,
+            AlignmentBaseFloorName = config.Config.AlignmentBaseFloorName,
             OutputConfig = NormalizeOutputConfig(config.OutputConfig),
-            Floors = config.Floors.Select(floor => new FloorConfigDocument
+            Floors = config.Config.Floors.Select(floor => new FloorConfigDocument
             {
                 Name = floor.Name,
                 Height = floor.Height,

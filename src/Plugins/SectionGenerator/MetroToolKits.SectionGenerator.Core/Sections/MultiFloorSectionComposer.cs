@@ -73,8 +73,8 @@ public sealed class MultiFloorSectionComposer
         }
 
         var profile = floorData.VerticalProfile;
-        var bottomThickness = profile.GetBottomBoundaryTop(0) - profile.GetBottomBoundaryBottom(0);
-        var topThickness = profile.GetTopBoundaryTop(0) - profile.GetTopBoundaryBottom(0);
+        var bottomThickness = profile.GetBottomStructuralTop(0) - profile.GetBottomStructuralBottom(0);
+        var topThickness = profile.GetTopStructuralTop(0) - profile.GetTopStructuralBottom(0);
         return bottomThickness + floorData.FloorHeight + topThickness;
     }
 

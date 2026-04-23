@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using MetroToolKits.Bootstrap.Logging;
+using MetroToolKits.Foundation.Core.Runtime;
 
 namespace MetroToolKits.Bootstrap;
 
@@ -50,7 +51,6 @@ public static class Startup
             services.AddSingleton(_loggerFactory);
             // UserLogger 同时作为 IUserLogger 接口注册，供所有依赖 IUserLogger 的用例解析
             services.AddSingleton<MetroToolKits.Foundation.Core.Logging.IUserLogger>(userLogger);
-            services.AddSingleton<OperationFeedbackPresenter>();
             services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
 
             // 5. 加载插件

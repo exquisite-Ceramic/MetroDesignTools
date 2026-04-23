@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using MetroToolKits.SectionGenerator.App.Models;
 using MetroToolKits.SectionGenerator.App.Diagnostics;
 using MetroToolKits.SectionGenerator.Infrastructure.Repositories;
 
@@ -64,10 +65,10 @@ public class JsonFloorConfigRepositoryTests : IDisposable
         var repository = CreateRepository(filePath);
         var config = repository.Load();
 
-        config.AlignmentBaseFloorName.Should().Be("F1");
-        config.Floors[0].AlignmentPoints.Should().HaveCount(3);
-        config.Floors[1].AlignmentPoints[0].X.Should().Be(100);
-        config.Floors[0].ScopeBounds.Should().BeNull();
+        config.Config.AlignmentBaseFloorName.Should().Be("F1");
+        config.Config.Floors[0].AlignmentPoints.Should().HaveCount(3);
+        config.Config.Floors[1].AlignmentPoints[0].X.Should().Be(100);
+        config.Config.Floors[0].ScopeBounds.Should().BeNull();
 
         var persisted = File.ReadAllText(filePath);
         persisted.Should().Contain("AlignmentBaseFloorName");
@@ -121,7 +122,7 @@ public class JsonFloorConfigRepositoryTests : IDisposable
         var repository = CreateRepository(filePath);
         var config = repository.Load();
 
-        config.Floors.Single(f => f.Name == "F2").AlignmentPoints.Should().BeEmpty();
+        config.Config.Floors.Single(f => f.Name == "F2").AlignmentPoints.Should().BeEmpty();
         config.RuntimeDiagnostics.Should().Contain(d =>
             d.Code == SectionGenerationErrorCodes.AlignmentMigrationConflict);
     }
@@ -157,12 +158,16 @@ public class JsonFloorConfigRepositoryTests : IDisposable
             }
         };
 
-        repository.Save(original);
+        repository.Save(new LoadedSectionConfig
+        {
+            Config = original,
+            OutputConfig = new SectionOutputConfig()
+        });
         var loaded = repository.Load();
 
-        loaded.AlignmentBaseFloorName.Should().Be("F1");
-        loaded.Floors.Single().AlignmentPoints.Should().HaveCount(3);
-        loaded.Floors.Single().ScopeBounds.Should().Be(new MetroToolKits.Foundation.Core.Geometry.ScopeBounds2D
+        loaded.Config.AlignmentBaseFloorName.Should().Be("F1");
+        loaded.Config.Floors.Single().AlignmentPoints.Should().HaveCount(3);
+        loaded.Config.Floors.Single().ScopeBounds.Should().Be(new MetroToolKits.Foundation.Core.Geometry.ScopeBounds2D
         {
             MinX = 10,
             MinY = 20,

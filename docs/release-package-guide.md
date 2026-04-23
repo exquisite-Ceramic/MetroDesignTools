@@ -35,11 +35,9 @@ Notes:
 2. Start AutoCAD.
 3. Run `NETLOAD`.
 4. Select `MetroToolKits.Bootstrap.dll`.
-5. Run `SectionSelfTest`.
 
 Expected result:
 
-- AutoCAD prints `SECTION_SELF_TEST:OK`.
 - Commands such as `GenSection`, `FloorConfig`, and `ShowToolbox` become available.
 
 ---
@@ -69,7 +67,7 @@ The repository includes an automated smoke test script:
 
 The script will:
 
-1. Copy build output to a temporary ASCII directory.
+1. Copy the published package to a temporary ASCII directory.
 2. `NETLOAD MetroToolKits.Bootstrap.dll`.
-3. Run `SectionSelfTest`.
+3. Run the internal host self-test command.
 4. Check the log for `SECTION_SELF_TEST:OK`.

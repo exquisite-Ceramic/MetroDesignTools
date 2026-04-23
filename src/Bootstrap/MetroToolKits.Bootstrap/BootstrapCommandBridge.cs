@@ -1,4 +1,5 @@
 using AcadApplication = Autodesk.AutoCAD.ApplicationServices.Application;
+using MetroToolKits.Foundation.Core.Hosting;
 
 [assembly: Autodesk.AutoCAD.Runtime.CommandClass(typeof(MetroToolKits.Bootstrap.BootstrapCommandBridge))]
 
@@ -54,13 +55,15 @@ public sealed class BootstrapCommandBridge
     public void LayerMapping()
         => Execute(SectionGeneratorCommandNames.LayerMapping);
 
-    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.SectionSelfTest)]
+#if HOST_AUTOMATION
+    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.SectionSelfTestInternal)]
     public void SectionSelfTest()
-        => Execute(SectionGeneratorCommandNames.SectionSelfTest);
+        => Execute(SectionGeneratorCommandNames.SectionSelfTestInternal);
 
-    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.SectionHostAcceptance)]
+    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.SectionHostAcceptanceInternal)]
     public void SectionHostAcceptance()
-        => Execute(SectionGeneratorCommandNames.SectionHostAcceptance);
+        => Execute(SectionGeneratorCommandNames.SectionHostAcceptanceInternal);
+#endif
 
     private static void Execute(string commandName)
     {

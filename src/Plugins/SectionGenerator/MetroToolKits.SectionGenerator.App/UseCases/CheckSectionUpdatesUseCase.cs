@@ -2,8 +2,9 @@ using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
-using MetroToolKits.SectionGenerator.App.Diagnostics;
 using MetroToolKits.SectionGenerator.App.Abstractions;
+using MetroToolKits.SectionGenerator.App.Diagnostics;
+using MetroToolKits.SectionGenerator.App.Support;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
 namespace MetroToolKits.SectionGenerator.App.UseCases;
@@ -14,6 +15,7 @@ namespace MetroToolKits.SectionGenerator.App.UseCases;
 public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
 {
     private readonly ISectionSnapshotRepository _snapshotRepo;
+    private readonly ISectionBlockQueryService _sectionBlockQueryService;
     private readonly ISectionLineResolver _sectionLineResolver;
     private readonly IElementRecognizer _elementRecognizer;
     private readonly IFloorConfigRepository _configRepo;
@@ -25,6 +27,7 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
 
     public CheckSectionUpdatesUseCase(
         ISectionSnapshotRepository snapshotRepo,
+        ISectionBlockQueryService sectionBlockQueryService,
         ISectionLineResolver sectionLineResolver,
         IElementRecognizer elementRecognizer,
         IFloorConfigRepository configRepo,
@@ -32,6 +35,7 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
         ILogger<CheckSectionUpdatesUseCase> logger)
         : this(
             snapshotRepo,
+            sectionBlockQueryService,
             sectionLineResolver,
             elementRecognizer,
             configRepo,
@@ -43,6 +47,7 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
 
     public CheckSectionUpdatesUseCase(
         ISectionSnapshotRepository snapshotRepo,
+        ISectionBlockQueryService sectionBlockQueryService,
         ISectionLineResolver sectionLineResolver,
         IElementRecognizer elementRecognizer,
         IFloorConfigRepository configRepo,
@@ -51,6 +56,7 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
         ILogger<CheckSectionUpdatesUseCase> logger)
     {
         _snapshotRepo      = snapshotRepo;
+        _sectionBlockQueryService = sectionBlockQueryService;
         _sectionLineResolver = sectionLineResolver;
         _elementRecognizer = elementRecognizer;
         _configRepo        = configRepo;
@@ -67,12 +73,12 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
         _logger.LogInformation("执行变更检测命令");
         var diagnostics = new List<OperationDiagnostic>();
 
-        var handles = _snapshotRepo.FindAllSectionBlockHandles();
+        var handles = _sectionBlockQueryService.FindAllSectionBlockHandles();
         _logger.LogDebug("扫描剖面块，共 {Count} 个", handles.Count);
 
         var results = new List<SectionCheckResult>();
-        var sourceConfig  = _configRepo.Load();
-        diagnostics.AddRange(sourceConfig.RuntimeDiagnostics);
+        var sourceDocument  = _configRepo.Load();
+        diagnostics.AddRange(sourceDocument.RuntimeDiagnostics);
 
         foreach (var handle in handles)
         {
@@ -92,15 +98,13 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
             // 重新计算当前哈希，与快照比对
             var outdatedFloors = new List<string>();
             var skippedFloors = new List<string>();
-            var expectedFloorNames = snapshot.GeneratedFloorNames.Count > 0
-                ? snapshot.GeneratedFloorNames
-                : snapshot.FloorSnapshots.Select(floor => floor.FloorName).ToList();
+            var expectedFloorNames = ResolveExpectedFloorNames(snapshot);
 
             if (!SectionExecutionConfigBuilder.TryBuild(
-                    sourceConfig,
+                    sourceDocument,
                     expectedFloorNames,
                     snapshot.TargetFloorName,
-                    out var config,
+                    out var executionDocument,
                     out var configError))
             {
                 results.Add(new SectionCheckResult
@@ -115,6 +119,8 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
                 continue;
             }
 
+            var config = executionDocument.Config;
+            var outputConfig = executionDocument.OutputConfig;
             var currentSourceLine = AlignToSnapshotDirection(ResolveSectionLine(snapshot), snapshot);
             var alignmentResolution = _alignmentResolver.Resolve(currentSourceLine, config);
             if (alignmentResolution.FatalIssue != null)
@@ -181,7 +187,9 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
 
                 var baseElevation = ComputeBaseElevation(config, floor.Name, currentSourceLine.Length);
                 var verticalProfile = _verticalProfileBuilder.Build(floor, currentSourceLine.Length, baseElevation);
-                var currentHash = _hasher.ComputeHash(elements, floor, verticalProfile);
+                var currentHash = SectionOutputConfigHasher.Combine(
+                    _hasher.ComputeHash(elements, floor, verticalProfile),
+                    outputConfig);
 
                 _logger.LogDebug("剖面块 {BlockName}，楼层 {FloorName}，旧哈希: {OldHash}，新哈希: {NewHash}",
                     snapshot.BlockName, floorSnap.FloorName, floorSnap.GeometryHash, currentHash);
@@ -287,6 +295,20 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
         return Vector3D.Dot(snapshotDirection.Normalized, currentDirection.Normalized) < 0
             ? new Foundation.Core.Geometry.Line3D(currentLine.End, currentLine.Start)
             : currentLine;
+    }
+
+    private static IReadOnlyList<string> ResolveExpectedFloorNames(SectionSnapshot snapshot)
+    {
+        if (snapshot.ExecutionFloorNames.Count > 0)
+        {
+            return snapshot.ExecutionFloorNames;
+        }
+
+        return string.IsNullOrWhiteSpace(snapshot.TargetFloorName)
+            ? Array.Empty<string>()
+            : snapshot.GeneratedFloorNames.Count > 0
+                ? snapshot.GeneratedFloorNames
+                : snapshot.FloorSnapshots.Select(floor => floor.FloorName).ToList();
     }
 
     private CheckSectionUpdatesResult BuildFailedResult(

@@ -13,7 +13,8 @@ public class FindRelatedSectionsUseCaseTests
     public void Execute_SourceHandleMissing_ReturnsFailedResult()
     {
         var repo = Substitute.For<ISectionSnapshotRepository>();
-        var useCase = new FindRelatedSectionsUseCase(repo, NullLogger<FindRelatedSectionsUseCase>.Instance);
+        var blockQueryService = Substitute.For<ISectionBlockQueryService>();
+        var useCase = new FindRelatedSectionsUseCase(repo, blockQueryService, NullLogger<FindRelatedSectionsUseCase>.Instance);
 
         var result = useCase.Execute(new FindRelatedSectionsRequest());
 
@@ -25,7 +26,8 @@ public class FindRelatedSectionsUseCaseTests
     public void Execute_WhenSnapshotContainsHandle_ReturnsMatchingSections()
     {
         var repo = Substitute.For<ISectionSnapshotRepository>();
-        repo.FindAllSectionBlockHandles().Returns(new[] { "A1", "B2" });
+        var blockQueryService = Substitute.For<ISectionBlockQueryService>();
+        blockQueryService.FindAllSectionBlockHandles().Returns(new[] { "A1", "B2" });
         repo.Load("A1").Returns(new SectionSnapshot
         {
             BlockName = "剖面A",
@@ -53,7 +55,7 @@ public class FindRelatedSectionsUseCaseTests
             }
         });
 
-        var useCase = new FindRelatedSectionsUseCase(repo, NullLogger<FindRelatedSectionsUseCase>.Instance);
+        var useCase = new FindRelatedSectionsUseCase(repo, blockQueryService, NullLogger<FindRelatedSectionsUseCase>.Instance);
         var result = useCase.Execute(new FindRelatedSectionsRequest { SourceHandle = "200" });
 
         result.Success.Should().BeTrue();
@@ -67,7 +69,8 @@ public class FindRelatedSectionsUseCaseTests
     public void Execute_WhenMultipleMatchesExist_ReturnsByGeneratedAtDescending()
     {
         var repo = Substitute.For<ISectionSnapshotRepository>();
-        repo.FindAllSectionBlockHandles().Returns(new[] { "A1", "B2" });
+        var blockQueryService = Substitute.For<ISectionBlockQueryService>();
+        blockQueryService.FindAllSectionBlockHandles().Returns(new[] { "A1", "B2" });
         repo.Load("A1").Returns(new SectionSnapshot
         {
             BlockName = "较早剖面",
@@ -95,7 +98,7 @@ public class FindRelatedSectionsUseCaseTests
             }
         });
 
-        var useCase = new FindRelatedSectionsUseCase(repo, NullLogger<FindRelatedSectionsUseCase>.Instance);
+        var useCase = new FindRelatedSectionsUseCase(repo, blockQueryService, NullLogger<FindRelatedSectionsUseCase>.Instance);
         var result = useCase.Execute(new FindRelatedSectionsRequest { SourceHandle = "ABC" });
 
         result.Sections.Select(x => x.BlockHandle).Should().Equal("B2", "A1");

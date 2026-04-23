@@ -34,6 +34,7 @@ public sealed class SectionSnapshot
     public string? LocalScopeFloorName   { get; set; }
     public DateTime GeneratedAt          { get; set; } = DateTime.Now;
     public double TotalHeight            { get; set; }
+    public List<string> ExecutionFloorNames { get; set; } = new();
     public List<string> GeneratedFloorNames { get; set; } = new();
     public List<FloorSnapshot> FloorSnapshots { get; set; } = new();
 }

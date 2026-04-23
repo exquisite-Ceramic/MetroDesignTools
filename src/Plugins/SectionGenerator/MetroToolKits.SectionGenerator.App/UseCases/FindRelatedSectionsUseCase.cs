@@ -9,13 +9,16 @@ namespace MetroToolKits.SectionGenerator.App.UseCases;
 public sealed class FindRelatedSectionsUseCase : IFindRelatedSectionsUseCase
 {
     private readonly ISectionSnapshotRepository _snapshotRepository;
+    private readonly ISectionBlockQueryService _sectionBlockQueryService;
     private readonly ILogger<FindRelatedSectionsUseCase> _logger;
 
     public FindRelatedSectionsUseCase(
         ISectionSnapshotRepository snapshotRepository,
+        ISectionBlockQueryService sectionBlockQueryService,
         ILogger<FindRelatedSectionsUseCase> logger)
     {
         _snapshotRepository = snapshotRepository;
+        _sectionBlockQueryService = sectionBlockQueryService;
         _logger = logger;
     }
 
@@ -31,7 +34,7 @@ public sealed class FindRelatedSectionsUseCase : IFindRelatedSectionsUseCase
         }
 
         var results = new List<RelatedSectionInfo>();
-        foreach (var blockHandle in _snapshotRepository.FindAllSectionBlockHandles())
+        foreach (var blockHandle in _sectionBlockQueryService.FindAllSectionBlockHandles())
         {
             var snapshot = _snapshotRepository.Load(blockHandle);
             if (snapshot == null)

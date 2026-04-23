@@ -1,4 +1,5 @@
 using MetroToolKits.Foundation.Core.Geometry;
+using MetroToolKits.SectionGenerator.App.Models;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
 namespace MetroToolKits.SectionGenerator.App.Abstractions;

@@ -1,4 +1,4 @@
-using MetroToolKits.SectionGenerator.Core.Sections;
+using MetroToolKits.SectionGenerator.App.Models;
 
 namespace MetroToolKits.SectionGenerator.App.Abstractions;
 
@@ -7,6 +7,6 @@ namespace MetroToolKits.SectionGenerator.App.Abstractions;
 /// </summary>
 public interface IFloorConfigRepository
 {
-    SectionConfig Load();
-    void Save(SectionConfig config);
+    LoadedSectionConfig Load();
+    void Save(LoadedSectionConfig config);
 }

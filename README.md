@@ -70,7 +70,6 @@ NETLOAD
 | `ConvertRegion` | 区域引导构件转换 |
 | `RevertConversion` | 恢复构件转换 |
 | `RevertAllConversions` | 恢复当前图中的全部转换 |
-| `SectionSelfTest` | 宿主自检 |
 
 ---
 
@@ -80,6 +79,7 @@ NETLOAD
 - `Microsoft.Extensions.*` 程序集会在构建/发布时从当前项目输出复制到插件目录
 - 发布包默认包含 `SectionGeneratorConfig.json`、`ElementTypes.json` 和 `README-release.md`
 - 运行期可写配置与日志默认落在按包隔离的用户目录 `%LOCALAPPDATA%\MetroToolKits\Packages\<package-scope>\...`，发布包中的 JSON 文件只作为初始化模板保留
+- 宿主烟测与宿主验收命令仅供自动化脚本内部调用，正常用户命令面不再暴露
 
 ---
 

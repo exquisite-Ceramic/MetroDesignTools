@@ -12,10 +12,20 @@ public interface ISectionSnapshotRepository
 
     /// <summary>从块的 XData 读取快照</summary>
     SectionSnapshot? Load(string blockHandle);
+}
 
-    /// <summary>扫描图纸中所有剖面块，返回块句柄列表</summary>
+/// <summary>
+/// 查询图纸中的剖面块。
+/// </summary>
+public interface ISectionBlockQueryService
+{
     IReadOnlyList<string> FindAllSectionBlockHandles();
+}
 
-    /// <summary>读取块定义中可见剖面几何的最小 X，用于旧快照兼容。</summary>
+/// <summary>
+/// 读取旧剖面块中与布局恢复相关的几何信息。
+/// </summary>
+public interface ISectionGeometryRecoveryService
+{
     double? ResolveBlockGeometryAnchorX(string blockHandle);
 }

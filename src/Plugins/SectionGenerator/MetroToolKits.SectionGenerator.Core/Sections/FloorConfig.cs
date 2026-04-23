@@ -1,6 +1,4 @@
-using System.Text.Json.Serialization;
 using MetroToolKits.Foundation.Building.Types;
-using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
 
 namespace MetroToolKits.SectionGenerator.Core.Sections;
@@ -54,71 +52,4 @@ public sealed class SectionConfig
 
     public string AlignmentBaseFloorName { get; set; } = string.Empty;
     public List<FloorConfig> Floors { get; set; } = new();
-    public SectionOutputConfig OutputConfig { get; set; } = new();
-
-    /// <summary>读取仓储时附带的运行期诊断，不参与持久化。</summary>
-    [JsonIgnore]
-    public List<OperationDiagnostic> RuntimeDiagnostics { get; set; } = new();
-
-    /// <summary>当前配置的运行期来源信息，不参与持久化。</summary>
-    [JsonIgnore]
-    public SectionConfigRuntimeState RuntimeState { get; set; } = new();
-}
-
-public sealed class SectionOutputConfig
-{
-    public AnnotationOptions AnnotationOptions { get; set; } = new();
-    public HatchOptions HatchOptions { get; set; } = new();
-    public LayerOptions LayerOptions { get; set; } = new();
-}
-
-public sealed class AnnotationOptions
-{
-    public bool GenerateAnnotations { get; set; }
-}
-
-public sealed class HatchOptions
-{
-    public bool Enabled { get; set; }
-    public HatchStyleOptions WallHatch { get; set; } = HatchStyleOptions.CreateDefault();
-    public HatchStyleOptions ColumnHatch { get; set; } = HatchStyleOptions.CreateDefault();
-    public HatchStyleOptions SlabHatch { get; set; } = HatchStyleOptions.CreateDefault();
-}
-
-public sealed class HatchStyleOptions
-{
-    public string PatternName { get; set; } = "ANSI31";
-    public double Scale { get; set; } = 100.0;
-    public double Angle { get; set; }
-    public bool UseByLayer { get; set; } = true;
-
-    public static HatchStyleOptions CreateDefault() => new();
-}
-
-public sealed class LayerOptions
-{
-    public string CutLineLayer { get; set; } = "MK_剖切线";
-    public string SightLineLayer { get; set; } = "MK_看线";
-    public string AnnotationLayer { get; set; } = "MK_标注";
-    public string WallHatchLayer { get; set; } = "MK_墙填充";
-    public string ColumnHatchLayer { get; set; } = "MK_柱填充";
-    public string SlabHatchLayer { get; set; } = "MK_楼板填充";
-    public string StructuralLayer { get; set; } = "MK_结构输出";
-    public string FinishLayer { get; set; } = "MK_装修输出";
-}
-
-public enum SectionConfigStorageSource
-{
-    EmbeddedDwg,
-    TransientUnsavedDrawing,
-    Missing
-}
-
-public sealed class SectionConfigRuntimeState
-{
-    public SectionConfigStorageSource Source { get; set; } = SectionConfigStorageSource.Missing;
-    public bool IsCurrentDrawingSaved { get; set; }
-    public bool HasPersistedConfig { get; set; }
-    public string DrawingDisplayName { get; set; } = string.Empty;
-    public string? DrawingPath { get; set; }
 }

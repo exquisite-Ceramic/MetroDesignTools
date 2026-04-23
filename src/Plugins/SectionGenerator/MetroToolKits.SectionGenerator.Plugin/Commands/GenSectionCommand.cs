@@ -2,11 +2,12 @@ using MetroToolKits.Foundation.Core.Logging;
 using System.Diagnostics;
 using Autodesk.AutoCAD.EditorInput;
 using Microsoft.Extensions.Logging;
-using MetroToolKits.Bootstrap;
-using MetroToolKits.Bootstrap.Logging;
+using MetroToolKits.Foundation.Core.Hosting;
 using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.App.Diagnostics;
+using MetroToolKits.SectionGenerator.App.Models;
+using MetroToolKits.SectionGenerator.App.Support;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Core.Sections;
 using MetroToolKits.SectionGenerator.Plugin.Selection;
@@ -168,9 +169,10 @@ public sealed class GenSectionCommand
             sw.ElapsedMilliseconds);
     }
 
-    private static bool TryPromptTargetFloor(Editor editor, SectionConfig config, out string? targetFloorName)
+    private static bool TryPromptTargetFloor(Editor editor, LoadedSectionConfig configDocument, out string? targetFloorName)
     {
         targetFloorName = null;
+        var config = configDocument.Config;
         if (config.Floors.Count <= 1)
             return true;
 
@@ -209,13 +211,14 @@ public sealed class GenSectionCommand
 
     private bool TryPromptLocalScope(
         Autodesk.AutoCAD.ApplicationServices.Document document,
-        SectionConfig config,
+        LoadedSectionConfig configDocument,
         string? targetFloorName,
         out ScopeBounds2D? localScopeBounds,
         out string? localScopeFloorName)
     {
         localScopeBounds = null;
         localScopeFloorName = null;
+        var config = configDocument.Config;
 
         var editor = document.Editor;
         var options = new PromptKeywordOptions("\n是否选择本次局部范围 [Yes/No] <No>: ")
