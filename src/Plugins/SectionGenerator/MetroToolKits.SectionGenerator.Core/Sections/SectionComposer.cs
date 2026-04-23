@@ -1,21 +1,19 @@
 using MetroToolKits.Foundation.Building.Elements;
-using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.Foundation.Core.Geometry;
 
 namespace MetroToolKits.SectionGenerator.Core.Sections;
 
 /// <summary>
 /// 剖面组合器 - 核心算法层
-/// 接收剖切线和构件列表，计算并返回局部剖面坐标中的 SectionGeometryData
+/// 接收剖切线和构件列表，计算并返回局部剖面坐标中的 SectionGeometryData。
+/// 主线稳定版不依赖复合墙/复合楼板模板体系。
 /// </summary>
 public sealed class SectionComposer
 {
     private readonly FloorVerticalProfileBuilder _verticalProfileBuilder;
 
     public SectionComposer()
-        : this(new FloorVerticalProfileBuilder(
-            new InMemorySlabAssemblyTemplateCatalog(),
-            new SlabAssemblyBuilder()))
+        : this(new FloorVerticalProfileBuilder())
     {
     }
 
@@ -24,14 +22,6 @@ public sealed class SectionComposer
         _verticalProfileBuilder = verticalProfileBuilder;
     }
 
-    /// <summary>
-    /// 生成单层剖面几何数据
-    /// </summary>
-    /// <param name="sectionLine">剖切线（平面坐标）</param>
-    /// <param name="viewDirection">视图方向（看线方向）</param>
-    /// <param name="elements">该层所有构件</param>
-    /// <param name="floorConfig">楼层配置</param>
-    /// <param name="baseElevation">楼层底部绝对标高</param>
     public SectionGeometryData Generate(
         Line3D sectionLine,
         Vector3D viewDirection,
@@ -39,7 +29,6 @@ public sealed class SectionComposer
         FloorConfig floorConfig,
         double baseElevation = 0)
     {
-        var elementDataList = new List<ElementSectionData>();
         var projector = new SectionCoordinateProjector(sectionLine);
         var verticalProfile = _verticalProfileBuilder.Build(floorConfig, projector.SectionLength, baseElevation);
         var context = new SectionGeometryContext
@@ -49,57 +38,51 @@ public sealed class SectionComposer
             Projector = projector,
             VerticalProfile = verticalProfile
         };
-        var elementList = elements.ToList();
-        var slabElements = elementList
-            .Where(element => element is Slab or CompositeSlabElement)
-            .ToList();
-        var nonSlabElements = elementList
-            .Where(element => element is not Slab && element is not CompositeSlabElement)
-            .ToList();
 
+        var elementList = elements.ToList();
+        var slabElements = elementList.OfType<Slab>().Cast<BuildingElement>().ToList();
+        var nonSlabElements = elementList.Except(slabElements).ToList();
+
+        var elementDataList = new List<ElementSectionData>();
         foreach (var element in nonSlabElements)
         {
-            var elementData = BuildNonSlabElementData(element, context);
-            if (elementData == null || elementData.CutLineSegments.Count == 0)
+            var data = BuildNonSlabElementData(element, context);
+            if (data == null || data.CutLineSegments.Count == 0)
             {
                 continue;
             }
 
-            elementDataList.Add(elementData);
+            elementDataList.Add(data);
         }
 
         var wallIntervals = elementDataList
             .Where(element => string.Equals(element.ElementType, "Wall", StringComparison.OrdinalIgnoreCase))
             .Select(element =>
             {
-                var xs = element.CutLines
+                var xValues = element.CutLineSegments
+                    .Select(segment => segment.Line)
                     .SelectMany(line => new[] { line.Start.X, line.End.X })
                     .ToList();
-                return xs.Count == 0
-                    ? ((double StartX, double EndX)?)null
-                    : (xs.Min(), xs.Max());
+                return xValues.Count == 0 ? ((double StartX, double EndX)?)null : (xValues.Min(), xValues.Max());
             })
             .Where(interval => interval.HasValue && interval.Value.EndX - interval.Value.StartX > 1e-6)
             .Select(interval => interval!.Value)
             .ToList();
 
-        foreach (var slabElement in slabElements)
+        foreach (var slab in slabElements.OfType<Slab>())
         {
-            var slabData = BuildDisplayedSlabElementData(slabElement, context, wallIntervals);
-            if (slabData == null || slabData.CutLines.Count == 0)
+            var data = BuildLegacySlabElementData(slab, context, wallIntervals);
+            if (data == null || data.CutLineSegments.Count == 0)
             {
                 continue;
             }
 
-            elementDataList.Add(slabData);
+            elementDataList.Add(data);
         }
 
-        // 生成楼层边界板剖面线（顶板/底板），输出到局部剖面坐标
         var slabLineSegments = _verticalProfileBuilder.BuildBoundaryLineSegments(floorConfig, verticalProfile, wallIntervals)
             .Where(segment => !IsDegenerate(segment.Line))
             .ToList();
-        var slabLines = slabLineSegments.Select(segment => segment.Line).ToList();
-        var hatchRegions = _verticalProfileBuilder.BuildBoundaryHatchRegions(floorConfig, verticalProfile);
 
         return new SectionGeometryData
         {
@@ -108,205 +91,9 @@ public sealed class SectionComposer
             FloorHeight = floorConfig.Height,
             VerticalProfile = verticalProfile,
             Elements = elementDataList,
-            SlabLines = slabLines,
+            SlabLines = slabLineSegments.Select(segment => segment.Line).ToList(),
             SlabLineSegments = slabLineSegments,
-            HatchRegions = hatchRegions
-        };
-    }
-
-    private static bool IsDegenerate(Line3D line, double tolerance = 1e-6)
-        => line.Start.DistanceTo(line.End) <= tolerance;
-
-    private static ElementSectionData? BuildDisplayedSlabElementData(
-        BuildingElement element,
-        SectionGeometryContext context,
-        IReadOnlyList<(double StartX, double EndX)> wallIntervals)
-    {
-        return element switch
-        {
-            CompositeSlabElement compositeSlab => BuildCompositeSlabElementData(compositeSlab, context, wallIntervals),
-            Slab slab => BuildLegacySlabElementData(slab, context),
-            _ => null
-        };
-    }
-
-    private static ElementSectionData? BuildLegacySlabElementData(Slab slab, SectionGeometryContext context)
-    {
-        if (!TryResolveSlabSpan(slab.Outline, context.SectionLine, out var left, out var right))
-        {
-            return null;
-        }
-
-        var topLine = context.Projector.ProjectLine(new Line3D(
-            new Point3D(left.X, left.Y, slab.TopElevation),
-            new Point3D(right.X, right.Y, slab.TopElevation)));
-        var bottomLine = context.Projector.ProjectLine(new Line3D(
-            new Point3D(left.X, left.Y, slab.TopElevation - slab.Thickness),
-            new Point3D(right.X, right.Y, slab.TopElevation - slab.Thickness)));
-
-        var cutLines = new[] { topLine, bottomLine }
-            .Where(line => !IsDegenerate(line))
-            .ToList();
-        if (cutLines.Count == 0)
-        {
-            return null;
-        }
-
-        var cutLineSegments = cutLines
-            .Select(line => new SectionLineSegment
-            {
-                Line = line,
-                Role = SectionLineRole.Structural
-            })
-            .ToList();
-        var hatchRegions = new[]
-        {
-            new SectionHatchRegion
-            {
-                Category = SectionHatchCategory.Slab,
-                Boundary = new[]
-                {
-                    new Point3D(topLine.Start.X, bottomLine.Start.Y, 0),
-                    new Point3D(topLine.End.X, bottomLine.End.Y, 0),
-                    new Point3D(topLine.End.X, topLine.End.Y, 0),
-                    new Point3D(topLine.Start.X, topLine.Start.Y, 0)
-                }
-            }
-        };
-
-        return new ElementSectionData
-        {
-            SourceHandle = slab.SourceHandle ?? string.Empty,
-            SourceHandles = slab.SourceHandles.Count > 0
-                ? slab.SourceHandles
-                : string.IsNullOrWhiteSpace(slab.SourceHandle)
-                    ? Array.Empty<string>()
-                    : new[] { slab.SourceHandle },
-            ElementType = slab.ElementType,
-            CutLines = cutLines,
-            CutLineSegments = cutLineSegments,
-            SightLines = Array.Empty<Line3D>(),
-            HatchRegions = hatchRegions
-        };
-    }
-
-    private static ElementSectionData? BuildCompositeSlabElementData(
-        CompositeSlabElement slab,
-        SectionGeometryContext context,
-        IReadOnlyList<(double StartX, double EndX)> wallIntervals)
-    {
-        if (!TryResolveSlabSpan(slab.CoreArea.Outline, context.SectionLine, out var left, out var right))
-        {
-            return null;
-        }
-
-        var cutLines = new List<Line3D>();
-        var cutLineSegments = new List<SectionLineSegment>();
-        var visibleCore = slab.LayerSections.FirstOrDefault(layer => layer.IsCore && layer.VisibleInSection);
-        if (visibleCore != null)
-        {
-            var coreTopLines = ProjectDisplayedLine(
-                left,
-                right,
-                slab.CoreArea.CoreTopElevation + GetUpperSurfaceOffset(visibleCore),
-                context,
-                clipAtWalls: false,
-                wallIntervals).ToList();
-            var coreBottomLines = ProjectDisplayedLine(
-                left,
-                right,
-                slab.CoreArea.CoreTopElevation + GetLowerSurfaceOffset(visibleCore),
-                context,
-                clipAtWalls: false,
-                wallIntervals).ToList();
-            cutLines.AddRange(coreTopLines);
-            cutLines.AddRange(coreBottomLines);
-            cutLineSegments.AddRange(coreTopLines.Concat(coreBottomLines).Select(line => new SectionLineSegment
-            {
-                Line = line,
-                Role = SectionLineRole.Structural
-            }));
-        }
-
-        var topFinish = slab.LayerSections
-            .Where(layer => !layer.IsCore && layer.VisibleInSection && layer.Side == SlabLayerSide.Top)
-            .OrderByDescending(GetUpperSurfaceOffset)
-            .FirstOrDefault();
-        if (topFinish != null)
-        {
-            var topFinishLines = ProjectDisplayedLine(
-                left,
-                right,
-                slab.CoreArea.CoreTopElevation + GetUpperSurfaceOffset(topFinish),
-                context,
-                clipAtWalls: slab.WallJunctionMode == SlabWallJunctionMode.StopAtWallFace,
-                wallIntervals).ToList();
-            cutLines.AddRange(topFinishLines);
-            cutLineSegments.AddRange(topFinishLines.Select(line => new SectionLineSegment
-            {
-                Line = line,
-                Role = SectionLineRole.Finish
-            }));
-        }
-
-        var bottomFinish = slab.LayerSections
-            .Where(layer => !layer.IsCore && layer.VisibleInSection && layer.Side == SlabLayerSide.Bottom)
-            .OrderBy(GetLowerSurfaceOffset)
-            .FirstOrDefault();
-        if (bottomFinish != null)
-        {
-            var bottomFinishLines = ProjectDisplayedLine(
-                left,
-                right,
-                slab.CoreArea.CoreTopElevation + GetLowerSurfaceOffset(bottomFinish),
-                context,
-                clipAtWalls: slab.WallJunctionMode == SlabWallJunctionMode.StopAtWallFace,
-                wallIntervals).ToList();
-            cutLines.AddRange(bottomFinishLines);
-            cutLineSegments.AddRange(bottomFinishLines.Select(line => new SectionLineSegment
-            {
-                Line = line,
-                Role = SectionLineRole.Finish
-            }));
-        }
-
-        cutLines = cutLines
-            .Where(line => !IsDegenerate(line))
-            .ToList();
-        if (cutLines.Count == 0)
-        {
-            return null;
-        }
-
-        return new ElementSectionData
-        {
-            SourceHandle = slab.SourceHandle ?? string.Empty,
-            SourceHandles = slab.SourceHandles.Count > 0
-                ? slab.SourceHandles
-                : string.IsNullOrWhiteSpace(slab.SourceHandle)
-                    ? Array.Empty<string>()
-                    : new[] { slab.SourceHandle },
-            ElementType = slab.ElementType,
-            TemplateId = slab.TemplateId,
-            CutLines = cutLines,
-            CutLineSegments = cutLineSegments,
-            SightLines = Array.Empty<Line3D>(),
-            HatchRegions = visibleCore == null
-                ? Array.Empty<SectionHatchRegion>()
-                : new[]
-                {
-                    new SectionHatchRegion
-                    {
-                        Category = SectionHatchCategory.Slab,
-                        Boundary = new[]
-                        {
-                            new Point3D(context.Projector.GetChainage(left), slab.CoreArea.CoreTopElevation + GetLowerSurfaceOffset(visibleCore), 0),
-                            new Point3D(context.Projector.GetChainage(right), slab.CoreArea.CoreTopElevation + GetLowerSurfaceOffset(visibleCore), 0),
-                            new Point3D(context.Projector.GetChainage(right), slab.CoreArea.CoreTopElevation + GetUpperSurfaceOffset(visibleCore), 0),
-                            new Point3D(context.Projector.GetChainage(left), slab.CoreArea.CoreTopElevation + GetUpperSurfaceOffset(visibleCore), 0)
-                        }
-                    }
-                }
+            HatchRegions = _verticalProfileBuilder.BuildBoundaryHatchRegions(floorConfig, verticalProfile)
         };
     }
 
@@ -314,73 +101,45 @@ public sealed class SectionComposer
     {
         return element switch
         {
-            CompositeWallElement compositeWall => BuildCompositeWallElementData(compositeWall, context),
-            Column column => BuildColumnElementData(column, context),
             Wall wall => BuildLegacyWallElementData(wall, context),
+            Column column => BuildColumnElementData(column, context),
             _ => BuildGenericElementData(element, context)
         };
     }
 
-    private static ElementSectionData? BuildCompositeWallElementData(CompositeWallElement wall, SectionGeometryContext context)
+    private static ElementSectionData? BuildLegacyWallElementData(Wall wall, SectionGeometryContext context)
     {
-        var worldLines = wall.GetSectionGeometry(context).ToList();
-        if (worldLines.Count == 0)
+        var cutLines = wall.GetSectionGeometry(context)
+            .Select(context.Projector.ProjectLine)
+            .Where(line => !IsDegenerate(line))
+            .ToList();
+        if (cutLines.Count == 0)
         {
             return null;
         }
 
-        var visibleLayers = wall.LayerSections.Where(layer => layer.VisibleInSection).ToList();
-        var cutLineSegments = new List<SectionLineSegment>();
-        var hatchRegions = new List<SectionHatchRegion>();
-
-        for (var i = 0; i < visibleLayers.Count; i++)
+        var cutLineSegments = cutLines.Select(line => new SectionLineSegment
         {
-            var startIndex = i * 4;
-            if (startIndex + 3 >= worldLines.Count)
-            {
-                break;
-            }
+            Line = line,
+            Role = SectionLineRole.Structural
+        }).ToList();
 
-            var lineChunk = worldLines
-                .Skip(startIndex)
-                .Take(4)
-                .Select(context.Projector.ProjectLine)
-                .Where(line => !IsDegenerate(line))
-                .ToList();
-
-            if (lineChunk.Count == 0)
-            {
-                continue;
-            }
-
-            var role = IsStructuralWallLayer(visibleLayers[i])
-                ? SectionLineRole.Structural
-                : SectionLineRole.Finish;
-            cutLineSegments.AddRange(lineChunk.Select(line => new SectionLineSegment
-            {
-                Line = line,
-                Role = role
-            }));
-
-            var first = context.Projector.ProjectLine(worldLines[startIndex]);
-            var second = context.Projector.ProjectLine(worldLines[startIndex + 1]);
-            hatchRegions.Add(new SectionHatchRegion
+        var mainLine = cutLines[0];
+        var halfThickness = Math.Max(wall.Thickness / 2.0, 1);
+        var hatchRegions = new[]
+        {
+            new SectionHatchRegion
             {
                 Category = SectionHatchCategory.Wall,
                 Boundary = new[]
                 {
-                    first.Start,
-                    second.Start,
-                    second.End,
-                    first.End
+                    new Point3D(mainLine.Start.X - halfThickness, mainLine.Start.Y, 0),
+                    new Point3D(mainLine.Start.X + halfThickness, mainLine.Start.Y, 0),
+                    new Point3D(mainLine.End.X + halfThickness, mainLine.End.Y, 0),
+                    new Point3D(mainLine.End.X - halfThickness, mainLine.End.Y, 0)
                 }
-            });
-        }
-
-        if (cutLineSegments.Count == 0)
-        {
-            return null;
-        }
+            }
+        };
 
         return new ElementSectionData
         {
@@ -391,8 +150,7 @@ public sealed class SectionComposer
                     ? Array.Empty<string>()
                     : new[] { wall.SourceHandle },
             ElementType = wall.ElementType,
-            TemplateId = wall.TemplateId,
-            CutLines = cutLineSegments.Select(segment => segment.Line).ToList(),
+            CutLines = cutLines,
             CutLineSegments = cutLineSegments,
             SightLines = Array.Empty<Line3D>(),
             HatchRegions = hatchRegions
@@ -417,10 +175,10 @@ public sealed class SectionComposer
         }
 
         var hatchRegions = new List<SectionHatchRegion>();
-        if (worldLines.Count >= 2)
+        if (cutLineSegments.Count >= 2)
         {
-            var left = context.Projector.ProjectLine(worldLines[0]);
-            var right = context.Projector.ProjectLine(worldLines[1]);
+            var left = cutLineSegments[0].Line;
+            var right = cutLineSegments[1].Line;
             hatchRegions.Add(new SectionHatchRegion
             {
                 Category = SectionHatchCategory.Column,
@@ -450,47 +208,67 @@ public sealed class SectionComposer
         };
     }
 
-    private static ElementSectionData? BuildLegacyWallElementData(Wall wall, SectionGeometryContext context)
+    private static ElementSectionData? BuildLegacySlabElementData(
+        Slab slab,
+        SectionGeometryContext context,
+        IReadOnlyList<(double StartX, double EndX)> wallIntervals)
     {
-        var cutLines = wall.GetSectionGeometry(context)
-            .Select(context.Projector.ProjectLine)
+        if (!TryResolveSlabSpan(slab.Outline, context.SectionLine, out var left, out var right))
+        {
+            return null;
+        }
+
+        var topLine = context.Projector.ProjectLine(new Line3D(
+            new Point3D(left.X, left.Y, slab.TopElevation),
+            new Point3D(right.X, right.Y, slab.TopElevation)));
+        var bottomLine = context.Projector.ProjectLine(new Line3D(
+            new Point3D(left.X, left.Y, slab.TopElevation - slab.Thickness),
+            new Point3D(right.X, right.Y, slab.TopElevation - slab.Thickness)));
+
+        var topSegments = ClipAtWallFaces(topLine, wallIntervals)
             .Where(line => !IsDegenerate(line))
             .ToList();
+        var bottomSegments = ClipAtWallFaces(bottomLine, wallIntervals)
+            .Where(line => !IsDegenerate(line))
+            .ToList();
+        var cutLines = topSegments.Concat(bottomSegments).ToList();
         if (cutLines.Count == 0)
         {
             return null;
         }
 
-        var cutLineSegments = cutLines.Select(line => new SectionLineSegment
-        {
-            Line = line,
-            Role = SectionLineRole.Structural
-        }).ToList();
-
-        var hatchRegions = new List<SectionHatchRegion>();
-        var line = cutLines[0];
-        var halfThickness = Math.Max(wall.Thickness / 2.0, 1);
-        hatchRegions.Add(new SectionHatchRegion
-        {
-            Category = SectionHatchCategory.Wall,
-            Boundary = new[]
+        var cutLineSegments = topSegments.Concat(bottomSegments)
+            .Select(line => new SectionLineSegment
             {
-                new Point3D(line.Start.X - halfThickness, line.Start.Y, 0),
-                new Point3D(line.Start.X + halfThickness, line.Start.Y, 0),
-                new Point3D(line.End.X + halfThickness, line.End.Y, 0),
-                new Point3D(line.End.X - halfThickness, line.End.Y, 0)
+                Line = line,
+                Role = SectionLineRole.Structural
+            })
+            .ToList();
+
+        var hatchRegions = new[]
+        {
+            new SectionHatchRegion
+            {
+                Category = SectionHatchCategory.Slab,
+                Boundary = new[]
+                {
+                    new Point3D(topLine.Start.X, bottomLine.Start.Y, 0),
+                    new Point3D(topLine.End.X, bottomLine.End.Y, 0),
+                    new Point3D(topLine.End.X, topLine.End.Y, 0),
+                    new Point3D(topLine.Start.X, topLine.Start.Y, 0)
+                }
             }
-        });
+        };
 
         return new ElementSectionData
         {
-            SourceHandle = wall.SourceHandle ?? string.Empty,
-            SourceHandles = wall.SourceHandles.Count > 0
-                ? wall.SourceHandles
-                : string.IsNullOrWhiteSpace(wall.SourceHandle)
+            SourceHandle = slab.SourceHandle ?? string.Empty,
+            SourceHandles = slab.SourceHandles.Count > 0
+                ? slab.SourceHandles
+                : string.IsNullOrWhiteSpace(slab.SourceHandle)
                     ? Array.Empty<string>()
-                    : new[] { wall.SourceHandle },
-            ElementType = wall.ElementType,
+                    : new[] { slab.SourceHandle },
+            ElementType = slab.ElementType,
             CutLines = cutLines,
             CutLineSegments = cutLineSegments,
             SightLines = Array.Empty<Line3D>(),
@@ -530,23 +308,6 @@ public sealed class SectionComposer
         };
     }
 
-    private static IEnumerable<Line3D> ProjectDisplayedLine(
-        Point3D left,
-        Point3D right,
-        double elevation,
-        SectionGeometryContext context,
-        bool clipAtWalls,
-        IReadOnlyList<(double StartX, double EndX)> wallIntervals)
-    {
-        var projected = context.Projector.ProjectLine(new Line3D(
-            new Point3D(left.X, left.Y, elevation),
-            new Point3D(right.X, right.Y, elevation)));
-
-        return clipAtWalls
-            ? ClipAtWallFaces(projected, wallIntervals).Where(line => !IsDegenerate(line)).ToArray()
-            : new[] { projected };
-    }
-
     private static bool TryResolveSlabSpan(
         IReadOnlyList<Point3D> outline,
         Line3D sectionLine,
@@ -566,8 +327,7 @@ public sealed class SectionComposer
         {
             var p1 = outline[i];
             var p2 = outline[(i + 1) % outline.Count];
-            var edge = new Line3D(p1, p2);
-            var intersection = LineIntersection2D(sectionLine, edge);
+            var intersection = LineIntersection2D(sectionLine, new Line3D(p1, p2));
             if (intersection.HasValue)
             {
                 intersections.Add(intersection.Value);
@@ -609,18 +369,27 @@ public sealed class SectionComposer
 
     private static Point3D? LineIntersection2D(Line3D line1, Line3D line2)
     {
-        var x1 = line1.Start.X; var y1 = line1.Start.Y;
-        var x2 = line1.End.X; var y2 = line1.End.Y;
-        var x3 = line2.Start.X; var y3 = line2.Start.Y;
-        var x4 = line2.End.X; var y4 = line2.End.Y;
+        var x1 = line1.Start.X;
+        var y1 = line1.Start.Y;
+        var x2 = line1.End.X;
+        var y2 = line1.End.Y;
+        var x3 = line2.Start.X;
+        var y3 = line2.Start.Y;
+        var x4 = line2.End.X;
+        var y4 = line2.End.Y;
 
         var denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-        if (Math.Abs(denom) < 1e-10) return null;
+        if (Math.Abs(denom) < 1e-10)
+        {
+            return null;
+        }
 
         var t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
         var u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
-
-        if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+        if (t < 0 || t > 1 || u < 0 || u > 1)
+        {
+            return null;
+        }
 
         return new Point3D(
             x1 + t * (x2 - x1),
@@ -685,23 +454,9 @@ public sealed class SectionComposer
         }
 
         var t = (x - line.Start.X) / (line.End.X - line.Start.X);
-        return line.Start.Y + (line.End.Y - line.Start.Y) * t;
+        return line.Start.Y + ((line.End.Y - line.Start.Y) * t);
     }
 
-    private static double GetUpperSurfaceOffset(SlabLayerSection layer)
-        => Math.Max(layer.TopOffset, layer.BottomOffset);
-
-    private static double GetLowerSurfaceOffset(SlabLayerSection layer)
-        => Math.Min(layer.TopOffset, layer.BottomOffset);
-
-    private static bool IsStructuralWallLayer(WallLayerSection layer)
-    {
-        if (string.IsNullOrWhiteSpace(layer.MaterialOrCategory))
-        {
-            return false;
-        }
-
-        return layer.MaterialOrCategory.Contains("结构", StringComparison.OrdinalIgnoreCase) ||
-               layer.MaterialOrCategory.Contains("core", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsDegenerate(Line3D line, double tolerance = 1e-6)
+        => line.Start.DistanceTo(line.End) <= tolerance;
 }

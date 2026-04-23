@@ -8,12 +8,11 @@ using MetroToolKits.SectionGenerator.Core.Sections;
 namespace MetroToolKits.SectionGenerator.Plugin.UI;
 
 /// <summary>
-/// 楼层配置管理窗口
+/// 楼层配置管理窗口。
 /// </summary>
 public partial class FloorConfigWindow : Window
 {
     private readonly ILogger<FloorConfigWindow> _logger;
-    private readonly IReadOnlyList<SlabAssemblyTemplate> _slabTemplates;
     private readonly ObservableCollection<FloorConfig> _floors = new();
     private SectionConfig _config = new();
     private FloorConfig? _currentFloor;
@@ -22,34 +21,31 @@ public partial class FloorConfigWindow : Window
 
     public FloorConfigWindow(
         SectionConfig config,
-        IReadOnlyList<SlabAssemblyTemplate> slabTemplates,
         ILogger<FloorConfigWindow> logger)
     {
         InitializeComponent();
         _config = config;
-        _slabTemplates = slabTemplates;
         _logger = logger;
 
         FloorListBox.ItemsSource = _floors;
         BaseFloorComboBox.ItemsSource = _floors;
-        TopBoundaryTemplateBox.ItemsSource = _slabTemplates;
-        BottomBoundaryTemplateBox.ItemsSource = _slabTemplates;
         LoadConfig();
     }
-
-    // ── 加载 ──────────────────────────────────────────────────────────────────
 
     private void LoadConfig()
     {
         _floors.Clear();
-        foreach (var f in _config.Floors) _floors.Add(f);
-        ConfigSourceStatus.Text = BuildConfigSourceStatus(_config.RuntimeState);
+        foreach (var floor in _config.Floors)
+        {
+            _floors.Add(floor);
+        }
 
-        GlobalSlopeCheck.IsChecked     = _config.GlobalSlopeEnabled;
-        GlobalSlopeValueBox.Text       = (_config.GlobalSlopeValue * 100).ToString("F2");
+        ConfigSourceStatus.Text = BuildConfigSourceStatus(_config.RuntimeState);
+        GlobalSlopeCheck.IsChecked = _config.GlobalSlopeEnabled;
+        GlobalSlopeValueBox.Text = (_config.GlobalSlopeValue * 100).ToString("F2");
         GlobalSlopeTargetBox.SelectedIndex = _config.GlobalSlopeTarget == "FinishLayer" ? 1 : 0;
-        BaseFloorComboBox.SelectedItem = _floors.FirstOrDefault(f =>
-            string.Equals(f.Name, _config.AlignmentBaseFloorName, StringComparison.OrdinalIgnoreCase));
+        BaseFloorComboBox.SelectedItem = _floors.FirstOrDefault(floor =>
+            string.Equals(floor.Name, _config.AlignmentBaseFloorName, StringComparison.OrdinalIgnoreCase));
         LoadOutputConfig(_config.OutputConfig);
 
         if (BaseFloorComboBox.SelectedItem == null && _floors.Count == 1)
@@ -136,9 +132,15 @@ public partial class FloorConfigWindow : Window
     {
         style.PatternName = patternBox.Text.Trim();
         if (double.TryParse(scaleBox.Text, out var scale))
+        {
             style.Scale = scale;
+        }
+
         if (double.TryParse(angleBox.Text, out var angle))
+        {
             style.Angle = angle;
+        }
+
         style.UseByLayer = byLayerCheck.IsChecked == true;
     }
 
@@ -159,8 +161,6 @@ public partial class FloorConfigWindow : Window
         };
     }
 
-    // ── 楼层列表操作 ──────────────────────────────────────────────────────────
-
     private void FloorListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (FloorListBox.SelectedItem is FloorConfig floor)
@@ -180,38 +180,42 @@ public partial class FloorConfigWindow : Window
     {
         var newFloor = new FloorConfig
         {
-            Name                = $"F{_floors.Count + 1}",
-            Height              = 3000,
+            Name = $"F{_floors.Count + 1}",
+            Height = 3000,
             BottomSlabThickness = 800,
-            TopSlabThickness    = 600,
-            FinishThickness     = 120,
+            TopSlabThickness = 600,
+            FinishThickness = 120,
             TopBoundarySlab = new BoundarySlabConfig
             {
-                TemplateId = string.Empty,
                 SlopeEnabled = false,
                 SlopeValue = 0,
                 SlopeTarget = "StructuralSlab"
             },
             BottomBoundarySlab = new BoundarySlabConfig
             {
-                TemplateId = string.Empty,
                 SlopeEnabled = false,
                 SlopeValue = 0,
                 SlopeTarget = "StructuralSlab"
             }
         };
+
         _floors.Add(newFloor);
         if (_floors.Count == 1)
         {
             BaseFloorComboBox.SelectedItem = newFloor;
         }
+
         FloorListBox.SelectedItem = newFloor;
         _logger.LogInformation("添加楼层: {FloorName}", newFloor.Name);
     }
 
     private void DeleteFloor_Click(object sender, RoutedEventArgs e)
     {
-        if (_currentFloor == null) return;
+        if (_currentFloor == null)
+        {
+            return;
+        }
+
         var name = _currentFloor.Name;
         _floors.Remove(_currentFloor);
         if (BaseFloorComboBox.SelectedItem is FloorConfig selectedBase &&
@@ -219,6 +223,7 @@ public partial class FloorConfigWindow : Window
         {
             BaseFloorComboBox.SelectedItem = _floors.FirstOrDefault();
         }
+
         _currentFloor = null;
         EditPanel.IsEnabled = false;
         _logger.LogInformation("删除楼层: {FloorName}", name);
@@ -226,32 +231,36 @@ public partial class FloorConfigWindow : Window
 
     private void MoveUp_Click(object sender, RoutedEventArgs e)
     {
-        var idx = FloorListBox.SelectedIndex;
-        if (idx <= 0) return;
-        _floors.Move(idx, idx - 1);
+        var index = FloorListBox.SelectedIndex;
+        if (index <= 0)
+        {
+            return;
+        }
+
+        _floors.Move(index, index - 1);
     }
 
     private void MoveDown_Click(object sender, RoutedEventArgs e)
     {
-        var idx = FloorListBox.SelectedIndex;
-        if (idx < 0 || idx >= _floors.Count - 1) return;
-        _floors.Move(idx, idx + 1);
-    }
+        var index = FloorListBox.SelectedIndex;
+        if (index < 0 || index >= _floors.Count - 1)
+        {
+            return;
+        }
 
-    // ── 参数编辑 ──────────────────────────────────────────────────────────────
+        _floors.Move(index, index + 1);
+    }
 
     private void BindFloorToUI(FloorConfig floor)
     {
-        NameBox.Text       = floor.Name;
-        HeightBox.Text     = floor.Height.ToString("F0");
+        NameBox.Text = floor.Name;
+        HeightBox.Text = floor.Height.ToString("F0");
         BottomSlabBox.Text = floor.BottomSlabThickness.ToString("F0");
-        TopSlabBox.Text    = floor.TopSlabThickness.ToString("F0");
-        FinishBox.Text     = floor.FinishThickness.ToString("F0");
+        TopSlabBox.Text = floor.TopSlabThickness.ToString("F0");
+        FinishBox.Text = floor.FinishThickness.ToString("F0");
         SlopeCheck.IsChecked = floor.HasSlope;
         SlopeValueBox.Text = (floor.SlopeValue * 100).ToString("F2");
         SlopeValueBox.IsEnabled = floor.HasSlope;
-        TopBoundaryTemplateBox.SelectedValue = floor.TopBoundarySlab.TemplateId;
-        BottomBoundaryTemplateBox.SelectedValue = floor.BottomBoundarySlab.TemplateId;
         TopSlopeCheck.IsChecked = floor.TopBoundarySlab.SlopeEnabled;
         TopSlopeValueBox.Text = (floor.TopBoundarySlab.SlopeValue * 100).ToString("F2");
         TopSlopeValueBox.IsEnabled = floor.TopBoundarySlab.SlopeEnabled;
@@ -280,23 +289,49 @@ public partial class FloorConfigWindow : Window
 
     private void SaveCurrentEdits()
     {
-        if (_currentFloor == null) return;
+        if (_currentFloor == null)
+        {
+            return;
+        }
 
         _currentFloor.Name = NameBox.Text.Trim();
-        if (double.TryParse(HeightBox.Text, out var h))     _currentFloor.Height = h;
-        if (double.TryParse(BottomSlabBox.Text, out var bs)) _currentFloor.BottomSlabThickness = bs;
-        if (double.TryParse(TopSlabBox.Text, out var ts))   _currentFloor.TopSlabThickness = ts;
-        if (double.TryParse(FinishBox.Text, out var ft))    _currentFloor.FinishThickness = ft;
+        if (double.TryParse(HeightBox.Text, out var height))
+        {
+            _currentFloor.Height = height;
+        }
+
+        if (double.TryParse(BottomSlabBox.Text, out var bottomSlab))
+        {
+            _currentFloor.BottomSlabThickness = bottomSlab;
+        }
+
+        if (double.TryParse(TopSlabBox.Text, out var topSlab))
+        {
+            _currentFloor.TopSlabThickness = topSlab;
+        }
+
+        if (double.TryParse(FinishBox.Text, out var finish))
+        {
+            _currentFloor.FinishThickness = finish;
+        }
+
         _currentFloor.HasSlope = SlopeCheck.IsChecked == true;
-        if (double.TryParse(SlopeValueBox.Text, out var sv)) _currentFloor.SlopeValue = sv / 100.0;
-        _currentFloor.TopBoundarySlab.TemplateId = TopBoundaryTemplateBox.SelectedValue?.ToString() ?? string.Empty;
-        _currentFloor.BottomBoundarySlab.TemplateId = BottomBoundaryTemplateBox.SelectedValue?.ToString() ?? string.Empty;
+        if (double.TryParse(SlopeValueBox.Text, out var legacySlope))
+        {
+            _currentFloor.SlopeValue = legacySlope / 100.0;
+        }
+
         _currentFloor.TopBoundarySlab.SlopeEnabled = TopSlopeCheck.IsChecked == true;
         _currentFloor.BottomBoundarySlab.SlopeEnabled = BottomSlopeCheck.IsChecked == true;
         if (double.TryParse(TopSlopeValueBox.Text, out var topSlope))
+        {
             _currentFloor.TopBoundarySlab.SlopeValue = topSlope / 100.0;
+        }
+
         if (double.TryParse(BottomSlopeValueBox.Text, out var bottomSlope))
+        {
             _currentFloor.BottomBoundarySlab.SlopeValue = bottomSlope / 100.0;
+        }
     }
 
     private void SlopeCheck_Changed(object sender, RoutedEventArgs e)
@@ -316,14 +351,14 @@ public partial class FloorConfigWindow : Window
         }
     }
 
-    // ── 对齐点拾取 ────────────────────────────────────────────────────────────
-
     private void PickAlignment_Click(object sender, RoutedEventArgs e)
     {
-        if (_currentFloor == null) return;
-        SaveCurrentEdits();
+        if (_currentFloor == null)
+        {
+            return;
+        }
 
-        // 关闭窗口，在 CAD 中拾取点
+        SaveCurrentEdits();
         DialogResult = null;
         Tag = ("PickAlignment", _currentFloor);
         Close();
@@ -331,7 +366,11 @@ public partial class FloorConfigWindow : Window
 
     private void ClearAlignment_Click(object sender, RoutedEventArgs e)
     {
-        if (_currentFloor == null) return;
+        if (_currentFloor == null)
+        {
+            return;
+        }
+
         _currentFloor.AlignmentPoints.Clear();
         AlignmentStatus.Text = "未设置";
         AlignmentStatus.Foreground = System.Windows.Media.Brushes.Gray;
@@ -340,9 +379,12 @@ public partial class FloorConfigWindow : Window
 
     private void PickScope_Click(object sender, RoutedEventArgs e)
     {
-        if (_currentFloor == null) return;
-        SaveCurrentEdits();
+        if (_currentFloor == null)
+        {
+            return;
+        }
 
+        SaveCurrentEdits();
         DialogResult = null;
         Tag = ("PickScope", _currentFloor);
         Close();
@@ -350,14 +392,16 @@ public partial class FloorConfigWindow : Window
 
     private void ClearScope_Click(object sender, RoutedEventArgs e)
     {
-        if (_currentFloor == null) return;
+        if (_currentFloor == null)
+        {
+            return;
+        }
+
         _currentFloor.ScopeBounds = null;
         ScopeStatus.Text = "未设置";
         ScopeStatus.Foreground = System.Windows.Media.Brushes.Gray;
         _logger.LogInformation("清除楼层 {FloorName} 整层范围", _currentFloor.Name);
     }
-
-    // ── 保存/取消 ─────────────────────────────────────────────────────────────
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
@@ -365,8 +409,11 @@ public partial class FloorConfigWindow : Window
 
         _config.Floors = _floors.ToList();
         _config.GlobalSlopeEnabled = GlobalSlopeCheck.IsChecked == true;
-        if (double.TryParse(GlobalSlopeValueBox.Text, out var gsv))
-            _config.GlobalSlopeValue = gsv / 100.0;
+        if (double.TryParse(GlobalSlopeValueBox.Text, out var globalSlope))
+        {
+            _config.GlobalSlopeValue = globalSlope / 100.0;
+        }
+
         _config.GlobalSlopeTarget = (GlobalSlopeTargetBox.SelectedItem as ComboBoxItem)?.Tag?.ToString()
                                     ?? "StructuralSlab";
         _config.GlobalTopSlopeEnabled = _config.GlobalSlopeEnabled;
@@ -382,7 +429,6 @@ public partial class FloorConfigWindow : Window
         }
 
         _logger.LogInformation("楼层配置编辑完成，待命令层保存，楼层数: {Count}", _config.Floors.Count);
-
         DialogResult = true;
         Close();
     }

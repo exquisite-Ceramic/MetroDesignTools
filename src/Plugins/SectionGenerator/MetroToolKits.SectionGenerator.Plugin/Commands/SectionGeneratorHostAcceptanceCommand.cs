@@ -239,7 +239,7 @@ public sealed class SectionGeneratorHostAcceptanceCommand
         };
         ms.AppendEntity(wallLineA);
         tr.AddNewlyCreatedDBObject(wallLineA, true);
-        backupService.BackupEntity(tr, wallLineA, "Wall", "wall-200-finish");
+        backupService.BackupEntity(tr, wallLineA, "Wall");
 
         var wallLineB = new AcadLine(new AcadPoint3d(-500, 1100, 0), new AcadPoint3d(500, 1100, 0))
         {
@@ -247,7 +247,7 @@ public sealed class SectionGeneratorHostAcceptanceCommand
         };
         ms.AppendEntity(wallLineB);
         tr.AddNewlyCreatedDBObject(wallLineB, true);
-        backupService.BackupEntity(tr, wallLineB, "Wall", "wall-200-finish");
+        backupService.BackupEntity(tr, wallLineB, "Wall");
 
         tr.Commit();
 

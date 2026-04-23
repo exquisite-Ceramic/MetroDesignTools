@@ -19,18 +19,15 @@ namespace MetroToolKits.SectionGenerator.Plugin.Commands;
 public sealed class FloorConfigCommand
 {
     private readonly IFloorConfigUseCase _floorConfigUseCase;
-    private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly ILogger<FloorConfigCommand> _logger;
     private readonly IUserLogger _userLogger;
 
     public FloorConfigCommand(
         IFloorConfigUseCase floorConfigUseCase,
-        ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         ILogger<FloorConfigCommand> logger,
         IUserLogger userLogger)
     {
         _floorConfigUseCase = floorConfigUseCase;
-        _slabTemplateCatalog = slabTemplateCatalog;
         _logger     = logger;
         _userLogger = userLogger;
     }
@@ -46,7 +43,6 @@ public sealed class FloorConfigCommand
         {
             var window = new FloorConfigWindow(
                 config,
-                _slabTemplateCatalog.GetAllTemplates(),
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<FloorConfigWindow>.Instance);
 
             Application.ShowModalWindow(window);

@@ -42,9 +42,6 @@ public sealed class ElementSectionData
     /// <summary>构件类型</summary>
     public string ElementType { get; init; } = string.Empty;
 
-    /// <summary>墙体模板标识（可选）</summary>
-    public string? TemplateId { get; init; }
-
     /// <summary>剖切面域轮廓线（局部剖面 XY 坐标）</summary>
     public IReadOnlyList<Line3D> CutLines { get; init; } = Array.Empty<Line3D>();
 

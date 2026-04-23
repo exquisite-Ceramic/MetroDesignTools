@@ -20,13 +20,11 @@
       "SlopeValue": 0.002,
       "SlopeTarget": "StructuralSlab",
       "BottomBoundarySlab": {
-        "TemplateId": "",
         "SlopeEnabled": false,
         "SlopeValue": 0.0,
         "SlopeTarget": "StructuralSlab"
       },
       "TopBoundarySlab": {
-        "TemplateId": "",
         "SlopeEnabled": true,
         "SlopeValue": 0.002,
         "SlopeTarget": "StructuralSlab"

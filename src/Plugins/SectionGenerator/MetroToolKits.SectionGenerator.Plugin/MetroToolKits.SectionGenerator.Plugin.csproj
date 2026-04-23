@@ -50,18 +50,6 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
-    <Content Include="..\Resources\WallAssemblyTemplates.json">
-      <Link>WallAssemblyTemplates.json</Link>
-      <TargetPath>WallAssemblyTemplates.json</TargetPath>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </Content>
-    <Content Include="..\Resources\SlabAssemblyTemplates.json">
-      <Link>SlabAssemblyTemplates.json</Link>
-      <TargetPath>SlabAssemblyTemplates.json</TargetPath>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
-    </Content>
   </ItemGroup>
 
   <Target Name="CopyMicrosoftExtensionsRuntimeAssembliesToBuildOutput" AfterTargets="Build">

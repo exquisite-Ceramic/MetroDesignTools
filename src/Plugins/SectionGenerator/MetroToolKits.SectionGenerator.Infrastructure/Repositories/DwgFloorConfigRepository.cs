@@ -172,14 +172,12 @@ public sealed class DwgFloorConfigRepository : IFloorConfigRepository
                     SlopeValue = 0.002,
                     BottomBoundarySlab = new BoundarySlabConfig
                     {
-                        TemplateId = string.Empty,
                         SlopeEnabled = false,
                         SlopeValue = 0,
                         SlopeTarget = "StructuralSlab"
                     },
                     TopBoundarySlab = new BoundarySlabConfig
                     {
-                        TemplateId = string.Empty,
                         SlopeEnabled = true,
                         SlopeValue = 0.002,
                         SlopeTarget = "StructuralSlab"

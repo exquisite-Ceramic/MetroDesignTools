@@ -25,7 +25,6 @@ public sealed class ElementLayerMapping
 {
     public string SourceLayerName { get; set; } = string.Empty;
     public ElementTypeDefinition ElementType { get; set; } = new();
-    public string? TemplateId { get; set; }
 }
 
 public sealed class ElementConversionApplySummary

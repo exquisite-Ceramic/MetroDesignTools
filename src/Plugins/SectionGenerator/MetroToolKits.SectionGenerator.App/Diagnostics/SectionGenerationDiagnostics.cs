@@ -22,8 +22,6 @@ public static class SectionGenerationErrorCodes
     public const string UnsupportedEntityType = "SectionGenerator.ElementRecognition.UnsupportedEntityType";
     public const string ConversionFailed = "SectionGenerator.ElementRecognition.ConversionFailed";
     public const string NoIntersectingElements = "SectionGenerator.ElementRecognition.NoIntersectingElements";
-    public const string WallTemplateMissing = "SectionGenerator.ElementRecognition.WallTemplateMissing";
-    public const string AmbiguousWallPairing = "SectionGenerator.ElementRecognition.AmbiguousWallPairing";
     public const string EmptyGeometry = "SectionGenerator.SectionComposition.EmptyGeometry";
     public const string DrawFailed = "SectionGenerator.DrawingOutput.DrawFailed";
     public const string SnapshotSaveFailed = "SectionGenerator.SnapshotPersist.SaveFailed";
@@ -315,44 +313,6 @@ public static class SectionGenerationDiagnosticFactory
         Metadata = CreateMetadata(
             ("elementType", elementType),
             ("layer", layerName))
-    };
-
-    public static OperationDiagnostic WallTemplateMissing(
-        string module,
-        string? targetHandle,
-        string layerName,
-        string? templateId) => new()
-    {
-        Level = DiagnosticLevel.Warning,
-        Code = SectionGenerationErrorCodes.WallTemplateMissing,
-        Stage = PipelineStage.ElementRecognition,
-        Module = module,
-        Message = string.IsNullOrWhiteSpace(templateId)
-            ? $"墙图层 {layerName} 未绑定墙体模板"
-            : $"墙图层 {layerName} 绑定的墙体模板 {templateId} 不存在",
-        TargetHandle = targetHandle,
-        Suggestion = "请先在墙体模板管理中维护模板，并在 LayerMapping/ConvertRegion 中为墙图层绑定模板。",
-        Metadata = CreateMetadata(
-            ("layer", layerName),
-            ("templateId", templateId))
-    };
-
-    public static OperationDiagnostic AmbiguousWallPairing(
-        string module,
-        string layerName,
-        string templateId,
-        int intersectionCount) => new()
-    {
-        Level = DiagnosticLevel.Warning,
-        Code = SectionGenerationErrorCodes.AmbiguousWallPairing,
-        Stage = PipelineStage.ElementRecognition,
-        Module = module,
-        Message = $"墙图层 {layerName} 使用模板 {templateId} 时，交点数量 {intersectionCount} 无法稳定配对为核心墙体",
-        Suggestion = "请检查墙边界是否闭合、是否存在共享边/折线墙，或改用中心线识别模板。",
-        Metadata = CreateMetadata(
-            ("layer", layerName),
-            ("templateId", templateId),
-            ("intersectionCount", intersectionCount.ToString()))
     };
 
     private static IReadOnlyDictionary<string, string?> CreateMetadata(params (string Key, string? Value)[] entries)

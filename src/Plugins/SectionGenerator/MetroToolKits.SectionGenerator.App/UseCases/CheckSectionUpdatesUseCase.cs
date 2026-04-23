@@ -36,9 +36,7 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
             elementRecognizer,
             configRepo,
             hasher,
-            new FloorVerticalProfileBuilder(
-                new InMemorySlabAssemblyTemplateCatalog(),
-                new SlabAssemblyBuilder()),
+            new FloorVerticalProfileBuilder(),
             logger)
     {
     }

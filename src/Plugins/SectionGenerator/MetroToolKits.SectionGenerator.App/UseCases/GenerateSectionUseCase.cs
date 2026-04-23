@@ -105,14 +105,12 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
                         FinishThickness = 120,
                         BottomBoundarySlab = new BoundarySlabConfig
                         {
-                            TemplateId = string.Empty,
                             SlopeEnabled = false,
                             SlopeValue = 0,
                             SlopeTarget = "StructuralSlab"
                         },
                         TopBoundarySlab = new BoundarySlabConfig
                         {
-                            TemplateId = string.Empty,
                             SlopeEnabled = false,
                             SlopeValue = 0,
                             SlopeTarget = "StructuralSlab"
@@ -394,30 +392,13 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
                     .Where(h => !string.IsNullOrWhiteSpace(h))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
-            var wallAssemblies = floorGeometry == null
-                ? new List<WallAssemblySnapshot>()
-                : floorGeometry.Elements
-                    .Where(e => !string.IsNullOrWhiteSpace(e.TemplateId))
-                    .Select(e => new WallAssemblySnapshot
-                    {
-                        TemplateId = e.TemplateId ?? string.Empty,
-                        SourceHandles = e.SourceHandles
-                            .Where(h => !string.IsNullOrWhiteSpace(h))
-                            .Distinct(StringComparer.OrdinalIgnoreCase)
-                            .ToList(),
-                        LayerSummaries = e.CutLines
-                            .Select(line => $"{line.Start.X:F2},{line.Start.Y:F2}->{line.End.X:F2},{line.End.Y:F2}")
-                            .ToList()
-                    })
-                    .ToList();
 
             return new FloorSnapshot
             {
                 FloorName    = f.Name,
                 GeometryHash = _hasher.ComputeHash(elements, f, floorGeometry?.VerticalProfile),
                 ElementCount = elements.Count,
-                SourceElementHandles = sourceHandles,
-                WallAssemblies = wallAssemblies
+                SourceElementHandles = sourceHandles
             };
         }).ToList();
 

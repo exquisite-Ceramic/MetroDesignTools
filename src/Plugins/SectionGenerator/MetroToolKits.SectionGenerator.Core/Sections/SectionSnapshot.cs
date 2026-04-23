@@ -12,14 +12,6 @@ public sealed class FloorSnapshot
     public string GeometryHash  { get; set; } = string.Empty;
     public int    ElementCount  { get; set; }
     public List<string> SourceElementHandles { get; set; } = new();
-    public List<WallAssemblySnapshot> WallAssemblies { get; set; } = new();
-}
-
-public sealed class WallAssemblySnapshot
-{
-    public string TemplateId { get; set; } = string.Empty;
-    public List<string> SourceHandles { get; set; } = new();
-    public List<string> LayerSummaries { get; set; } = new();
 }
 
 /// <summary>

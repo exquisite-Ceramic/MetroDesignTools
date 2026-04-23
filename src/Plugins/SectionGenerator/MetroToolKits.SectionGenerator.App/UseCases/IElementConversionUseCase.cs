@@ -34,7 +34,6 @@ public sealed class LayerTypeAssignment
 {
     public string SourceLayerName { get; set; } = string.Empty;
     public string TypeId { get; set; } = string.Empty;
-    public string? TemplateId { get; set; }
 }
 
 public sealed class ElementConversionApplyResult
