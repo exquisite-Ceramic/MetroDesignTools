@@ -21,6 +21,9 @@ public sealed class GenerateSectionRequest
     public double  ViewDepth      { get; set; } = 3000;
     public Point3D InsertionPoint { get; set; }
 
+    /// <summary>原始剖切线实体 Handle，用于后续更新时追踪剖面来源。</summary>
+    public string? SourceCutLineHandle { get; set; }
+
     /// <summary>指定单层配置（null 则从仓储加载所有楼层）</summary>
     public FloorConfig? FloorConfig { get; set; }
 }
@@ -32,6 +35,7 @@ public sealed class GenerateSectionResult
 {
     public bool    Success      { get; set; }
     public string? BlockName    { get; set; }
+    public string? BlockHandle  { get; set; }
     public string? ErrorMessage { get; set; }
     public int     FloorCount   { get; set; }
     public double  TotalHeight  { get; set; }
