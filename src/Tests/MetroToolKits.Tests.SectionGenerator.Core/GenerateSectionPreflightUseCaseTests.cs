@@ -46,10 +46,12 @@ public class GenerateSectionPreflightUseCaseTests
         {
             Status = OperationStatus.Success
         });
+        var readinessInspector = Substitute.For<IGenerationReadinessInspector>();
 
         var useCase = new GenerateSectionPreflightUseCase(
             repository,
             checkUseCase,
+            readinessInspector,
             NullLogger<GenerateSectionPreflightUseCase>.Instance);
 
         var result = useCase.Execute();
@@ -104,10 +106,22 @@ public class GenerateSectionPreflightUseCaseTests
                 }
             }
         });
+        var readinessInspector = Substitute.For<IGenerationReadinessInspector>();
+        readinessInspector.Inspect().Returns(new GenerationReadinessSummary
+        {
+            TotalRecognizableElementCount = 4,
+            RecognizableWallCount = 2,
+            RecognizableColumnCount = 1,
+            RecognizableSlabCount = 1,
+            TemplatedWallCount = 1,
+            TemplatedSlabCount = 1,
+            LegacyWallCount = 1
+        });
 
         var useCase = new GenerateSectionPreflightUseCase(
             repository,
             checkUseCase,
+            readinessInspector,
             NullLogger<GenerateSectionPreflightUseCase>.Instance);
 
         var result = useCase.Execute();
@@ -118,5 +132,7 @@ public class GenerateSectionPreflightUseCaseTests
         result.ExistingSections.UnknownCount.Should().Be(1);
         result.ExistingSections.PartialCount.Should().Be(1);
         result.ExistingSections.CheckResult.Should().NotBeNull();
+        result.Readiness.TotalRecognizableElementCount.Should().Be(4);
+        result.Readiness.TemplatedWallCount.Should().Be(1);
     }
 }

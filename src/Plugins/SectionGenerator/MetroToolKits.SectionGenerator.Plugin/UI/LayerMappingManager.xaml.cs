@@ -423,6 +423,10 @@ public class LayerMapping
     public string? TemplateId { get; set; }
     public string? TemplateName { get; set; }
 
+    public string TemplateDisplay => string.IsNullOrWhiteSpace(TemplateName) ? "—" : TemplateName;
+
+    public string ModeText => string.IsNullOrWhiteSpace(TemplateName) ? "稳定模式" : "模板模式";
+
     public string DisplayText =>
         string.IsNullOrWhiteSpace(TemplateName)
             ? $"{LayerName} → {TypeName}"

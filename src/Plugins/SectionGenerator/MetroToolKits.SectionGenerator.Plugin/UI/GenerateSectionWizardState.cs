@@ -8,6 +8,7 @@ public enum GenerateSectionWizardAction
 {
     None,
     OpenFloorConfig,
+    OpenLayerMapping,
     ViewUpdateDetails,
     PickCutLine,
     PickLocalScope,

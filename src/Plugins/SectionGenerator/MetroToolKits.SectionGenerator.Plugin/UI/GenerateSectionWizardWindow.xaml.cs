@@ -109,6 +109,7 @@ public partial class GenerateSectionWizardWindow : Window
     private void RenderPreflight()
     {
         var runtimeState = _state.PreflightResult.ConfigDocument.RuntimeState;
+        var readiness = _state.PreflightResult.Readiness;
         ConfigSourceText.Text = runtimeState.Source switch
         {
             SectionConfigStorageSource.EmbeddedDwg =>
@@ -134,10 +135,16 @@ public partial class GenerateSectionWizardWindow : Window
             ? $"共 {existingSections.TotalCount} 个剖面：最新 {existingSections.UpToDateCount}，需更新 {existingSections.OutdatedCount}，未知 {existingSections.UnknownCount}，部分检查 {existingSections.PartialCount}。"
             : $"无法检查现有剖面状态：{existingSections.ErrorMessage}";
 
+        ReadinessSummaryText.Text = readiness.HasRecognizableElements
+            ? $"当前图纸已发现 {readiness.TotalRecognizableElementCount} 个可识别墙/柱/板（墙 {readiness.RecognizableWallCount}，柱 {readiness.RecognizableColumnCount}，板 {readiness.RecognizableSlabCount}）。模板模式：墙 {readiness.TemplatedWallCount}，板 {readiness.TemplatedSlabCount}；稳定模式：墙 {readiness.LegacyWallCount}，板 {readiness.LegacySlabCount}。"
+            : "当前图纸尚未发现可识别的墙/柱/板。若图纸仍是原始图层，请先执行图层映射或区域转换。";
+
         ViewUpdatesButton.IsEnabled = existingSections.CheckResult != null;
-        PreflightHintText.Text = _state.PreflightResult.CanGenerate
-            ? "你可以继续设置本次生成参数；如果已有剖面存在需更新/未知状态，这里只做提醒，不阻止新剖面生成。"
-            : "请先通过“配置楼层...”补齐基准层、基准点或整层范围，再继续生成。";
+        PreflightHintText.Text = !_state.PreflightResult.CanGenerate
+            ? "请先通过“配置楼层...”补齐基准层、基准点或整层范围，再继续生成。"
+            : !readiness.HasRecognizableElements
+                ? "当前图纸还没有可识别构件，建议先执行图层映射或区域转换，再回来继续生成。"
+                : "当前图纸已经具备生成前提。如果已有剖面存在需更新/未知状态，这里只做提醒，不阻止新剖面生成。";
     }
 
     private void RenderParameters()
@@ -166,9 +173,14 @@ public partial class GenerateSectionWizardWindow : Window
     private void RenderConfirmation()
     {
         var existingSections = _state.PreflightResult.ExistingSections;
+        var readiness = _state.PreflightResult.Readiness;
         ConfirmPreflightText.Text =
             $"配置状态：{(_state.PreflightResult.CanGenerate ? "已满足生成要求" : "仍缺少必配项")}\n" +
             $"已有剖面：共 {existingSections.TotalCount} 个，需更新 {existingSections.OutdatedCount} 个，未知 {existingSections.UnknownCount} 个。";
+
+        ConfirmReadinessText.Text = readiness.HasRecognizableElements
+            ? $"可识别构件：{readiness.TotalRecognizableElementCount} 个；模板模式：墙 {readiness.TemplatedWallCount}，板 {readiness.TemplatedSlabCount}；稳定模式：墙 {readiness.LegacyWallCount}，板 {readiness.LegacySlabCount}。"
+            : "当前图纸尚未发现可识别构件，生成前建议先完成图层映射或区域转换。";
 
         ConfirmParametersText.Text =
             $"视图深度：{_state.ViewDepth:F0} mm\n" +
@@ -190,6 +202,9 @@ public partial class GenerateSectionWizardWindow : Window
 
     private void OpenFloorConfig_Click(object sender, RoutedEventArgs e)
         => CloseForAction(GenerateSectionWizardAction.OpenFloorConfig);
+
+    private void OpenLayerMapping_Click(object sender, RoutedEventArgs e)
+        => CloseForAction(GenerateSectionWizardAction.OpenLayerMapping);
 
     private void ViewUpdates_Click(object sender, RoutedEventArgs e)
         => CloseForAction(GenerateSectionWizardAction.ViewUpdateDetails);

@@ -66,6 +66,7 @@ public class SectionGeneratorPlugin : IPlugin
         // 备份服务
         services.AddSingleton<ElementConversionBackupService>();
         services.AddSingleton<IElementConversionService, CadElementConversionService>();
+        services.AddSingleton<IGenerationReadinessInspector, GenerationReadinessInspector>();
 
         // 楼层配置仓储（DWG 内嵌配置）
         services.AddSingleton<IFloorConfigRepository, DwgFloorConfigRepository>();

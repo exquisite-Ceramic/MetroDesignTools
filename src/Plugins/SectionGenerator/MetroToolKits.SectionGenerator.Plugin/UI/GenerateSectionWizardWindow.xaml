@@ -26,6 +26,7 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
@@ -47,10 +48,17 @@
                     </StackPanel>
                 </GroupBox>
 
-                <TextBlock Grid.Row="3" x:Name="PreflightHintText" Foreground="Gray" TextWrapping="Wrap" Margin="4,4,4,0"/>
+                <GroupBox Header="构件与模板状态" Grid.Row="3" Margin="0,0,0,8">
+                    <StackPanel Margin="8">
+                        <TextBlock x:Name="ReadinessSummaryText" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </GroupBox>
 
-                <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                <TextBlock Grid.Row="4" x:Name="PreflightHintText" Foreground="Gray" TextWrapping="Wrap" Margin="4,4,4,0"/>
+
+                <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
                     <Button Content="配置楼层..." Width="100" Height="30" Margin="0,0,8,0" Click="OpenFloorConfig_Click"/>
+                    <Button Content="图层映射..." Width="100" Height="30" Margin="0,0,8,0" Click="OpenLayerMapping_Click"/>
                     <Button x:Name="ViewUpdatesButton" Content="查看更新详情..." Width="120" Height="30" Click="ViewUpdates_Click"/>
                 </StackPanel>
             </Grid>
@@ -129,15 +137,19 @@
                     <TextBlock x:Name="ConfirmPreflightText" Margin="8" TextWrapping="Wrap"/>
                 </GroupBox>
 
-                <GroupBox Header="本次生成参数" Grid.Row="1" Margin="0,0,0,8">
+                <GroupBox Header="构件与模板状态" Grid.Row="1" Margin="0,0,0,8">
+                    <TextBlock x:Name="ConfirmReadinessText" Margin="8" TextWrapping="Wrap"/>
+                </GroupBox>
+
+                <GroupBox Header="本次生成参数" Grid.Row="2" Margin="0,0,0,8">
                     <TextBlock x:Name="ConfirmParametersText" Margin="8" TextWrapping="Wrap"/>
                 </GroupBox>
 
-                <GroupBox Header="CAD 选取摘要" Grid.Row="2" Margin="0,0,0,8">
+                <GroupBox Header="CAD 选取摘要" Grid.Row="3" Margin="0,0,0,8">
                     <TextBlock x:Name="ConfirmCadSelectionText" Margin="8" TextWrapping="Wrap"/>
                 </GroupBox>
 
-                <GroupBox Header="输出配置摘要" Grid.Row="3" Margin="0,0,0,8">
+                <GroupBox Header="输出配置摘要" Grid.Row="4" Margin="0,0,0,8">
                     <TextBlock x:Name="ConfirmOutputText" Margin="8" TextWrapping="Wrap"/>
                 </GroupBox>
             </Grid>

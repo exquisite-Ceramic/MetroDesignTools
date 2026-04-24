@@ -2,10 +2,12 @@ using System.Diagnostics;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Microsoft.Extensions.Logging;
+using MetroToolKits.Foundation.Cad.Layering.Services;
 using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.Foundation.Core.Hosting;
 using MetroToolKits.Foundation.Core.Logging;
+using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Diagnostics;
 using MetroToolKits.SectionGenerator.App.Support;
 using MetroToolKits.SectionGenerator.App.UseCases;
@@ -26,6 +28,10 @@ public sealed class GenSectionCommand
     private readonly IGenerateSectionPreflightUseCase _preflightUseCase;
     private readonly IFloorConfigUseCase _floorConfigUseCase;
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
+    private readonly ILayerService _layerService;
+    private readonly IElementTypeCatalog _typeCatalog;
+    private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
+    private readonly IElementConversionUseCase _elementConversionUseCase;
     private readonly ICheckSectionUpdatesUseCase _checkUseCase;
     private readonly IUpdateSectionUseCase _updateUseCase;
     private readonly ILogger<GenSectionCommand> _logger;
@@ -37,6 +43,10 @@ public sealed class GenSectionCommand
         IGenerateSectionPreflightUseCase preflightUseCase,
         IFloorConfigUseCase floorConfigUseCase,
         ISlabAssemblyTemplateCatalog slabTemplateCatalog,
+        ILayerService layerService,
+        IElementTypeCatalog typeCatalog,
+        IWallAssemblyTemplateCatalog wallTemplateCatalog,
+        IElementConversionUseCase elementConversionUseCase,
         ICheckSectionUpdatesUseCase checkUseCase,
         IUpdateSectionUseCase updateUseCase,
         ILogger<GenSectionCommand> logger,
@@ -47,6 +57,10 @@ public sealed class GenSectionCommand
         _preflightUseCase = preflightUseCase;
         _floorConfigUseCase = floorConfigUseCase;
         _slabTemplateCatalog = slabTemplateCatalog;
+        _layerService = layerService;
+        _typeCatalog = typeCatalog;
+        _wallTemplateCatalog = wallTemplateCatalog;
+        _elementConversionUseCase = elementConversionUseCase;
         _checkUseCase = checkUseCase;
         _updateUseCase = updateUseCase;
         _logger = logger;
@@ -86,6 +100,10 @@ public sealed class GenSectionCommand
 
                 case GenerateSectionWizardAction.OpenFloorConfig:
                     FloorConfigDialogWorkflow.Run(_floorConfigUseCase, _slabTemplateCatalog, _userLogger, _logger);
+                    continue;
+
+                case GenerateSectionWizardAction.OpenLayerMapping:
+                    OpenLayerMappingWindow();
                     continue;
 
                 case GenerateSectionWizardAction.ViewUpdateDetails:
@@ -131,6 +149,17 @@ public sealed class GenSectionCommand
             Microsoft.Extensions.Logging.Abstractions.NullLogger<SectionUpdateDialog>.Instance,
             _userLogger);
         Application.ShowModelessWindow(dialog);
+    }
+
+    private void OpenLayerMappingWindow()
+    {
+        var window = new LayerMappingManager(
+            _layerService,
+            _typeCatalog,
+            _wallTemplateCatalog,
+            _slabTemplateCatalog,
+            _elementConversionUseCase);
+        Application.ShowModalWindow(window);
     }
 
     private bool TryPickCutLine(Autodesk.AutoCAD.ApplicationServices.Document document, GenerateSectionWizardState state)

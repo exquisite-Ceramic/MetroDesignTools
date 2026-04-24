@@ -1,5 +1,6 @@
 using System.Drawing;
 using Autodesk.AutoCAD.Windows;
+using MetroToolKits.SectionGenerator.App.UseCases;
 
 namespace MetroToolKits.SectionGenerator.Plugin.UI;
 
@@ -8,7 +9,13 @@ namespace MetroToolKits.SectionGenerator.Plugin.UI;
 /// </summary>
 public sealed class SectionToolboxPaletteService
 {
+    private readonly IGenerateSectionPreflightUseCase _preflightUseCase;
     private PaletteSet? _paletteSet;
+
+    public SectionToolboxPaletteService(IGenerateSectionPreflightUseCase preflightUseCase)
+    {
+        _preflightUseCase = preflightUseCase;
+    }
 
     public void Show()
     {
@@ -16,12 +23,12 @@ public sealed class SectionToolboxPaletteService
         _paletteSet.Visible = true;
     }
 
-    private static PaletteSet CreatePaletteSet()
+    private PaletteSet CreatePaletteSet()
     {
         var paletteSet = new PaletteSet("MetroToolKits 工具箱")
         {
-            MinimumSize = new Size(320, 480),
-            Size = new Size(320, 480),
+            MinimumSize = new Size(360, 560),
+            Size = new Size(360, 560),
             DockEnabled = DockSides.Left | DockSides.Right
         };
 
@@ -29,7 +36,7 @@ public sealed class SectionToolboxPaletteService
             PaletteSetStyles.ShowAutoHideButton |
             PaletteSetStyles.ShowCloseButton |
             PaletteSetStyles.ShowPropertiesMenu;
-        paletteSet.AddVisual("SectionGenerator", new SectionToolboxControl());
+        paletteSet.AddVisual("SectionGenerator", new SectionToolboxControl(_preflightUseCase));
         return paletteSet;
     }
 }

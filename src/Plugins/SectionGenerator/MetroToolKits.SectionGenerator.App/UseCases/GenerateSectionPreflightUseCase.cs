@@ -10,15 +10,18 @@ public sealed class GenerateSectionPreflightUseCase : IGenerateSectionPreflightU
 {
     private readonly IFloorConfigRepository _floorConfigRepository;
     private readonly ICheckSectionUpdatesUseCase _checkSectionUpdatesUseCase;
+    private readonly IGenerationReadinessInspector _generationReadinessInspector;
     private readonly ILogger<GenerateSectionPreflightUseCase> _logger;
 
     public GenerateSectionPreflightUseCase(
         IFloorConfigRepository floorConfigRepository,
         ICheckSectionUpdatesUseCase checkSectionUpdatesUseCase,
+        IGenerationReadinessInspector generationReadinessInspector,
         ILogger<GenerateSectionPreflightUseCase> logger)
     {
         _floorConfigRepository = floorConfigRepository;
         _checkSectionUpdatesUseCase = checkSectionUpdatesUseCase;
+        _generationReadinessInspector = generationReadinessInspector;
         _logger = logger;
     }
 
@@ -27,18 +30,21 @@ public sealed class GenerateSectionPreflightUseCase : IGenerateSectionPreflightU
         var configDocument = _floorConfigRepository.Load();
         var missingRequirements = SectionGenerationConfigValidator.ValidateForGeneration(configDocument.Config);
         var existingSections = BuildExistingSectionSummary();
+        var readiness = _generationReadinessInspector.Inspect();
 
         _logger.LogDebug(
-            "生成预检完成，楼层数: {FloorCount}，缺失项: {MissingCount}，现有剖面数: {SectionCount}",
+            "生成预检完成，楼层数: {FloorCount}，缺失项: {MissingCount}，现有剖面数: {SectionCount}，可识别构件数: {ElementCount}",
             configDocument.Config.Floors.Count,
             missingRequirements.Count,
-            existingSections.TotalCount);
+            existingSections.TotalCount,
+            readiness.TotalRecognizableElementCount);
 
         return new GenerateSectionPreflightResult
         {
             ConfigDocument = configDocument,
             MissingRequirements = missingRequirements,
-            ExistingSections = existingSections
+            ExistingSections = existingSections,
+            Readiness = readiness
         };
     }
 
