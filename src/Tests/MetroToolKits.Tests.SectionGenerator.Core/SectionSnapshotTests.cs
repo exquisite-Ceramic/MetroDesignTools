@@ -72,6 +72,50 @@ public class SectionSnapshotTests
         snap.CutLineEnd.X.Should().Be(6000);
     }
 
+    [Fact]
+    public void SectionSnapshotFloorScope_PrefersExecutionFloorNames()
+    {
+        var snap = new SectionSnapshot
+        {
+            TargetFloorName = null,
+            ExecutionFloorNames = new List<string> { "F1", "F2", "F3" },
+            GeneratedFloorNames = new List<string> { "F1", "F3" }
+        };
+
+        SectionSnapshotFloorScope.ResolveExecutionFloorNames(snap)
+            .Should()
+            .Equal("F1", "F2", "F3");
+    }
+
+    [Fact]
+    public void SectionSnapshotFloorScope_LeavesLegacyGlobalSnapshotsUnconstrained()
+    {
+        var snap = new SectionSnapshot
+        {
+            TargetFloorName = null,
+            GeneratedFloorNames = new List<string> { "F1", "F3" }
+        };
+
+        SectionSnapshotFloorScope.ResolveExecutionFloorNames(snap)
+            .Should()
+            .BeEmpty();
+    }
+
+    [Fact]
+    public void SectionSnapshotFloorScope_FallsBackToGeneratedFloorsForLegacyTargetedSnapshots()
+    {
+        var snap = new SectionSnapshot
+        {
+            TargetFloorName = "F3",
+            GeneratedFloorNames = new List<string> { "F3" },
+            FloorSnapshots = new List<FloorSnapshot> { new() { FloorName = "F2" } }
+        };
+
+        SectionSnapshotFloorScope.ResolveExecutionFloorNames(snap)
+            .Should()
+            .Equal("F3");
+    }
+
     // ── SectionUpdateStatus ───────────────────────────────────────────────────
 
     [Fact]

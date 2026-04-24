@@ -432,21 +432,6 @@ public sealed class SectionGeneratorHostAcceptanceCommand
         return $"{result.Failure.Code} @ {result.Failure.Stage}: {result.Failure.UserMessage}";
     }
 
-    private static void ResetModelSpace(Database db)
-    {
-        using var tr = db.TransactionManager.StartTransaction();
-        var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-        var ms = (BlockTableRecord)tr.GetObject(bt[BlockTableRecord.ModelSpace], OpenMode.ForWrite);
-
-        foreach (ObjectId objId in ms)
-        {
-            if (tr.GetObject(objId, OpenMode.ForWrite, false) is Entity entity && !entity.IsErased)
-                entity.Erase();
-        }
-
-        tr.Commit();
-    }
-
     private static void EnsureLayer(Transaction tr, Database db, string layerName)
     {
         var layerTable = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);

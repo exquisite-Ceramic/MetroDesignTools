@@ -98,7 +98,7 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
             // 重新计算当前哈希，与快照比对
             var outdatedFloors = new List<string>();
             var skippedFloors = new List<string>();
-            var expectedFloorNames = ResolveExpectedFloorNames(snapshot);
+            var expectedFloorNames = SectionSnapshotFloorScope.ResolveExecutionFloorNames(snapshot);
 
             if (!SectionExecutionConfigBuilder.TryBuild(
                     sourceDocument,
@@ -295,20 +295,6 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
         return Vector3D.Dot(snapshotDirection.Normalized, currentDirection.Normalized) < 0
             ? new Foundation.Core.Geometry.Line3D(currentLine.End, currentLine.Start)
             : currentLine;
-    }
-
-    private static IReadOnlyList<string> ResolveExpectedFloorNames(SectionSnapshot snapshot)
-    {
-        if (snapshot.ExecutionFloorNames.Count > 0)
-        {
-            return snapshot.ExecutionFloorNames;
-        }
-
-        return string.IsNullOrWhiteSpace(snapshot.TargetFloorName)
-            ? Array.Empty<string>()
-            : snapshot.GeneratedFloorNames.Count > 0
-                ? snapshot.GeneratedFloorNames
-                : snapshot.FloorSnapshots.Select(floor => floor.FloorName).ToList();
     }
 
     private CheckSectionUpdatesResult BuildFailedResult(
