@@ -49,6 +49,7 @@ public sealed class GenSectionCommand
             return;
         }
 
+        var sourceCutLineHandle = lineResult.ObjectId.Handle.ToString();
         Point3D cutStart, cutEnd;
         using (var tr = doc.Database.TransactionManager.StartTransaction())
         {
@@ -62,7 +63,7 @@ public sealed class GenSectionCommand
             cutStart = new Point3D(cadLine.StartPoint.X, cadLine.StartPoint.Y, cadLine.StartPoint.Z);
             cutEnd   = new Point3D(cadLine.EndPoint.X,   cadLine.EndPoint.Y,   cadLine.EndPoint.Z);
             var length = cutStart.DistanceTo(cutEnd);
-            _logger.LogDebug("剖切线选择，Handle: {Handle}，长度: {Length:F2}", lineResult.ObjectId.Handle, length);
+            _logger.LogDebug("剖切线选择，Handle: {Handle}，长度: {Length:F2}", sourceCutLineHandle, length);
             tr.Commit();
         }
 
@@ -89,10 +90,11 @@ public sealed class GenSectionCommand
 
         var result = _useCase.Execute(new GenerateSectionRequest
         {
-            CutLineStart   = cutStart,
-            CutLineEnd     = cutEnd,
-            ViewDepth      = viewDepth,
-            InsertionPoint = insertPt
+            CutLineStart          = cutStart,
+            CutLineEnd            = cutEnd,
+            ViewDepth             = viewDepth,
+            InsertionPoint        = insertPt,
+            SourceCutLineHandle   = sourceCutLineHandle
         });
 
         sw.Stop();
@@ -100,8 +102,8 @@ public sealed class GenSectionCommand
         if (result.Success)
         {
             _userLogger.SectionCreated(result.BlockName!, result.FloorCount, sw.ElapsedMilliseconds);
-            _logger.LogInformation("剖面生成完成，块名称: {BlockName}，楼层数: {FloorCount}，耗时: {ElapsedMs}ms",
-                result.BlockName, result.FloorCount, sw.ElapsedMilliseconds);
+            _logger.LogInformation("剖面生成完成，块名称: {BlockName}，块句柄: {BlockHandle}，楼层数: {FloorCount}，耗时: {ElapsedMs}ms",
+                result.BlockName, result.BlockHandle, result.FloorCount, sw.ElapsedMilliseconds);
         }
         else
         {
@@ -110,4 +112,3 @@ public sealed class GenSectionCommand
         }
     }
 }
-
