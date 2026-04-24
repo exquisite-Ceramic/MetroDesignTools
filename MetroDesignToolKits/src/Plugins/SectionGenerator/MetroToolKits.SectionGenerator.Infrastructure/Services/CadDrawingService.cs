@@ -15,7 +15,7 @@ public sealed class CadDrawingService : IDrawingService
 {
     // ── 单层 ──────────────────────────────────────────────────────────────────
 
-    public string DrawSectionBlock(SectionGeometryData geometryData, Point3D insertionPoint, FloorConfig floorConfig)
+    public SectionBlockDrawResult DrawSectionBlock(SectionGeometryData geometryData, Point3D insertionPoint, FloorConfig floorConfig)
     {
         var multiData = new MultiFloorSectionData
         {
@@ -27,7 +27,7 @@ public sealed class CadDrawingService : IDrawingService
 
     // ── 多楼层 ────────────────────────────────────────────────────────────────
 
-    public string DrawMultiFloorSectionBlock(MultiFloorSectionData multiData, Point3D insertionPoint,
+    public SectionBlockDrawResult DrawMultiFloorSectionBlock(MultiFloorSectionData multiData, Point3D insertionPoint,
         IReadOnlyList<FloorConfig> floors)
     {
         var doc = Application.DocumentManager.MdiActiveDocument
@@ -63,10 +63,15 @@ public sealed class CadDrawingService : IDrawingService
         ms.AppendEntity(blockRef);
         tr.AddNewlyCreatedDBObject(blockRef, true);
 
+        var blockHandle = blockRef.Handle.ToString();
         AttachSnapshotXData(blockRef, tr, multiData, db);
 
         tr.Commit();
-        return blockName;
+        return new SectionBlockDrawResult
+        {
+            BlockName   = blockName,
+            BlockHandle = blockHandle
+        };
     }
 
     // ── 标注 ──────────────────────────────────────────────────────────────────
