@@ -62,13 +62,14 @@ public sealed class UpdateSectionUseCase : IUpdateSectionUseCase
                 };
             }
 
-            // 2. 重新生成（使用快照中记录的插入点）
+            // 2. 重新生成（使用快照中记录的剖切线、插入点、视图深度）
             var genResult = _generateUseCase.Execute(new GenerateSectionRequest
             {
-                CutLineStart   = snapshot.CutLineStart,
-                CutLineEnd     = snapshot.CutLineEnd,
-                InsertionPoint = snapshot.InsertionPoint,
-                ViewDepth      = snapshot.ViewDepth
+                CutLineStart          = snapshot.CutLineStart,
+                CutLineEnd            = snapshot.CutLineEnd,
+                InsertionPoint        = snapshot.InsertionPoint,
+                ViewDepth             = snapshot.ViewDepth,
+                SourceCutLineHandle   = snapshot.SourceCutLineHandle
             });
 
             if (!genResult.Success)
@@ -82,8 +83,8 @@ public sealed class UpdateSectionUseCase : IUpdateSectionUseCase
 
             sw.Stop();
             _userLogger.SectionUpdated(snapshot.BlockName);
-            _logger.LogInformation("剖面块 {OldName} 已更新为 {NewName}，耗时 {ElapsedMs}ms",
-                snapshot.BlockName, genResult.BlockName, sw.ElapsedMilliseconds);
+            _logger.LogInformation("剖面块 {OldName} 已更新为 {NewName}，新句柄 {NewHandle}，耗时 {ElapsedMs}ms",
+                snapshot.BlockName, genResult.BlockName, genResult.BlockHandle, sw.ElapsedMilliseconds);
 
             return new UpdateSectionResult { Success = true, NewBlockName = genResult.BlockName };
         }
