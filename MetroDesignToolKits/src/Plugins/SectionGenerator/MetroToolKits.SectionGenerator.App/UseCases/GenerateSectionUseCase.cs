@@ -99,23 +99,25 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
                 composeSw.ElapsedMilliseconds, multiData.TotalHeight);
 
             // 绘制块
-            var blockName = _drawingService.DrawMultiFloorSectionBlock(
+            var drawResult = _drawingService.DrawMultiFloorSectionBlock(
                 multiData, request.InsertionPoint, floors);
 
-            // 写入快照（含各楼层哈希）
-            var snapshot = BuildSnapshot(blockName, request, floors, floorElements, multiData);
-            _snapshotRepo.Save(blockName, snapshot);
-            _logger.LogDebug("写入剖面快照，楼层哈希: {Hashes}",
+            // 写入快照（含各楼层哈希）。注意：快照必须写到块参照 Handle 上，不能写到块定义名称上。
+            var snapshot = BuildSnapshot(drawResult.BlockName, request, floors, floorElements, multiData);
+            _snapshotRepo.Save(drawResult.BlockHandle, snapshot);
+            _logger.LogDebug("写入剖面快照，块句柄: {BlockHandle}，楼层哈希: {Hashes}",
+                drawResult.BlockHandle,
                 string.Join(", ", snapshot.FloorSnapshots.Select(f => $"{f.FloorName}:{f.GeometryHash}")));
 
             sw.Stop();
-            _logger.LogInformation("创建剖面块 {BlockName}，楼层数: {FloorCount}，总耗时: {ElapsedMs}ms",
-                blockName, floors.Count, sw.ElapsedMilliseconds);
+            _logger.LogInformation("创建剖面块 {BlockName}，句柄 {BlockHandle}，楼层数: {FloorCount}，总耗时: {ElapsedMs}ms",
+                drawResult.BlockName, drawResult.BlockHandle, floors.Count, sw.ElapsedMilliseconds);
 
             return new GenerateSectionResult
             {
                 Success     = true,
-                BlockName   = blockName,
+                BlockName   = drawResult.BlockName,
+                BlockHandle = drawResult.BlockHandle,
                 FloorCount  = floors.Count,
                 TotalHeight = multiData.TotalHeight
             };
@@ -149,6 +151,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
         return new SectionSnapshot
         {
             BlockName             = blockName,
+            SourceCutLineHandle   = request.SourceCutLineHandle ?? string.Empty,
             CutLineStart          = request.CutLineStart,
             CutLineEnd            = request.CutLineEnd,
             InsertionPoint        = request.InsertionPoint,
