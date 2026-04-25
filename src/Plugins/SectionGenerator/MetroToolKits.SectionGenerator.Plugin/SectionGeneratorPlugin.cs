@@ -128,6 +128,7 @@ public class SectionGeneratorPlugin : IPlugin
         services.AddSingleton<IGenerateSectionPreflightUseCase, GenerateSectionPreflightUseCase>();
         services.AddSingleton<IWorkbenchSnapshotAssembler, WorkbenchSnapshotAssembler>();
         services.AddSingleton<IFloorConfigDocumentAssembler, FloorConfigDocumentAssembler>();
+        services.AddSingleton<IFloorConfigSaveRequestMapper, FloorConfigSaveRequestMapper>();
         services.AddSingleton<IUpdateSectionUseCase, UpdateSectionUseCase>();
         services.AddSingleton<ILocateSourceElementUseCase, LocateSourceElementUseCase>();
         services.AddSingleton<IFindRelatedSectionsUseCase, FindRelatedSectionsUseCase>();
