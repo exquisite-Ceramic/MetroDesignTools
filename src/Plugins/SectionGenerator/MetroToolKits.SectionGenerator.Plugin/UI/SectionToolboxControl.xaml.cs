@@ -47,6 +47,8 @@ public partial class SectionToolboxControl : UserControl
         _slabTemplateCatalogMapper = slabTemplateCatalogMapper;
         _floorConfigPaletteController.StateChanged += FloorConfigPaletteController_StateChanged;
         _layerMappingPaletteController.StateChanged += LayerMappingPaletteController_StateChanged;
+        WorkbenchOverviewPanelHost.RefreshRequested += WorkbenchOverviewPanelHost_RefreshRequested;
+        WorkbenchOverviewPanelHost.CommandRequested += WorkbenchOverviewPanelHost_CommandRequested;
         OutputSettingsEntryPanelHost.NavigateToFloorConfigRequested += OutputSettingsEntryPanelHost_NavigateToFloorConfigRequested;
         Loaded += SectionToolboxControl_Loaded;
     }
@@ -69,6 +71,11 @@ public partial class SectionToolboxControl : UserControl
             return;
         }
 
+        ExecuteCommand(commandName);
+    }
+
+    private void ExecuteCommand(string commandName)
+    {
         var doc = Application.DocumentManager.MdiActiveDocument;
         if (doc == null)
         {
@@ -81,7 +88,7 @@ public partial class SectionToolboxControl : UserControl
 
     private void RefreshStatus()
     {
-        StatusText.Text = ReadyMessage;
+        WorkbenchOverviewPanelHost.SetStatusText(ReadyMessage);
 
         try
         {
@@ -102,12 +109,7 @@ public partial class SectionToolboxControl : UserControl
 
     private void UpdateOverviewTab(SectionWorkbenchSnapshotDto snapshot)
     {
-        ConfigSummaryText.Text = snapshot.FloorConfig.SummaryText;
-        ReadinessSummaryText.Text = snapshot.ElementReadiness.SummaryText;
-        SectionsSummaryText.Text = snapshot.ExistingSections.SummaryText;
-        RecommendedActionText.Text = snapshot.RecommendedAction.Message;
-        PrimaryActionButton.Content = snapshot.RecommendedAction.ButtonText;
-        PrimaryActionButton.Tag = snapshot.RecommendedAction.CommandTag;
+        WorkbenchOverviewPanelHost.ApplySnapshot(snapshot);
     }
 
     private void UpdatePreparationTab(SectionWorkbenchSnapshotDto snapshot)
@@ -146,12 +148,13 @@ public partial class SectionToolboxControl : UserControl
 
     private void ApplyRefreshFailure(Exception ex)
     {
-        ConfigSummaryText.Text = "配置：暂时无法读取当前图纸配置状态。";
-        ReadinessSummaryText.Text = "构件：暂时无法检查当前图纸的构件就绪度。";
-        SectionsSummaryText.Text = $"剖面：状态刷新失败。{ex.Message}";
-        RecommendedActionText.Text = "状态刷新失败时，仍可直接进入楼层配置或重新刷新。";
-        PrimaryActionButton.Content = "楼层配置";
-        PrimaryActionButton.Tag = SectionGeneratorCommandNames.FloorConfig;
+        WorkbenchOverviewPanelHost.ApplyFallbackState(
+            "配置：暂时无法读取当前图纸配置状态。",
+            "构件：暂时无法检查当前图纸的构件就绪度。",
+            $"剖面：状态刷新失败。{ex.Message}",
+            "状态刷新失败时，仍可直接进入楼层配置或重新刷新。",
+            "楼层配置",
+            SectionGeneratorCommandNames.FloorConfig);
 
         PreparationSummaryText.Text = "准备：暂时无法读取图纸准备状态。";
         PreparationCountsText.Text = "构件计数：暂时无法统计。";
@@ -219,6 +222,16 @@ public partial class SectionToolboxControl : UserControl
     private void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
         RefreshStatus();
+    }
+
+    private void WorkbenchOverviewPanelHost_RefreshRequested(object? sender, EventArgs e)
+    {
+        RefreshStatus();
+    }
+
+    private void WorkbenchOverviewPanelHost_CommandRequested(object? sender, WorkbenchCommandRequestedEventArgs e)
+    {
+        ExecuteCommand(e.CommandName);
     }
 
     private void RefreshFloorConfigButton_Click(object sender, RoutedEventArgs e)
