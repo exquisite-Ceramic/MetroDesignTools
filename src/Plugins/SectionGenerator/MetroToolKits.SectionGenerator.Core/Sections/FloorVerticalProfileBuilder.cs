@@ -1,5 +1,8 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using MetroToolKits.Foundation.Building.Elements;
 using MetroToolKits.Foundation.Building.Types;
+using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
 
 namespace MetroToolKits.SectionGenerator.Core.Sections;
@@ -10,20 +13,41 @@ namespace MetroToolKits.SectionGenerator.Core.Sections;
 /// </summary>
 public sealed class FloorVerticalProfileBuilder
 {
+    public const string BoundarySlabTemplateMissingCode = "SectionGenerator.FloorConfigLoad.BoundarySlabTemplateMissing";
+
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly ISlabAssemblyBuilder _slabAssemblyBuilder;
+    private readonly ILogger<FloorVerticalProfileBuilder> _logger;
 
+    /// <summary>
+    /// 仅用于测试和兼容回退；生产链请通过 DI 注入共享实例。
+    /// </summary>
     public FloorVerticalProfileBuilder()
-        : this(new InMemorySlabAssemblyTemplateCatalog(), new SlabAssemblyBuilder())
+        : this(
+            new InMemorySlabAssemblyTemplateCatalog(),
+            new SlabAssemblyBuilder(),
+            NullLogger<FloorVerticalProfileBuilder>.Instance)
     {
     }
 
     public FloorVerticalProfileBuilder(
         ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         ISlabAssemblyBuilder slabAssemblyBuilder)
+        : this(
+            slabTemplateCatalog,
+            slabAssemblyBuilder,
+            NullLogger<FloorVerticalProfileBuilder>.Instance)
+    {
+    }
+
+    public FloorVerticalProfileBuilder(
+        ISlabAssemblyTemplateCatalog slabTemplateCatalog,
+        ISlabAssemblyBuilder slabAssemblyBuilder,
+        ILogger<FloorVerticalProfileBuilder> logger)
     {
         _slabTemplateCatalog = slabTemplateCatalog;
         _slabAssemblyBuilder = slabAssemblyBuilder;
+        _logger = logger;
     }
 
     public FloorVerticalProfile Build(
@@ -32,11 +56,17 @@ public sealed class FloorVerticalProfileBuilder
         double baseElevation)
     {
         var bottomDefinition = ResolveBoundaryDefinition(
+            floor,
+            "底边界板",
             floor.BottomBoundarySlab,
-            createLegacyTemplate: () => CreateLegacyBottomTemplate(floor));
+            createLegacyTemplate: () => CreateLegacyBottomTemplate(floor),
+            logResolution: true);
         var topDefinition = ResolveBoundaryDefinition(
+            floor,
+            "顶边界板",
             floor.TopBoundarySlab,
-            createLegacyTemplate: () => CreateLegacyTopTemplate(floor));
+            createLegacyTemplate: () => CreateLegacyTopTemplate(floor),
+            logResolution: true);
 
         var bottomSlopeDelta = bottomDefinition.Config.SlopeEnabled
             ? sectionLength * bottomDefinition.Config.SlopeValue
@@ -92,7 +122,11 @@ public sealed class FloorVerticalProfileBuilder
     {
         var segments = new List<SectionLineSegment>();
         segments.AddRange(BuildBoundaryLinesFor(
-            ResolveBoundaryDefinition(floor.BottomBoundarySlab, () => CreateLegacyBottomTemplate(floor)),
+            ResolveBoundaryDefinition(
+                floor,
+                "底边界板",
+                floor.BottomBoundarySlab,
+                () => CreateLegacyBottomTemplate(floor)),
             anchorAtTop: true,
             anchorStartY: profile.BottomBoundaryTop.StartY,
             anchorEndY: profile.BottomBoundaryTop.EndY,
@@ -100,7 +134,11 @@ public sealed class FloorVerticalProfileBuilder
             wallIntervals));
 
         segments.AddRange(BuildBoundaryLinesFor(
-            ResolveBoundaryDefinition(floor.TopBoundarySlab, () => CreateLegacyTopTemplate(floor)),
+            ResolveBoundaryDefinition(
+                floor,
+                "顶边界板",
+                floor.TopBoundarySlab,
+                () => CreateLegacyTopTemplate(floor)),
             anchorAtTop: false,
             anchorStartY: profile.TopBoundaryBottom.StartY,
             anchorEndY: profile.TopBoundaryBottom.EndY,
@@ -368,14 +406,24 @@ public sealed class FloorVerticalProfileBuilder
     }
 
     private BoundaryTemplateDefinition ResolveBoundaryDefinition(
+        FloorConfig floor,
+        string boundaryName,
         BoundarySlabConfig config,
-        Func<SlabAssemblyTemplate> createLegacyTemplate)
+        Func<SlabAssemblyTemplate> createLegacyTemplate,
+        bool logResolution = false)
     {
-        var template = !string.IsNullOrWhiteSpace(config.TemplateId)
-            ? _slabTemplateCatalog.GetById(config.TemplateId)
-            : null;
+        SlabAssemblyTemplate template;
+        var usedLegacyTemplate = string.IsNullOrWhiteSpace(config.TemplateId);
+        if (usedLegacyTemplate)
+        {
+            template = createLegacyTemplate();
+        }
+        else
+        {
+            template = _slabTemplateCatalog.GetById(config.TemplateId)
+                ?? throw CreateMissingTemplateException(floor.Name, boundaryName, config.TemplateId);
+        }
 
-        template ??= createLegacyTemplate();
         var element = _slabAssemblyBuilder.Build(
             new CoreSlabArea
             {
@@ -394,7 +442,7 @@ public sealed class FloorVerticalProfileBuilder
             ? Math.Min(coreLayer.TopOffset, coreLayer.BottomOffset)
             : bottommostOffset;
 
-        return new BoundaryTemplateDefinition(
+        var definition = new BoundaryTemplateDefinition(
             template,
             config,
             element.LayerSections.Select(layer => new BoundaryLayerDefinition(
@@ -414,6 +462,48 @@ public sealed class FloorVerticalProfileBuilder
             coreBottomOffset - topmostOffset,
             coreTopOffset - bottommostOffset,
             coreBottomOffset - bottommostOffset);
+
+        if (logResolution)
+        {
+            _logger.LogInformation(
+                "楼层 {FloorName} 的{BoundaryName}模板解析完成。RequestedTemplateId={RequestedTemplateId}, ResolvedTemplateId={ResolvedTemplateId}, ResolvedTemplateName={ResolvedTemplateName}, TopmostOffset={TopmostOffset:F2}, BottommostOffset={BottommostOffset:F2}, CoreTopOffset={CoreTopOffset:F2}, CoreBottomOffset={CoreBottomOffset:F2}, LegacyFallback={LegacyFallback}",
+                floor.Name,
+                boundaryName,
+                string.IsNullOrWhiteSpace(config.TemplateId) ? null : config.TemplateId,
+                template.TemplateId,
+                template.TemplateName,
+                definition.TopmostOffset,
+                definition.BottommostOffset,
+                definition.CoreTopOffset,
+                definition.CoreBottomOffset,
+                usedLegacyTemplate);
+        }
+
+        return definition;
+    }
+
+    private static BoundarySlabTemplateResolutionException CreateMissingTemplateException(
+        string floorName,
+        string boundaryName,
+        string templateId)
+    {
+        var technicalMessage =
+            $"楼层 {floorName} 的{boundaryName}已配置模板 {templateId}，但当前模板目录中找不到该模板。";
+        var failure = new OperationFailure
+        {
+            Code = BoundarySlabTemplateMissingCode,
+            Category = FailureCategory.UserInput,
+            Stage = PipelineStage.FloorConfigLoad,
+            Module = nameof(FloorVerticalProfileBuilder),
+            UserMessage = $"{floorName} 的{boundaryName}模板不存在，请检查楼板模板配置",
+            TechnicalMessage = technicalMessage
+        };
+
+        return new BoundarySlabTemplateResolutionException(
+            floorName,
+            boundaryName,
+            templateId,
+            failure);
     }
 
     private static SlabAssemblyTemplate CreateLegacyBottomTemplate(FloorConfig floor)
@@ -491,4 +581,23 @@ public sealed class FloorVerticalProfileBuilder
         public double GetUpperSurfaceOffset() => Math.Max(TopOffset, BottomOffset);
         public double GetLowerSurfaceOffset() => Math.Min(TopOffset, BottomOffset);
     }
+}
+
+public sealed class BoundarySlabTemplateResolutionException : ToolkitException
+{
+    public BoundarySlabTemplateResolutionException(
+        string floorName,
+        string boundaryName,
+        string templateId,
+        OperationFailure failure)
+        : base(failure)
+    {
+        FloorName = floorName;
+        BoundaryName = boundaryName;
+        TemplateId = templateId;
+    }
+
+    public string FloorName { get; }
+    public string BoundaryName { get; }
+    public string TemplateId { get; }
 }

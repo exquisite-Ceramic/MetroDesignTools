@@ -1,11 +1,13 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using MetroToolKits.Foundation.Building.Elements;
+using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Diagnostics;
 using MetroToolKits.SectionGenerator.App.Models;
+using MetroToolKits.SectionGenerator.App.Support;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Core.Sections;
 using NSubstitute;
@@ -47,6 +49,41 @@ public class CheckSectionUpdatesUseCaseTests
 
         result.Items.Should().HaveCount(1);
         result.Items[0].Status.Should().Be(SectionUpdateStatus.Unknown);
+    }
+
+    [Fact]
+    public void Execute_WhenEmbeddedConfigMissing_ReturnsUnknownForAllSections()
+    {
+        var snapshotRepo = SnapshotRepoWithSingleSnapshot("old-hash");
+        var blockQueryService = Substitute.For<ISectionBlockQueryService>();
+        blockQueryService.FindAllSectionBlockHandles().Returns(new[] { "H1" });
+        var recognizer = Substitute.For<IElementRecognizer>();
+        var configRepo = Substitute.For<IFloorConfigRepository>();
+        configRepo.Load().Returns(new LoadedSectionConfig
+        {
+            Config = new SectionConfig(),
+            OutputConfig = new SectionOutputConfig(),
+            RuntimeState = new SectionConfigRuntimeState
+            {
+                Source = SectionConfigStorageSource.Missing,
+                DrawingDisplayName = "44.dwg"
+            }
+        });
+
+        var result = BuildUseCase(
+            snapshotRepo,
+            recognizer,
+            configRepo,
+            blockQueryService: blockQueryService).Execute();
+
+        result.Status.Should().Be(OperationStatus.PartialSuccess);
+        result.Items.Should().HaveCount(1);
+        result.Items[0].Status.Should().Be(SectionUpdateStatus.Unknown);
+        result.Items[0].WarningMessage.Should().Contain("缺少内嵌楼层配置");
+        result.Diagnostics.Should().Contain(d =>
+            d.Code == SectionGenerationErrorCodes.FloorConfigMissing &&
+            d.Module == nameof(CheckSectionUpdatesUseCase));
+        recognizer.DidNotReceive().RecognizeElements(Arg.Any<Line3D>(), Arg.Any<double>(), Arg.Any<ScopeBounds2D?>());
     }
 
     [Fact]
@@ -278,17 +315,119 @@ public class CheckSectionUpdatesUseCaseTests
         result.Items[0].OutdatedFloors.Should().BeEmpty();
     }
 
+    [Fact]
+    public void Execute_BoundaryTemplateGeometryChangedWithSameTemplateId_ReturnsOutdated()
+    {
+        var elements = new[] { MakeWall() };
+        var floor = DefaultFloor("F1");
+        floor.BottomBoundarySlab = new BoundarySlabConfig();
+        floor.TopBoundarySlab = new BoundarySlabConfig
+        {
+            TemplateId = "top-boundary-template"
+        };
+
+        var oldCatalog = new InMemorySlabAssemblyTemplateCatalog(new[]
+        {
+            CreateTopBoundaryTemplate("top-boundary-template", coreThickness: 200, finishThickness: 20)
+        });
+        var oldBuilder = new FloorVerticalProfileBuilder(
+            oldCatalog,
+            new SlabAssemblyBuilder(),
+            NullLogger<FloorVerticalProfileBuilder>.Instance);
+        var oldProfile = oldBuilder.Build(floor, sectionLength: 20, baseElevation: 0);
+        var oldHash = SectionOutputConfigHasher.Combine(
+            new FloorGeometryHasher().ComputeHash(elements, floor, oldProfile),
+            new SectionOutputConfig());
+
+        var snapshotRepo = SnapshotRepoWithSingleSnapshot(oldHash);
+        var recognizer = Substitute.For<IElementRecognizer>();
+        recognizer.RecognizeElements(Arg.Any<Line3D>(), Arg.Any<double>(), Arg.Any<ScopeBounds2D?>())
+            .Returns(new ElementRecognitionResult { Elements = elements });
+
+        var configRepo = Substitute.For<IFloorConfigRepository>();
+        configRepo.Load().Returns(LoadedConfig(new SectionConfig
+        {
+            Floors = new List<FloorConfig> { floor }
+        }));
+
+        var newCatalog = new InMemorySlabAssemblyTemplateCatalog(new[]
+        {
+            CreateTopBoundaryTemplate("top-boundary-template", coreThickness: 260, finishThickness: 40)
+        });
+        var newBuilder = new FloorVerticalProfileBuilder(
+            newCatalog,
+            new SlabAssemblyBuilder(),
+            NullLogger<FloorVerticalProfileBuilder>.Instance);
+
+        var result = BuildUseCase(
+            snapshotRepo,
+            recognizer,
+            configRepo,
+            slabTemplateCatalog: newCatalog,
+            verticalProfileBuilder: newBuilder).Execute();
+
+        result.Items[0].Status.Should().Be(SectionUpdateStatus.Outdated);
+        result.Items[0].OutdatedFloors.Should().Contain("F1");
+    }
+
+    [Fact]
+    public void Execute_ConfiguredBoundaryTemplateMissing_ReturnsUnknown()
+    {
+        var floor = DefaultFloor("F1");
+        floor.BottomBoundarySlab = new BoundarySlabConfig();
+        floor.TopBoundarySlab = new BoundarySlabConfig
+        {
+            TemplateId = "missing-top-template"
+        };
+
+        var snapshotRepo = SnapshotRepoWithSingleSnapshot("old-hash");
+        var recognizer = Substitute.For<IElementRecognizer>();
+        recognizer.RecognizeElements(Arg.Any<Line3D>(), Arg.Any<double>(), Arg.Any<ScopeBounds2D?>())
+            .Returns(new ElementRecognitionResult { Elements = new[] { MakeWall() } });
+
+        var configRepo = Substitute.For<IFloorConfigRepository>();
+        configRepo.Load().Returns(LoadedConfig(new SectionConfig
+        {
+            Floors = new List<FloorConfig> { floor }
+        }));
+
+        var catalog = new InMemorySlabAssemblyTemplateCatalog(Array.Empty<SlabAssemblyTemplate>());
+        var builder = new FloorVerticalProfileBuilder(
+            catalog,
+            new SlabAssemblyBuilder(),
+            NullLogger<FloorVerticalProfileBuilder>.Instance);
+
+        var result = BuildUseCase(
+            snapshotRepo,
+            recognizer,
+            configRepo,
+            slabTemplateCatalog: catalog,
+            verticalProfileBuilder: builder).Execute();
+
+        result.Status.Should().Be(OperationStatus.PartialSuccess);
+        result.Items[0].Status.Should().Be(SectionUpdateStatus.Unknown);
+        result.Items[0].SkippedFloors.Should().Contain("F1");
+        result.Diagnostics.Should().Contain(d => d.Code == FloorVerticalProfileBuilder.BoundarySlabTemplateMissingCode);
+    }
+
     private static CheckSectionUpdatesUseCase BuildUseCase(
         ISectionSnapshotRepository? snapshotRepo = null,
         IElementRecognizer? recognizer = null,
         IFloorConfigRepository? configRepo = null,
         ISectionLineResolver? lineResolver = null,
-        ISectionBlockQueryService? blockQueryService = null)
+        ISectionBlockQueryService? blockQueryService = null,
+        ISlabAssemblyTemplateCatalog? slabTemplateCatalog = null,
+        FloorVerticalProfileBuilder? verticalProfileBuilder = null)
     {
         snapshotRepo ??= Substitute.For<ISectionSnapshotRepository>();
         recognizer ??= Substitute.For<IElementRecognizer>();
         lineResolver ??= Substitute.For<ISectionLineResolver>();
         blockQueryService ??= Substitute.For<ISectionBlockQueryService>();
+        slabTemplateCatalog ??= new InMemorySlabAssemblyTemplateCatalog();
+        verticalProfileBuilder ??= new FloorVerticalProfileBuilder(
+            slabTemplateCatalog,
+            new SlabAssemblyBuilder(),
+            NullLogger<FloorVerticalProfileBuilder>.Instance);
 
         if (configRepo == null)
         {
@@ -306,6 +445,8 @@ public class CheckSectionUpdatesUseCaseTests
             recognizer,
             configRepo,
             new FloorGeometryHasher(),
+            slabTemplateCatalog,
+            verticalProfileBuilder,
             NullLogger<CheckSectionUpdatesUseCase>.Instance);
     }
 
@@ -349,6 +490,48 @@ public class CheckSectionUpdatesUseCaseTests
     private static LoadedSectionConfig LoadedConfig(SectionConfig config) => new()
     {
         Config = config,
-        OutputConfig = new SectionOutputConfig()
+        OutputConfig = new SectionOutputConfig(),
+        RuntimeState = new SectionConfigRuntimeState
+        {
+            Source = SectionConfigStorageSource.EmbeddedDwg,
+            DrawingDisplayName = "Test.dwg",
+            HasPersistedConfig = true,
+            IsCurrentDrawingSaved = true
+        }
     };
+
+    private static SlabAssemblyTemplate CreateTopBoundaryTemplate(
+        string templateId,
+        double coreThickness,
+        double finishThickness)
+    {
+        var template = new SlabAssemblyTemplate
+        {
+            TemplateId = templateId,
+            TemplateName = $"Template-{templateId}",
+            WallJunctionMode = SlabWallJunctionMode.StopAtWallFace,
+            CoreRule = new SlabCoreRule
+            {
+                Name = "结构顶板",
+                Thickness = coreThickness,
+                MaterialOrCategory = "结构",
+                VisibleInSection = true
+            }
+        };
+
+        if (finishThickness > 0)
+        {
+            template.TopLayers.Add(new SlabLayerRule
+            {
+                Name = "装修面层",
+                Side = SlabLayerSide.Top,
+                Order = 1,
+                Thickness = finishThickness,
+                MaterialOrCategory = "装修",
+                VisibleInSection = true
+            });
+        }
+
+        return template;
+    }
 }

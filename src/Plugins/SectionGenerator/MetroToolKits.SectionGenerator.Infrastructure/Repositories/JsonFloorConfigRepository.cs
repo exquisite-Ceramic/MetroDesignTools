@@ -409,6 +409,7 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
 
         return new BoundarySlabConfig
         {
+            TemplateId = document.TemplateId ?? string.Empty,
             SlopeEnabled = document.SlopeEnabled,
             SlopeValue = document.SlopeValue,
             SlopeTarget = document.SlopeTarget ?? fallbackSlopeTarget
@@ -419,6 +420,7 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
     {
         return new BoundarySlabDocument
         {
+            TemplateId = string.IsNullOrWhiteSpace(config.TemplateId) ? null : config.TemplateId,
             SlopeEnabled = config.SlopeEnabled,
             SlopeValue = config.SlopeValue,
             SlopeTarget = config.SlopeTarget
@@ -488,6 +490,7 @@ public sealed class JsonFloorConfigRepository : IFloorConfigRepository
 
     private sealed class BoundarySlabDocument
     {
+        public string? TemplateId { get; set; }
         public bool SlopeEnabled { get; set; }
         public double SlopeValue { get; set; }
         public string? SlopeTarget { get; set; } = "StructuralSlab";

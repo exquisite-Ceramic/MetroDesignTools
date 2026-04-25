@@ -1,9 +1,11 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Diagnostics;
+using MetroToolKits.SectionGenerator.App.Models;
 using MetroToolKits.SectionGenerator.App.Support;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
@@ -20,6 +22,7 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
     private readonly IElementRecognizer _elementRecognizer;
     private readonly IFloorConfigRepository _configRepo;
     private readonly FloorGeometryHasher _hasher;
+    private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly FloorAlignmentResolver _alignmentResolver;
     private readonly FloorScopeResolver _scopeResolver;
     private readonly FloorVerticalProfileBuilder _verticalProfileBuilder;
@@ -32,26 +35,7 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
         IElementRecognizer elementRecognizer,
         IFloorConfigRepository configRepo,
         FloorGeometryHasher hasher,
-        ILogger<CheckSectionUpdatesUseCase> logger)
-        : this(
-            snapshotRepo,
-            sectionBlockQueryService,
-            sectionLineResolver,
-            elementRecognizer,
-            configRepo,
-            hasher,
-            new FloorVerticalProfileBuilder(),
-            logger)
-    {
-    }
-
-    public CheckSectionUpdatesUseCase(
-        ISectionSnapshotRepository snapshotRepo,
-        ISectionBlockQueryService sectionBlockQueryService,
-        ISectionLineResolver sectionLineResolver,
-        IElementRecognizer elementRecognizer,
-        IFloorConfigRepository configRepo,
-        FloorGeometryHasher hasher,
+        ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         FloorVerticalProfileBuilder verticalProfileBuilder,
         ILogger<CheckSectionUpdatesUseCase> logger)
     {
@@ -61,6 +45,7 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
         _elementRecognizer = elementRecognizer;
         _configRepo        = configRepo;
         _hasher            = hasher;
+        _slabTemplateCatalog = slabTemplateCatalog;
         _alignmentResolver = new FloorAlignmentResolver();
         _scopeResolver     = new FloorScopeResolver();
         _verticalProfileBuilder = verticalProfileBuilder;
@@ -79,6 +64,41 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
         var results = new List<SectionCheckResult>();
         var sourceDocument  = _configRepo.Load();
         diagnostics.AddRange(sourceDocument.RuntimeDiagnostics);
+
+        if (sourceDocument.RuntimeState.Source == SectionConfigStorageSource.Missing && handles.Count > 0)
+        {
+            diagnostics.Add(BuildMissingEmbeddedConfigDiagnostic(sourceDocument.RuntimeState.DrawingDisplayName));
+            _logger.LogWarning(
+                "当前图纸 {DrawingName} 缺少内嵌楼层配置，所有剖面检查结果记为 Unknown",
+                sourceDocument.RuntimeState.DrawingDisplayName);
+
+            foreach (var handle in handles)
+            {
+                var snapshot = _snapshotRepo.Load(handle);
+                results.Add(new SectionCheckResult
+                {
+                    BlockHandle = handle,
+                    BlockName = snapshot?.BlockName ?? handle,
+                    Status = SectionUpdateStatus.Unknown,
+                    SkippedFloors = snapshot != null
+                        ? SectionSnapshotFloorScope.ResolveExecutionFloorNames(snapshot).ToList()
+                        : new List<string>(),
+                    WarningMessage = BuildMissingEmbeddedConfigMessage(sourceDocument.RuntimeState.DrawingDisplayName),
+                    Snapshot = snapshot
+                });
+            }
+
+            sw.Stop();
+            _logger.LogInformation("变更检测完成，共 {Total} 个剖面，{Outdated} 个需要更新，耗时 {ElapsedMs}ms",
+                results.Count, 0, sw.ElapsedMilliseconds);
+
+            return new CheckSectionUpdatesResult
+            {
+                Status = OperationStatus.PartialSuccess,
+                Diagnostics = diagnostics,
+                Items = results
+            };
+        }
 
         foreach (var handle in handles)
         {
@@ -185,17 +205,58 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
                     snapshot.ViewDepth,
                     context.EffectiveScope).Elements;
 
-                var baseElevation = ComputeBaseElevation(config, floor.Name, currentSourceLine.Length);
-                var verticalProfile = _verticalProfileBuilder.Build(floor, currentSourceLine.Length, baseElevation);
-                var currentHash = SectionOutputConfigHasher.Combine(
-                    _hasher.ComputeHash(elements, floor, verticalProfile),
-                    outputConfig);
+                try
+                {
+                    var baseElevation = ComputeBaseElevation(config, floor.Name, currentSourceLine.Length);
+                    var verticalProfile = _verticalProfileBuilder.Build(floor, currentSourceLine.Length, baseElevation);
+                    var currentHash = SectionOutputConfigHasher.Combine(
+                        _hasher.ComputeHash(elements, floor, verticalProfile),
+                        outputConfig);
+                    var isOutdated = currentHash != floorSnap.GeometryHash;
+                    var requestedTopTemplateId = string.IsNullOrWhiteSpace(floor.TopBoundarySlab.TemplateId)
+                        ? null
+                        : floor.TopBoundarySlab.TemplateId;
+                    var resolvedTopTemplate = ResolveBoundaryTemplate(requestedTopTemplateId);
+                    var topBoundaryBottom = verticalProfile.GetTopBoundaryBottom(0);
+                    var topmostOffset = verticalProfile.GetTopBoundaryTop(0) - topBoundaryBottom;
+                    var bottommostOffset = 0d;
+                    var coreTopOffset = verticalProfile.GetTopStructuralTop(0) - topBoundaryBottom;
+                    var coreBottomOffset = verticalProfile.GetTopStructuralBottom(0) - topBoundaryBottom;
 
-                _logger.LogDebug("剖面块 {BlockName}，楼层 {FloorName}，旧哈希: {OldHash}，新哈希: {NewHash}",
-                    snapshot.BlockName, floorSnap.FloorName, floorSnap.GeometryHash, currentHash);
+                    _logger.LogInformation(
+                        "剖面块 {BlockName}，楼层 {FloorName}，TopBoundaryTemplateId={TopBoundaryTemplateId}, ResolvedTemplateId={ResolvedTemplateId}, ResolvedTemplateName={ResolvedTemplateName}, TopmostOffset={TopmostOffset:F2}, BottommostOffset={BottommostOffset:F2}, CoreTopOffset={CoreTopOffset:F2}, CoreBottomOffset={CoreBottomOffset:F2}, OldHash={OldHash}, NewHash={NewHash}, IsOutdated={IsOutdated}",
+                        snapshot.BlockName,
+                        floorSnap.FloorName,
+                        requestedTopTemplateId,
+                        resolvedTopTemplate?.TemplateId ?? (requestedTopTemplateId == null ? "legacy-top-boundary" : null),
+                        resolvedTopTemplate?.TemplateName ?? (requestedTopTemplateId == null ? "LegacyTopBoundary" : null),
+                        topmostOffset,
+                        bottommostOffset,
+                        coreTopOffset,
+                        coreBottomOffset,
+                        floorSnap.GeometryHash,
+                        currentHash,
+                        isOutdated);
 
-                if (currentHash != floorSnap.GeometryHash)
-                    outdatedFloors.Add(floorSnap.FloorName);
+                    if (isOutdated)
+                    {
+                        outdatedFloors.Add(floorSnap.FloorName);
+                    }
+                }
+                catch (BoundarySlabTemplateResolutionException ex)
+                {
+                    skippedFloors.Add(floorSnap.FloorName);
+                    hasUncheckableGeneratedFloor = true;
+                    diagnostics.Add(BuildBoundaryTemplateMissingDiagnostic(floorSnap.FloorName, ex));
+                    _logger.LogWarning(
+                        ex,
+                        "剖面块 {BlockName} 在复核楼层 {RequestedFloorName} 时无法解析 {BoundaryFloorName} 的{BoundaryName}模板 {TemplateId}，本条结果记为 Unknown",
+                        snapshot.BlockName,
+                        floorSnap.FloorName,
+                        ex.FloorName,
+                        ex.BoundaryName,
+                        ex.TemplateId);
+                }
             }
 
             var status = hasUncheckableGeneratedFloor
@@ -295,6 +356,62 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
         return Vector3D.Dot(snapshotDirection.Normalized, currentDirection.Normalized) < 0
             ? new Foundation.Core.Geometry.Line3D(currentLine.End, currentLine.Start)
             : currentLine;
+    }
+
+    private SlabAssemblyTemplate? ResolveBoundaryTemplate(string? templateId)
+    {
+        if (string.IsNullOrWhiteSpace(templateId))
+        {
+            return null;
+        }
+
+        return _slabTemplateCatalog.GetById(templateId);
+    }
+
+    private static string BuildMissingEmbeddedConfigMessage(string drawingName)
+        => $"当前图纸 {drawingName} 缺少内嵌楼层配置，无法确认剖面是否最新";
+
+    private static OperationDiagnostic BuildMissingEmbeddedConfigDiagnostic(string drawingName)
+    {
+        var metadata = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["drawing"] = drawingName
+        };
+
+        return new OperationDiagnostic
+        {
+            Level = DiagnosticLevel.Warning,
+            Code = SectionGenerationErrorCodes.FloorConfigMissing,
+            Stage = PipelineStage.FloorConfigLoad,
+            Module = nameof(CheckSectionUpdatesUseCase),
+            Message = BuildMissingEmbeddedConfigMessage(drawingName),
+            Suggestion = "请先打开 FloorConfig 保存当前图纸配置后，再执行更新检查。",
+            Metadata = metadata
+        };
+    }
+
+    private static OperationDiagnostic BuildBoundaryTemplateMissingDiagnostic(
+        string requestedFloorName,
+        BoundarySlabTemplateResolutionException ex)
+    {
+        var metadata = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["requestedFloor"] = requestedFloorName,
+            ["boundaryFloor"] = ex.FloorName,
+            ["boundaryName"] = ex.BoundaryName,
+            ["templateId"] = ex.TemplateId
+        };
+
+        return new OperationDiagnostic
+        {
+            Level = DiagnosticLevel.Warning,
+            Code = ex.Failure.Code,
+            Stage = ex.Failure.Stage,
+            Module = nameof(CheckSectionUpdatesUseCase),
+            Message = $"复核楼层 {requestedFloorName} 时，{ex.FloorName} 的{ex.BoundaryName}模板 {ex.TemplateId} 缺失，无法确认当前剖面是否最新",
+            Suggestion = "请先恢复缺失的楼板模板或重新绑定边界板模板后，再执行更新检查。",
+            Metadata = metadata
+        };
     }
 
     private CheckSectionUpdatesResult BuildFailedResult(

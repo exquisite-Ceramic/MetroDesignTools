@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
@@ -83,5 +84,61 @@ public class FloorVerticalProfileBuilderTests
         profile.GetTopStructuralBottom(1000).Should().Be(5300);
         profile.GetTopBoundaryTop(0).Should().Be(6020);
         profile.GetTopBoundaryTop(1000).Should().Be(6040);
+    }
+
+    [Fact]
+    public void Build_EmptyTemplateId_StillFallsBackToLegacyThickness()
+    {
+        var builder = new FloorVerticalProfileBuilder(
+            new InMemorySlabAssemblyTemplateCatalog(Array.Empty<SlabAssemblyTemplate>()),
+            new SlabAssemblyBuilder(),
+            NullLogger<FloorVerticalProfileBuilder>.Instance);
+        var floor = new FloorConfig
+        {
+            Name = "F1",
+            Height = 5200,
+            FinishThickness = 120,
+            BottomSlabThickness = 800,
+            TopSlabThickness = 600,
+            BottomBoundarySlab = new BoundarySlabConfig(),
+            TopBoundarySlab = new BoundarySlabConfig
+            {
+                TemplateId = string.Empty
+            }
+        };
+
+        var profile = builder.Build(floor, sectionLength: 1000, baseElevation: 100);
+
+        profile.GetTopStructuralBottom(0).Should().Be(5300);
+        profile.GetTopBoundaryTop(0).Should().Be(6020);
+    }
+
+    [Fact]
+    public void Build_ConfiguredTemplateIdMissing_ThrowsBoundarySlabTemplateResolutionException()
+    {
+        var builder = new FloorVerticalProfileBuilder(
+            new InMemorySlabAssemblyTemplateCatalog(Array.Empty<SlabAssemblyTemplate>()),
+            new SlabAssemblyBuilder(),
+            NullLogger<FloorVerticalProfileBuilder>.Instance);
+        var floor = new FloorConfig
+        {
+            Name = "F1",
+            Height = 5200,
+            BottomSlabThickness = 800,
+            TopSlabThickness = 600,
+            BottomBoundarySlab = new BoundarySlabConfig(),
+            TopBoundarySlab = new BoundarySlabConfig
+            {
+                TemplateId = "missing-top-template"
+            }
+        };
+
+        var act = () => builder.Build(floor, sectionLength: 1000, baseElevation: 100);
+
+        var exception = act.Should().Throw<BoundarySlabTemplateResolutionException>().Which;
+        exception.FloorName.Should().Be("F1");
+        exception.BoundaryName.Should().Be("顶边界板");
+        exception.TemplateId.Should().Be("missing-top-template");
+        exception.Failure.Code.Should().Be(FloorVerticalProfileBuilder.BoundarySlabTemplateMissingCode);
     }
 }

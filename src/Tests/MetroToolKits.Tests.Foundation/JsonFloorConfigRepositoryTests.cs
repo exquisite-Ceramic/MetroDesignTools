@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.SectionGenerator.App.Models;
 using MetroToolKits.SectionGenerator.App.Diagnostics;
 using MetroToolKits.SectionGenerator.Infrastructure.Repositories;
@@ -174,6 +175,53 @@ public class JsonFloorConfigRepositoryTests : IDisposable
             MaxX = 110,
             MaxY = 220
         });
+    }
+
+    [Fact]
+    public void Save_AndLoad_NewFormat_RoundTripsBoundaryTemplateIds()
+    {
+        var filePath = Path.Combine(_tempDirectory, "section-config-boundary-template.json");
+        var repository = CreateRepository(filePath);
+
+        var original = new MetroToolKits.SectionGenerator.Core.Sections.SectionConfig
+        {
+            AlignmentBaseFloorName = "F1",
+            Floors =
+            {
+                new MetroToolKits.SectionGenerator.Core.Sections.FloorConfig
+                {
+                    Name = "F1",
+                    TopBoundarySlab = new BoundarySlabConfig
+                    {
+                        TemplateId = "top-template",
+                        SlopeEnabled = true,
+                        SlopeValue = 0.01,
+                        SlopeTarget = "StructuralSlab"
+                    },
+                    BottomBoundarySlab = new BoundarySlabConfig
+                    {
+                        TemplateId = "bottom-template",
+                        SlopeEnabled = false,
+                        SlopeValue = 0,
+                        SlopeTarget = "StructuralSlab"
+                    }
+                }
+            }
+        };
+
+        repository.Save(new LoadedSectionConfig
+        {
+            Config = original,
+            OutputConfig = new SectionOutputConfig()
+        });
+        var persisted = File.ReadAllText(filePath);
+        var loaded = repository.Load();
+        var floor = loaded.Config.Floors.Single();
+
+        persisted.Should().Contain("top-template");
+        persisted.Should().Contain("bottom-template");
+        floor.TopBoundarySlab.TemplateId.Should().Be("top-template");
+        floor.BottomBoundarySlab.TemplateId.Should().Be("bottom-template");
     }
 
     public void Dispose()

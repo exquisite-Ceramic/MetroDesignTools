@@ -13,6 +13,9 @@ public sealed class SectionComposer
 {
     private readonly FloorVerticalProfileBuilder _verticalProfileBuilder;
 
+    /// <summary>
+    /// 仅用于测试和兼容回退；生产链请通过 DI 注入共享的 FloorVerticalProfileBuilder。
+    /// </summary>
     public SectionComposer()
         : this(new FloorVerticalProfileBuilder())
     {

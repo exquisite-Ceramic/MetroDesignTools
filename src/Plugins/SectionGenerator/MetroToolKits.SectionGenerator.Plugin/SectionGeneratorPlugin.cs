@@ -76,12 +76,20 @@ public class SectionGeneratorPlugin : IPlugin
         services.AddSingleton<ISectionLineResolver, CadSectionLineResolver>();
 
         // Core 层
-        services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.FloorVerticalProfileBuilder>();
-        services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.SectionComposer>();
-        services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.MultiFloorSectionComposer>();
+        services.AddSingleton<ISlabAssemblyBuilder, SlabAssemblyBuilder>();
+        services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.FloorVerticalProfileBuilder>(sp =>
+            new MetroToolKits.SectionGenerator.Core.Sections.FloorVerticalProfileBuilder(
+                sp.GetRequiredService<ISlabAssemblyTemplateCatalog>(),
+                sp.GetRequiredService<ISlabAssemblyBuilder>(),
+                sp.GetRequiredService<ILogger<MetroToolKits.SectionGenerator.Core.Sections.FloorVerticalProfileBuilder>>()));
+        services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.SectionComposer>(sp =>
+            new MetroToolKits.SectionGenerator.Core.Sections.SectionComposer(
+                sp.GetRequiredService<MetroToolKits.SectionGenerator.Core.Sections.FloorVerticalProfileBuilder>()));
+        services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.MultiFloorSectionComposer>(sp =>
+            new MetroToolKits.SectionGenerator.Core.Sections.MultiFloorSectionComposer(
+                sp.GetRequiredService<MetroToolKits.SectionGenerator.Core.Sections.SectionComposer>()));
         services.AddSingleton<MetroToolKits.SectionGenerator.Core.Sections.FloorGeometryHasher>();
         services.AddSingleton<IWallAssemblyBuilder, WallAssemblyBuilder>();
-        services.AddSingleton<ISlabAssemblyBuilder, SlabAssemblyBuilder>();
         services.AddSingleton<OperationFeedbackPresenter>();
 
         // 快照仓储 + 块删除服务
@@ -96,8 +104,27 @@ public class SectionGeneratorPlugin : IPlugin
         services.AddSingleton<IDrawingService, CadDrawingService>();
 
         // 用例
-        services.AddSingleton<IGenerateSectionUseCase, GenerateSectionUseCase>();
-        services.AddSingleton<ICheckSectionUpdatesUseCase, CheckSectionUpdatesUseCase>();
+        services.AddSingleton<IGenerateSectionUseCase>(sp =>
+            new GenerateSectionUseCase(
+                sp.GetRequiredService<IFloorConfigRepository>(),
+                sp.GetRequiredService<IElementRecognizer>(),
+                sp.GetRequiredService<MetroToolKits.SectionGenerator.Core.Sections.MultiFloorSectionComposer>(),
+                sp.GetRequiredService<IDrawingService>(),
+                sp.GetRequiredService<ISectionSnapshotRepository>(),
+                sp.GetRequiredService<MetroToolKits.SectionGenerator.Core.Sections.FloorGeometryHasher>(),
+                sp.GetRequiredService<ILogger<GenerateSectionUseCase>>(),
+                sp.GetRequiredService<MetroToolKits.Foundation.Core.Logging.IUserLogger>()));
+        services.AddSingleton<ICheckSectionUpdatesUseCase>(sp =>
+            new CheckSectionUpdatesUseCase(
+                sp.GetRequiredService<ISectionSnapshotRepository>(),
+                sp.GetRequiredService<ISectionBlockQueryService>(),
+                sp.GetRequiredService<ISectionLineResolver>(),
+                sp.GetRequiredService<IElementRecognizer>(),
+                sp.GetRequiredService<IFloorConfigRepository>(),
+                sp.GetRequiredService<MetroToolKits.SectionGenerator.Core.Sections.FloorGeometryHasher>(),
+                sp.GetRequiredService<ISlabAssemblyTemplateCatalog>(),
+                sp.GetRequiredService<MetroToolKits.SectionGenerator.Core.Sections.FloorVerticalProfileBuilder>(),
+                sp.GetRequiredService<ILogger<CheckSectionUpdatesUseCase>>()));
         services.AddSingleton<IGenerateSectionPreflightUseCase, GenerateSectionPreflightUseCase>();
         services.AddSingleton<IUpdateSectionUseCase, UpdateSectionUseCase>();
         services.AddSingleton<ILocateSourceElementUseCase, LocateSourceElementUseCase>();

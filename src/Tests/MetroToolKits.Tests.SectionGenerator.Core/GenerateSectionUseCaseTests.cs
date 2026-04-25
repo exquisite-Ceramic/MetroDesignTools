@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using MetroToolKits.Foundation.Building.Elements;
+using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.Foundation.Core.Logging;
@@ -209,6 +210,60 @@ public class GenerateSectionUseCaseTests
             Arg.Any<Line3D>(),
             3000,
             Arg.Is<ScopeBounds2D?>(scope => scope.HasValue && scope.Value.MinX == -1000));
+    }
+
+    [Fact]
+    public void Execute_TopBoundaryTemplateWithFinishLayer_GeneratesFinishBoundaryLines()
+    {
+        var floor = DefaultFloor(
+            "F1",
+            new Point3D(0, 0, 0),
+            new Point3D(10, 0, 0),
+            new Point3D(0, 10, 0));
+        floor.FinishThickness = 0;
+        floor.TopBoundarySlab = new BoundarySlabConfig
+        {
+            TemplateId = "slab-120-finish"
+        };
+        floor.BottomBoundarySlab = new BoundarySlabConfig();
+
+        var configRepo = Substitute.For<IFloorConfigRepository>();
+        configRepo.Load().Returns(LoadedConfig(new SectionConfig
+        {
+            AlignmentBaseFloorName = "F1",
+            Floors = new List<FloorConfig> { floor }
+        }));
+
+        var recognizer = SingleWallRecognizer();
+        var drawingService = Substitute.For<IDrawingService>();
+        drawingService.DrawMultiFloorSectionBlock(
+                Arg.Any<MultiFloorSectionData>(),
+                Arg.Any<Point3D>(),
+                Arg.Any<IReadOnlyList<FloorConfig>>(),
+                Arg.Any<SectionOutputConfig>(),
+                Arg.Any<double>())
+            .Returns(new DrawSectionBlockResult
+            {
+                BlockName = "MK_剖面_F1",
+                BlockHandle = "ABCD"
+            });
+
+        var useCase = BuildUseCase(
+            configRepo: configRepo,
+            recognizer: recognizer,
+            drawingService: drawingService);
+
+        var result = useCase.Execute(CreateRequest());
+
+        result.Status.Should().Be(OperationStatus.Success);
+        drawingService.Received(1).DrawMultiFloorSectionBlock(
+            Arg.Is<MultiFloorSectionData>(data =>
+                data.Floors.Count == 1 &&
+                data.Floors[0].SlabLineSegments.Any(segment => segment.Role == SectionLineRole.Finish)),
+            Arg.Any<Point3D>(),
+            Arg.Any<IReadOnlyList<FloorConfig>>(),
+            Arg.Any<SectionOutputConfig>(),
+            Arg.Any<double>());
     }
 
     [Fact]

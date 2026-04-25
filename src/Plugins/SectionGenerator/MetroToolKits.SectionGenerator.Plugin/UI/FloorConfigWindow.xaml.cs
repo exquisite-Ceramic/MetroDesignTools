@@ -14,27 +14,28 @@ namespace MetroToolKits.SectionGenerator.Plugin.UI;
 public partial class FloorConfigWindow : Window
 {
     private readonly ILogger<FloorConfigWindow> _logger;
-    private readonly IReadOnlyList<TemplateOption> _slabTemplates;
+    private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly ObservableCollection<FloorConfig> _floors = new();
     private LoadedSectionConfig _document = new();
     private FloorConfig? _currentFloor;
+    private IReadOnlyList<TemplateOption> _slabTemplates = Array.Empty<TemplateOption>();
+    private bool _isRefreshingTemplateSelectors;
 
     public LoadedSectionConfig CurrentDocument => _document;
 
     public FloorConfigWindow(
         LoadedSectionConfig document,
-        IReadOnlyList<SlabAssemblyTemplate> slabTemplates,
+        ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         ILogger<FloorConfigWindow> logger)
     {
         InitializeComponent();
         _document = document;
         _logger = logger;
-        _slabTemplates = BuildTemplateOptions(slabTemplates);
+        _slabTemplateCatalog = slabTemplateCatalog;
 
         FloorListBox.ItemsSource = _floors;
         BaseFloorComboBox.ItemsSource = _floors;
-        TopBoundaryTemplateBox.ItemsSource = _slabTemplates;
-        BottomBoundaryTemplateBox.ItemsSource = _slabTemplates;
+        RefreshTemplateOptions();
         LoadConfig();
     }
 
@@ -45,7 +46,7 @@ public partial class FloorConfigWindow : Window
             new()
             {
                 TemplateId = string.Empty,
-                TemplateName = "（不绑定模板，沿用厚度参数）"
+                TemplateName = "（未绑定模板）"
             }
         };
         options.AddRange(slabTemplates.Select(template => new TemplateOption
@@ -78,6 +79,95 @@ public partial class FloorConfigWindow : Window
         }
 
         _logger.LogDebug("楼层配置窗口加载，楼层数: {Count}", _floors.Count);
+    }
+
+    private void RefreshTemplateOptions()
+    {
+        _slabTemplates = BuildTemplateOptions(_slabTemplateCatalog.GetAllTemplates());
+        TopBoundaryTemplateBox.ItemsSource = _slabTemplates;
+        BottomBoundaryTemplateBox.ItemsSource = _slabTemplates;
+    }
+
+    private static string NormalizeTemplateId(string? templateId, IReadOnlyList<TemplateOption> options)
+    {
+        if (!string.IsNullOrWhiteSpace(templateId) &&
+            options.Any(option => string.Equals(option.TemplateId, templateId, StringComparison.OrdinalIgnoreCase)))
+        {
+            return templateId;
+        }
+
+        return string.Empty;
+    }
+
+    private SlabAssemblyTemplate? ResolveTemplate(string? templateId)
+    {
+        if (string.IsNullOrWhiteSpace(templateId))
+        {
+            return null;
+        }
+
+        return _slabTemplateCatalog.GetAllTemplates()
+            .FirstOrDefault(template => string.Equals(template.TemplateId, templateId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string FormatThicknessValue(double thickness)
+        => thickness.ToString("F0");
+
+    private static string BuildTemplateDisplayValue(
+        string? templateId,
+        SlabAssemblyTemplate? template,
+        Func<SlabAssemblyTemplate, double> selector)
+    {
+        if (string.IsNullOrWhiteSpace(templateId))
+        {
+            return "未绑定模板";
+        }
+
+        if (template == null)
+        {
+            return "模板不存在";
+        }
+
+        return FormatThicknessValue(selector(template));
+    }
+
+    private void ApplyBoundaryTemplateSelection(FloorConfig floor, string topTemplateId, string bottomTemplateId)
+    {
+        var normalizedTop = NormalizeTemplateId(topTemplateId, _slabTemplates);
+        var normalizedBottom = NormalizeTemplateId(bottomTemplateId, _slabTemplates);
+
+        floor.TopBoundarySlab.TemplateId = normalizedTop;
+        floor.BottomBoundarySlab.TemplateId = normalizedBottom;
+
+        _isRefreshingTemplateSelectors = true;
+        try
+        {
+            TopBoundaryTemplateBox.SelectedValue = normalizedTop;
+            BottomBoundaryTemplateBox.SelectedValue = normalizedBottom;
+        }
+        finally
+        {
+            _isRefreshingTemplateSelectors = false;
+        }
+    }
+
+    private void RefreshBoundaryTemplateDisplays(FloorConfig floor)
+    {
+        var topTemplate = ResolveTemplate(floor.TopBoundarySlab.TemplateId);
+        var bottomTemplate = ResolveTemplate(floor.BottomBoundarySlab.TemplateId);
+
+        BottomSlabBox.Text = BuildTemplateDisplayValue(
+            floor.BottomBoundarySlab.TemplateId,
+            bottomTemplate,
+            template => template.CoreRule.Thickness);
+        TopSlabBox.Text = BuildTemplateDisplayValue(
+            floor.TopBoundarySlab.TemplateId,
+            topTemplate,
+            template => template.CoreRule.Thickness);
+        FinishBox.Text = BuildTemplateDisplayValue(
+            floor.TopBoundarySlab.TemplateId,
+            topTemplate,
+            template => template.TopLayers.Sum(layer => layer.Thickness));
     }
 
     private void LoadOutputConfig(SectionOutputConfig outputConfig)
@@ -279,9 +369,6 @@ public partial class FloorConfigWindow : Window
     {
         NameBox.Text = floor.Name;
         HeightBox.Text = floor.Height.ToString("F0");
-        BottomSlabBox.Text = floor.BottomSlabThickness.ToString("F0");
-        TopSlabBox.Text = floor.TopSlabThickness.ToString("F0");
-        FinishBox.Text = floor.FinishThickness.ToString("F0");
         SlopeCheck.IsChecked = floor.HasSlope;
         SlopeValueBox.Text = (floor.SlopeValue * 100).ToString("F2");
         SlopeValueBox.IsEnabled = floor.HasSlope;
@@ -291,8 +378,9 @@ public partial class FloorConfigWindow : Window
         BottomSlopeCheck.IsChecked = floor.BottomBoundarySlab.SlopeEnabled;
         BottomSlopeValueBox.Text = (floor.BottomBoundarySlab.SlopeValue * 100).ToString("F2");
         BottomSlopeValueBox.IsEnabled = floor.BottomBoundarySlab.SlopeEnabled;
-        TopBoundaryTemplateBox.SelectedValue = floor.TopBoundarySlab.TemplateId;
-        BottomBoundaryTemplateBox.SelectedValue = floor.BottomBoundarySlab.TemplateId;
+        RefreshTemplateOptions();
+        ApplyBoundaryTemplateSelection(floor, floor.TopBoundarySlab.TemplateId, floor.BottomBoundarySlab.TemplateId);
+        RefreshBoundaryTemplateDisplays(floor);
 
         var pointCount = floor.AlignmentPoints.Count;
         AlignmentLabel.Content = BaseFloorComboBox.SelectedItem is FloorConfig baseFloor &&
@@ -326,21 +414,6 @@ public partial class FloorConfigWindow : Window
             _currentFloor.Height = height;
         }
 
-        if (double.TryParse(BottomSlabBox.Text, out var bottomSlab))
-        {
-            _currentFloor.BottomSlabThickness = bottomSlab;
-        }
-
-        if (double.TryParse(TopSlabBox.Text, out var topSlab))
-        {
-            _currentFloor.TopSlabThickness = topSlab;
-        }
-
-        if (double.TryParse(FinishBox.Text, out var finish))
-        {
-            _currentFloor.FinishThickness = finish;
-        }
-
         _currentFloor.HasSlope = SlopeCheck.IsChecked == true;
         if (double.TryParse(SlopeValueBox.Text, out var legacySlope))
         {
@@ -370,6 +443,83 @@ public partial class FloorConfigWindow : Window
 
     private void BottomSlopeCheck_Changed(object sender, RoutedEventArgs e)
         => BottomSlopeValueBox.IsEnabled = BottomSlopeCheck.IsChecked == true;
+
+    private void TopBoundaryTemplateBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isRefreshingTemplateSelectors || _currentFloor == null)
+        {
+            return;
+        }
+
+        _currentFloor.TopBoundarySlab.TemplateId = TopBoundaryTemplateBox.SelectedValue?.ToString() ?? string.Empty;
+        RefreshBoundaryTemplateDisplays(_currentFloor);
+    }
+
+    private void BottomBoundaryTemplateBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isRefreshingTemplateSelectors || _currentFloor == null)
+        {
+            return;
+        }
+
+        _currentFloor.BottomBoundarySlab.TemplateId = BottomBoundaryTemplateBox.SelectedValue?.ToString() ?? string.Empty;
+        RefreshBoundaryTemplateDisplays(_currentFloor);
+    }
+
+    private void EditBottomTemplate_Click(object sender, RoutedEventArgs e)
+        => OpenTemplateManager(SlabTemplateLaunchContext.BottomThickness);
+
+    private void EditTopTemplate_Click(object sender, RoutedEventArgs e)
+        => OpenTemplateManager(SlabTemplateLaunchContext.TopThickness);
+
+    private void EditFinishTemplate_Click(object sender, RoutedEventArgs e)
+        => OpenTemplateManager(SlabTemplateLaunchContext.Finish);
+
+    private void OpenTemplateManager(SlabTemplateLaunchContext context)
+    {
+        if (_currentFloor == null)
+        {
+            return;
+        }
+
+        var existingTemplateIds = _slabTemplateCatalog.GetAllTemplates()
+            .Select(template => template.TemplateId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var currentTopTemplateId = _currentFloor.TopBoundarySlab.TemplateId;
+        var currentBottomTemplateId = _currentFloor.BottomBoundarySlab.TemplateId;
+        var manager = new SlabAssemblyTemplateManager(_slabTemplateCatalog)
+        {
+            Owner = this
+        };
+
+        if (manager.ShowDialog() != true)
+        {
+            return;
+        }
+
+        RefreshTemplateOptions();
+
+        var selectedTemplateId = manager.SelectedTemplateId;
+        var nextTopTemplateId = currentTopTemplateId;
+        var nextBottomTemplateId = currentBottomTemplateId;
+        var selectedTemplateIsNew = !string.IsNullOrWhiteSpace(selectedTemplateId) &&
+                                    !existingTemplateIds.Contains(selectedTemplateId);
+
+        if (selectedTemplateIsNew)
+        {
+            if (context == SlabTemplateLaunchContext.BottomThickness)
+            {
+                nextBottomTemplateId = selectedTemplateId;
+            }
+            else
+            {
+                nextTopTemplateId = selectedTemplateId;
+            }
+        }
+
+        ApplyBoundaryTemplateSelection(_currentFloor, nextTopTemplateId, nextBottomTemplateId);
+        RefreshBoundaryTemplateDisplays(_currentFloor);
+    }
 
     private void BaseFloorComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -515,4 +665,11 @@ internal sealed class TemplateOption
     public string TemplateId { get; init; } = string.Empty;
 
     public string TemplateName { get; init; } = string.Empty;
+}
+
+internal enum SlabTemplateLaunchContext
+{
+    BottomThickness,
+    TopThickness,
+    Finish
 }

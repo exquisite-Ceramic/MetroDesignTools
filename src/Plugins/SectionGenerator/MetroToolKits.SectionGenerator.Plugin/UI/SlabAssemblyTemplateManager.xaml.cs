@@ -12,6 +12,8 @@ public partial class SlabAssemblyTemplateManager : Window
     private readonly ObservableCollection<SlabAssemblyTemplate> _templates = new();
     private SlabAssemblyTemplate? _currentTemplate;
 
+    public string SelectedTemplateId { get; private set; } = string.Empty;
+
     public SlabAssemblyTemplateManager(ISlabAssemblyTemplateCatalog templateCatalog)
     {
         InitializeComponent();
@@ -162,6 +164,9 @@ public partial class SlabAssemblyTemplateManager : Window
         }
 
         _templateCatalog.SaveAll(_templates.ToList());
+        SelectedTemplateId = (TemplateListBox.SelectedItem as SlabAssemblyTemplate)?.TemplateId
+                             ?? _currentTemplate?.TemplateId
+                             ?? string.Empty;
         DialogResult = true;
         Close();
     }

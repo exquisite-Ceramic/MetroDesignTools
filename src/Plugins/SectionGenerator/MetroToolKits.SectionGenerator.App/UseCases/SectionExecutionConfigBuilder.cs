@@ -144,6 +144,7 @@ internal static class SectionExecutionConfigBuilder
     private static BoundarySlabConfig CloneBoundarySlab(BoundarySlabConfig? boundarySlab)
         => new()
         {
+            TemplateId = boundarySlab?.TemplateId ?? string.Empty,
             SlopeEnabled = boundarySlab?.SlopeEnabled == true,
             SlopeValue = boundarySlab?.SlopeValue ?? 0,
             SlopeTarget = boundarySlab?.SlopeTarget ?? "StructuralSlab"

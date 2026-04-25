@@ -86,13 +86,40 @@
                                     <TextBox Grid.Row="1" Grid.Column="1" x:Name="HeightBox" Margin="0,2"/>
 
                                     <Label Grid.Row="2" Grid.Column="0" Content="底板厚度 (mm):"/>
-                                    <TextBox Grid.Row="2" Grid.Column="1" x:Name="BottomSlabBox" Margin="0,2"/>
+                                    <DockPanel Grid.Row="2" Grid.Column="1" Margin="0,2">
+                                        <Button Content="..."
+                                                Width="28"
+                                                Margin="6,0,0,0"
+                                                DockPanel.Dock="Right"
+                                                Click="EditBottomTemplate_Click"/>
+                                        <TextBox x:Name="BottomSlabBox"
+                                                 IsReadOnly="True"
+                                                 IsTabStop="False"/>
+                                    </DockPanel>
 
                                     <Label Grid.Row="3" Grid.Column="0" Content="顶板厚度 (mm):"/>
-                                    <TextBox Grid.Row="3" Grid.Column="1" x:Name="TopSlabBox" Margin="0,2"/>
+                                    <DockPanel Grid.Row="3" Grid.Column="1" Margin="0,2">
+                                        <Button Content="..."
+                                                Width="28"
+                                                Margin="6,0,0,0"
+                                                DockPanel.Dock="Right"
+                                                Click="EditTopTemplate_Click"/>
+                                        <TextBox x:Name="TopSlabBox"
+                                                 IsReadOnly="True"
+                                                 IsTabStop="False"/>
+                                    </DockPanel>
 
                                     <Label Grid.Row="4" Grid.Column="0" Content="装修面层 (mm):"/>
-                                    <TextBox Grid.Row="4" Grid.Column="1" x:Name="FinishBox" Margin="0,2"/>
+                                    <DockPanel Grid.Row="4" Grid.Column="1" Margin="0,2">
+                                        <Button Content="..."
+                                                Width="28"
+                                                Margin="6,0,0,0"
+                                                DockPanel.Dock="Right"
+                                                Click="EditFinishTemplate_Click"/>
+                                        <TextBox x:Name="FinishBox"
+                                                 IsReadOnly="True"
+                                                 IsTabStop="False"/>
+                                    </DockPanel>
 
                                     <Label Grid.Row="5" Grid.Column="0" Content="兼容坡度:"/>
                                     <StackPanel Grid.Row="5" Grid.Column="1" Orientation="Horizontal">
@@ -111,7 +138,8 @@
                                               x:Name="TopBoundaryTemplateBox"
                                               Margin="0,2"
                                               DisplayMemberPath="TemplateName"
-                                              SelectedValuePath="TemplateId"/>
+                                              SelectedValuePath="TemplateId"
+                                              SelectionChanged="TopBoundaryTemplateBox_SelectionChanged"/>
 
                                     <Label Grid.Row="8" Grid.Column="0" Content="顶板坡度 (%):"/>
                                     <StackPanel Grid.Row="8" Grid.Column="1" Orientation="Horizontal">
@@ -128,7 +156,8 @@
                                               x:Name="BottomBoundaryTemplateBox"
                                               Margin="0,2"
                                               DisplayMemberPath="TemplateName"
-                                              SelectedValuePath="TemplateId"/>
+                                              SelectedValuePath="TemplateId"
+                                              SelectionChanged="BottomBoundaryTemplateBox_SelectionChanged"/>
 
                                     <Label Grid.Row="10" Grid.Column="0" Content="底板坡度 (%):"/>
                                     <StackPanel Grid.Row="10" Grid.Column="1" Orientation="Horizontal">

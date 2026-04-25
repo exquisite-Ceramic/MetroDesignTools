@@ -28,7 +28,7 @@ internal static class FloorConfigDialogWorkflow
         {
             var window = new FloorConfigWindow(
                 configDocument,
-                slabTemplateCatalog.GetAllTemplates(),
+                slabTemplateCatalog,
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<FloorConfigWindow>.Instance);
 
             Application.ShowModalWindow(window);

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.Foundation.Core.Logging;
 using MetroToolKits.SectionGenerator.App.Abstractions;
+using MetroToolKits.SectionGenerator.App.Models;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
 namespace MetroToolKits.SectionGenerator.App.UseCases;
@@ -15,6 +16,7 @@ public sealed class UpdateSectionUseCase : IUpdateSectionUseCase
     private readonly ISectionSnapshotRepository _snapshotRepo;
     private readonly ISectionGeometryRecoveryService _sectionGeometryRecoveryService;
     private readonly ISectionLineResolver _sectionLineResolver;
+    private readonly IFloorConfigRepository _configRepo;
     private readonly IGenerateSectionUseCase _generateUseCase;
     private readonly IBlockEraseService _blockEraseService;
     private readonly ILogger<UpdateSectionUseCase> _logger;
@@ -24,6 +26,7 @@ public sealed class UpdateSectionUseCase : IUpdateSectionUseCase
         ISectionSnapshotRepository snapshotRepo,
         ISectionGeometryRecoveryService sectionGeometryRecoveryService,
         ISectionLineResolver sectionLineResolver,
+        IFloorConfigRepository configRepo,
         IGenerateSectionUseCase generateUseCase,
         IBlockEraseService blockEraseService,
         ILogger<UpdateSectionUseCase> logger,
@@ -32,6 +35,7 @@ public sealed class UpdateSectionUseCase : IUpdateSectionUseCase
         _snapshotRepo     = snapshotRepo;
         _sectionGeometryRecoveryService = sectionGeometryRecoveryService;
         _sectionLineResolver = sectionLineResolver;
+        _configRepo       = configRepo;
         _generateUseCase  = generateUseCase;
         _blockEraseService = blockEraseService;
         _logger           = logger;
@@ -81,8 +85,24 @@ public sealed class UpdateSectionUseCase : IUpdateSectionUseCase
             }
 
             var snapshotDirection = ResolveSnapshotDirection(snapshot);
-            var geometryAnchorX = ResolveGeometryAnchor(request.BlockHandle, snapshot);
             var alignedSectionLine = AlignToSnapshotDirection(currentSectionLine.Value, snapshotDirection);
+            var sourceDocument = _configRepo.Load();
+            if (sourceDocument.RuntimeState.Source == SectionConfigStorageSource.Missing)
+            {
+                const string errorMessage = "当前图纸缺少内嵌楼层配置，请先打开 FloorConfig 保存当前图纸配置后再更新剖面";
+                _logger.LogWarning(
+                    "剖面块 {BlockName} 更新被阻止，当前图纸 {DrawingName} 缺少内嵌楼层配置",
+                    snapshot.BlockName,
+                    sourceDocument.RuntimeState.DrawingDisplayName);
+                _userLogger.SectionUpdateFailed(snapshot.BlockName, errorMessage);
+                return new UpdateSectionResult
+                {
+                    Success = false,
+                    ErrorMessage = errorMessage
+                };
+            }
+
+            var geometryAnchorX = ResolveGeometryAnchor(request.BlockHandle, snapshot);
             EnsureSnapshotCompatibilityFields(request.BlockHandle, snapshot, geometryAnchorX, snapshotDirection);
 
             // 2. 重新生成（使用快照中记录的插入点）
