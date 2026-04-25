@@ -30,6 +30,7 @@ public sealed class GenSectionCommand
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly IFloorConfigDocumentAssembler _floorConfigDocumentAssembler;
     private readonly IFloorConfigSaveRequestMapper _floorConfigSaveRequestMapper;
+    private readonly ISectionOutputConfigMapper _sectionOutputConfigMapper;
     private readonly ILayerService _layerService;
     private readonly IElementTypeCatalog _typeCatalog;
     private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
@@ -47,6 +48,7 @@ public sealed class GenSectionCommand
         ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         IFloorConfigDocumentAssembler floorConfigDocumentAssembler,
         IFloorConfigSaveRequestMapper floorConfigSaveRequestMapper,
+        ISectionOutputConfigMapper sectionOutputConfigMapper,
         ILayerService layerService,
         IElementTypeCatalog typeCatalog,
         IWallAssemblyTemplateCatalog wallTemplateCatalog,
@@ -63,6 +65,7 @@ public sealed class GenSectionCommand
         _slabTemplateCatalog = slabTemplateCatalog;
         _floorConfigDocumentAssembler = floorConfigDocumentAssembler;
         _floorConfigSaveRequestMapper = floorConfigSaveRequestMapper;
+        _sectionOutputConfigMapper = sectionOutputConfigMapper;
         _layerService = layerService;
         _typeCatalog = typeCatalog;
         _wallTemplateCatalog = wallTemplateCatalog;
@@ -110,6 +113,7 @@ public sealed class GenSectionCommand
                         _slabTemplateCatalog,
                         _floorConfigDocumentAssembler,
                         _floorConfigSaveRequestMapper,
+                        _sectionOutputConfigMapper,
                         _userLogger,
                         _logger);
                     continue;

@@ -7,6 +7,7 @@ using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Models;
 using MetroToolKits.SectionGenerator.Contracts.Common;
 using MetroToolKits.SectionGenerator.Contracts.Floors;
+using MetroToolKits.SectionGenerator.Contracts.Output;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
 namespace MetroToolKits.SectionGenerator.Plugin.UI;
@@ -20,6 +21,7 @@ public partial class FloorConfigWindow : Window
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly IFloorConfigDocumentAssembler _floorConfigDocumentAssembler;
     private readonly IFloorConfigSaveRequestMapper _saveRequestMapper;
+    private readonly ISectionOutputConfigMapper _sectionOutputConfigMapper;
     private readonly ObservableCollection<FloorConfig> _floors = new();
     private readonly ObservableCollection<FloorSummaryDto> _floorSummaries = new();
     private LoadedSectionConfig _document = new();
@@ -35,6 +37,7 @@ public partial class FloorConfigWindow : Window
         ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         IFloorConfigDocumentAssembler floorConfigDocumentAssembler,
         IFloorConfigSaveRequestMapper saveRequestMapper,
+        ISectionOutputConfigMapper sectionOutputConfigMapper,
         ILogger<FloorConfigWindow> logger)
     {
         InitializeComponent();
@@ -43,6 +46,7 @@ public partial class FloorConfigWindow : Window
         _slabTemplateCatalog = slabTemplateCatalog;
         _floorConfigDocumentAssembler = floorConfigDocumentAssembler;
         _saveRequestMapper = saveRequestMapper;
+        _sectionOutputConfigMapper = sectionOutputConfigMapper;
 
         FloorListBox.ItemsSource = _floorSummaries;
         BaseFloorComboBox.ItemsSource = _floors;
@@ -229,92 +233,101 @@ public partial class FloorConfigWindow : Window
             template => template.TopLayers.Sum(layer => layer.Thickness));
     }
 
-    private void LoadOutputConfig(SectionOutputConfig outputConfig)
+    private void LoadOutputConfig(SectionOutputConfig? outputConfig)
     {
-        outputConfig ??= new SectionOutputConfig();
-        outputConfig.AnnotationOptions ??= new AnnotationOptions();
-        outputConfig.HatchOptions ??= new HatchOptions();
-        outputConfig.HatchOptions.WallHatch ??= HatchStyleOptions.CreateDefault();
-        outputConfig.HatchOptions.ColumnHatch ??= HatchStyleOptions.CreateDefault();
-        outputConfig.HatchOptions.SlabHatch ??= HatchStyleOptions.CreateDefault();
-        outputConfig.LayerOptions ??= new LayerOptions();
+        var dto = _sectionOutputConfigMapper.ToDto(outputConfig);
 
-        GenerateAnnotationsCheck.IsChecked = outputConfig.AnnotationOptions.GenerateAnnotations;
-        EnableHatchCheck.IsChecked = outputConfig.HatchOptions.Enabled;
+        GenerateAnnotationsCheck.IsChecked = dto.AnnotationOptions?.GenerateAnnotations == true;
+        EnableHatchCheck.IsChecked = dto.HatchOptions?.Enabled == true;
 
-        BindHatchStyle(outputConfig.HatchOptions.WallHatch, WallHatchPatternBox, WallHatchScaleBox, WallHatchAngleBox, WallHatchByLayerCheck);
-        BindHatchStyle(outputConfig.HatchOptions.ColumnHatch, ColumnHatchPatternBox, ColumnHatchScaleBox, ColumnHatchAngleBox, ColumnHatchByLayerCheck);
-        BindHatchStyle(outputConfig.HatchOptions.SlabHatch, SlabHatchPatternBox, SlabHatchScaleBox, SlabHatchAngleBox, SlabHatchByLayerCheck);
+        BindHatchStyle(dto.HatchOptions?.WallHatch, WallHatchPatternBox, WallHatchScaleBox, WallHatchAngleBox, WallHatchByLayerCheck);
+        BindHatchStyle(dto.HatchOptions?.ColumnHatch, ColumnHatchPatternBox, ColumnHatchScaleBox, ColumnHatchAngleBox, ColumnHatchByLayerCheck);
+        BindHatchStyle(dto.HatchOptions?.SlabHatch, SlabHatchPatternBox, SlabHatchScaleBox, SlabHatchAngleBox, SlabHatchByLayerCheck);
 
-        CutLineLayerBox.Text = outputConfig.LayerOptions.CutLineLayer;
-        SightLineLayerBox.Text = outputConfig.LayerOptions.SightLineLayer;
-        AnnotationLayerBox.Text = outputConfig.LayerOptions.AnnotationLayer;
-        WallHatchLayerBox.Text = outputConfig.LayerOptions.WallHatchLayer;
-        ColumnHatchLayerBox.Text = outputConfig.LayerOptions.ColumnHatchLayer;
-        SlabHatchLayerBox.Text = outputConfig.LayerOptions.SlabHatchLayer;
-        StructuralLayerBox.Text = outputConfig.LayerOptions.StructuralLayer;
-        FinishLayerBox.Text = outputConfig.LayerOptions.FinishLayer;
+        CutLineLayerBox.Text = dto.LayerOptions?.CutLineLayer ?? string.Empty;
+        SightLineLayerBox.Text = dto.LayerOptions?.SightLineLayer ?? string.Empty;
+        AnnotationLayerBox.Text = dto.LayerOptions?.AnnotationLayer ?? string.Empty;
+        WallHatchLayerBox.Text = dto.LayerOptions?.WallHatchLayer ?? string.Empty;
+        ColumnHatchLayerBox.Text = dto.LayerOptions?.ColumnHatchLayer ?? string.Empty;
+        SlabHatchLayerBox.Text = dto.LayerOptions?.SlabHatchLayer ?? string.Empty;
+        StructuralLayerBox.Text = dto.LayerOptions?.StructuralLayer ?? string.Empty;
+        FinishLayerBox.Text = dto.LayerOptions?.FinishLayer ?? string.Empty;
     }
 
     private static void BindHatchStyle(
-        HatchStyleOptions style,
+        HatchStyleDto? style,
         TextBox patternBox,
         TextBox scaleBox,
         TextBox angleBox,
         CheckBox byLayerCheck)
     {
-        patternBox.Text = style.PatternName;
-        scaleBox.Text = style.Scale.ToString("F2");
-        angleBox.Text = style.Angle.ToString("F2");
-        byLayerCheck.IsChecked = style.UseByLayer;
+        var resolvedStyle = style ?? new HatchStyleDto();
+        patternBox.Text = resolvedStyle.PatternName;
+        scaleBox.Text = resolvedStyle.Scale.ToString("F2");
+        angleBox.Text = resolvedStyle.Angle.ToString("F2");
+        byLayerCheck.IsChecked = resolvedStyle.UseByLayer;
     }
 
     private void SaveOutputConfig()
     {
-        _document.OutputConfig ??= new SectionOutputConfig();
-        _document.OutputConfig.AnnotationOptions ??= new AnnotationOptions();
-        _document.OutputConfig.HatchOptions ??= new HatchOptions();
-        _document.OutputConfig.HatchOptions.WallHatch ??= HatchStyleOptions.CreateDefault();
-        _document.OutputConfig.HatchOptions.ColumnHatch ??= HatchStyleOptions.CreateDefault();
-        _document.OutputConfig.HatchOptions.SlabHatch ??= HatchStyleOptions.CreateDefault();
-        _document.OutputConfig.LayerOptions ??= new LayerOptions();
+        var existingDto = _sectionOutputConfigMapper.ToDto(_document.OutputConfig);
+        var dto = new SectionOutputConfigDto
+        {
+            AnnotationOptions = new AnnotationOptionsDto
+            {
+                GenerateAnnotations = GenerateAnnotationsCheck.IsChecked == true
+            },
+            HatchOptions = new HatchOptionsDto
+            {
+                Enabled = EnableHatchCheck.IsChecked == true,
+                WallHatch = BuildHatchStyleDto(existingDto.HatchOptions?.WallHatch, WallHatchPatternBox, WallHatchScaleBox, WallHatchAngleBox, WallHatchByLayerCheck),
+                ColumnHatch = BuildHatchStyleDto(existingDto.HatchOptions?.ColumnHatch, ColumnHatchPatternBox, ColumnHatchScaleBox, ColumnHatchAngleBox, ColumnHatchByLayerCheck),
+                SlabHatch = BuildHatchStyleDto(existingDto.HatchOptions?.SlabHatch, SlabHatchPatternBox, SlabHatchScaleBox, SlabHatchAngleBox, SlabHatchByLayerCheck)
+            },
+            LayerOptions = new LayerOptionsDto
+            {
+                CutLineLayer = CutLineLayerBox.Text.Trim(),
+                SightLineLayer = SightLineLayerBox.Text.Trim(),
+                AnnotationLayer = AnnotationLayerBox.Text.Trim(),
+                WallHatchLayer = WallHatchLayerBox.Text.Trim(),
+                ColumnHatchLayer = ColumnHatchLayerBox.Text.Trim(),
+                SlabHatchLayer = SlabHatchLayerBox.Text.Trim(),
+                StructuralLayer = StructuralLayerBox.Text.Trim(),
+                FinishLayer = FinishLayerBox.Text.Trim()
+            }
+        };
 
-        _document.OutputConfig.AnnotationOptions.GenerateAnnotations = GenerateAnnotationsCheck.IsChecked == true;
-        _document.OutputConfig.HatchOptions.Enabled = EnableHatchCheck.IsChecked == true;
-
-        SaveHatchStyle(_document.OutputConfig.HatchOptions.WallHatch, WallHatchPatternBox, WallHatchScaleBox, WallHatchAngleBox, WallHatchByLayerCheck);
-        SaveHatchStyle(_document.OutputConfig.HatchOptions.ColumnHatch, ColumnHatchPatternBox, ColumnHatchScaleBox, ColumnHatchAngleBox, ColumnHatchByLayerCheck);
-        SaveHatchStyle(_document.OutputConfig.HatchOptions.SlabHatch, SlabHatchPatternBox, SlabHatchScaleBox, SlabHatchAngleBox, SlabHatchByLayerCheck);
-
-        _document.OutputConfig.LayerOptions.CutLineLayer = CutLineLayerBox.Text.Trim();
-        _document.OutputConfig.LayerOptions.SightLineLayer = SightLineLayerBox.Text.Trim();
-        _document.OutputConfig.LayerOptions.AnnotationLayer = AnnotationLayerBox.Text.Trim();
-        _document.OutputConfig.LayerOptions.WallHatchLayer = WallHatchLayerBox.Text.Trim();
-        _document.OutputConfig.LayerOptions.ColumnHatchLayer = ColumnHatchLayerBox.Text.Trim();
-        _document.OutputConfig.LayerOptions.SlabHatchLayer = SlabHatchLayerBox.Text.Trim();
-        _document.OutputConfig.LayerOptions.StructuralLayer = StructuralLayerBox.Text.Trim();
-        _document.OutputConfig.LayerOptions.FinishLayer = FinishLayerBox.Text.Trim();
+        _sectionOutputConfigMapper.ApplyToDocument(dto, _document);
     }
 
-    private static void SaveHatchStyle(
-        HatchStyleOptions style,
+    private static HatchStyleDto BuildHatchStyleDto(
+        HatchStyleDto? existingStyle,
         TextBox patternBox,
         TextBox scaleBox,
         TextBox angleBox,
         CheckBox byLayerCheck)
     {
-        style.PatternName = patternBox.Text.Trim();
-        if (double.TryParse(scaleBox.Text, out var scale))
+        var resolvedStyle = existingStyle ?? new HatchStyleDto();
+        var resolvedScale = resolvedStyle.Scale;
+        var resolvedAngle = resolvedStyle.Angle;
+
+        if (double.TryParse(scaleBox.Text, out var parsedScale))
         {
-            style.Scale = scale;
+            resolvedScale = parsedScale;
         }
 
-        if (double.TryParse(angleBox.Text, out var angle))
+        if (double.TryParse(angleBox.Text, out var parsedAngle))
         {
-            style.Angle = angle;
+            resolvedAngle = parsedAngle;
         }
 
-        style.UseByLayer = byLayerCheck.IsChecked == true;
+        return new HatchStyleDto
+        {
+            PatternName = patternBox.Text.Trim(),
+            Scale = resolvedScale,
+            Angle = resolvedAngle,
+            UseByLayer = byLayerCheck.IsChecked == true
+        };
     }
 
     private void FloorListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

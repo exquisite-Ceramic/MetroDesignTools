@@ -17,6 +17,7 @@ public sealed class FloorConfigCommand
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly IFloorConfigDocumentAssembler _floorConfigDocumentAssembler;
     private readonly IFloorConfigSaveRequestMapper _floorConfigSaveRequestMapper;
+    private readonly ISectionOutputConfigMapper _sectionOutputConfigMapper;
     private readonly ILogger<FloorConfigCommand> _logger;
     private readonly IUserLogger _userLogger;
 
@@ -25,6 +26,7 @@ public sealed class FloorConfigCommand
         ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         IFloorConfigDocumentAssembler floorConfigDocumentAssembler,
         IFloorConfigSaveRequestMapper floorConfigSaveRequestMapper,
+        ISectionOutputConfigMapper sectionOutputConfigMapper,
         ILogger<FloorConfigCommand> logger,
         IUserLogger userLogger)
     {
@@ -32,6 +34,7 @@ public sealed class FloorConfigCommand
         _slabTemplateCatalog = slabTemplateCatalog;
         _floorConfigDocumentAssembler = floorConfigDocumentAssembler;
         _floorConfigSaveRequestMapper = floorConfigSaveRequestMapper;
+        _sectionOutputConfigMapper = sectionOutputConfigMapper;
         _logger     = logger;
         _userLogger = userLogger;
     }
@@ -45,6 +48,7 @@ public sealed class FloorConfigCommand
             _slabTemplateCatalog,
             _floorConfigDocumentAssembler,
             _floorConfigSaveRequestMapper,
+            _sectionOutputConfigMapper,
             _userLogger,
             _logger);
     }
