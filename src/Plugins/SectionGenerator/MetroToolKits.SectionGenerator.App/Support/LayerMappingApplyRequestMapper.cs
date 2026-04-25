@@ -26,7 +26,7 @@ public sealed class LayerMappingApplyRequestMapper : ILayerMappingApplyRequestMa
         };
     }
 
-    public ElementConversionApplyRequest ToDomain(ApplyLayerMappingsRequestDto request)
+    public ElementConversionApplyRequest ToDomainRequest(ApplyLayerMappingsRequestDto request)
     {
         ArgumentNullException.ThrowIfNull(request);
 

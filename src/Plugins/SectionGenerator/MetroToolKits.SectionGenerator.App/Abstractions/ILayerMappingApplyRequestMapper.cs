@@ -9,5 +9,5 @@ public interface ILayerMappingApplyRequestMapper
         IReadOnlyCollection<LayerMappingDto> mappings,
         bool applyToEntireDrawing);
 
-    ElementConversionApplyRequest ToDomain(ApplyLayerMappingsRequestDto request);
+    ElementConversionApplyRequest ToDomainRequest(ApplyLayerMappingsRequestDto request);
 }

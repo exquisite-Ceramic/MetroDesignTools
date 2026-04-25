@@ -92,7 +92,7 @@ public class LayerMappingApplyRequestMapperTests
     }
 
     [Fact]
-    public void ToDomain_MapsRequestCorrectly()
+    public void ToDomainRequest_MapsRequestCorrectly()
     {
         var request = new ApplyLayerMappingsRequestDto
         {
@@ -114,7 +114,7 @@ public class LayerMappingApplyRequestMapperTests
             ]
         };
 
-        var domainRequest = _mapper.ToDomain(request);
+        var domainRequest = _mapper.ToDomainRequest(request);
 
         domainRequest.ApplyToEntireDrawing.Should().BeTrue();
         domainRequest.LayerMappings.Should().HaveCount(2);

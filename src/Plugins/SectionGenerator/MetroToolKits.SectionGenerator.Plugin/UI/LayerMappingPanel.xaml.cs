@@ -4,7 +4,6 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.SectionGenerator.App.Abstractions;
-using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Contracts.LayerMapping;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
@@ -16,14 +15,13 @@ public partial class LayerMappingPanel : UserControl
     private ILayerMappingApplyRequestMapper? _applyRequestMapper;
     private IWallAssemblyTemplateCatalog? _wallTemplateCatalog;
     private ISlabAssemblyTemplateCatalog? _slabTemplateCatalog;
-    private IElementConversionUseCase? _conversionUseCase;
     private readonly ObservableCollection<LayerInfo> _layers = new();
     private readonly ObservableCollection<ElementTypeDefinition> _types = new();
     private readonly ObservableCollection<LayerMapping> _mappings = new();
     private List<ElementTypeDefinition> _allTypes = new();
     private bool _initialized;
 
-    public event EventHandler? ApplyCompleted;
+    public event EventHandler<ApplyLayerMappingsRequestedEventArgs>? ApplyRequested;
 
     public event EventHandler? CancelRequested;
 
@@ -36,8 +34,7 @@ public partial class LayerMappingPanel : UserControl
         ILayerMappingWorkspaceAssembler workspaceAssembler,
         ILayerMappingApplyRequestMapper applyRequestMapper,
         IWallAssemblyTemplateCatalog wallTemplateCatalog,
-        ISlabAssemblyTemplateCatalog slabTemplateCatalog,
-        IElementConversionUseCase conversionUseCase)
+        ISlabAssemblyTemplateCatalog slabTemplateCatalog)
     {
         if (_initialized)
         {
@@ -48,7 +45,6 @@ public partial class LayerMappingPanel : UserControl
         _applyRequestMapper = applyRequestMapper;
         _wallTemplateCatalog = wallTemplateCatalog;
         _slabTemplateCatalog = slabTemplateCatalog;
-        _conversionUseCase = conversionUseCase;
         _initialized = true;
 
         LoadData();
@@ -267,16 +263,6 @@ public partial class LayerMappingPanel : UserControl
             return;
         }
 
-        if (!ApplyMappings())
-        {
-            return;
-        }
-
-        ApplyCompleted?.Invoke(this, EventArgs.Empty);
-    }
-
-    private bool ApplyMappings()
-    {
         EnsureInitialized();
 
         var requestDto = _applyRequestMapper!.ToRequest(
@@ -291,21 +277,8 @@ public partial class LayerMappingPanel : UserControl
                 TemplateName = mapping.TemplateName
             }).ToArray(),
             applyToEntireDrawing: true);
-        var domainRequest = _applyRequestMapper.ToDomain(requestDto);
-        var result = _conversionUseCase!.ApplyMappings(domainRequest);
 
-        if (!result.Success)
-        {
-            MessageBox.Show(result.ErrorMessage ?? "图层映射应用失败。", "错误", MessageBoxButton.OK, MessageBoxImage.Error);
-            return false;
-        }
-
-        MessageBox.Show(
-            $"已应用 {result.MappedLayerCount} 个图层映射，共转换 {result.ConvertedCount} 个实体。",
-            "完成",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
-        return true;
+        ApplyRequested?.Invoke(this, new ApplyLayerMappingsRequestedEventArgs(requestDto));
     }
 
     private void CancelButton_Click(object sender, RoutedEventArgs e)
@@ -507,4 +480,14 @@ internal sealed class TemplateSelectionResult<TTemplate>
     public bool Cancelled { get; init; }
 
     public TTemplate? Template { get; init; }
+}
+
+public sealed class ApplyLayerMappingsRequestedEventArgs : EventArgs
+{
+    public ApplyLayerMappingsRequestedEventArgs(ApplyLayerMappingsRequestDto request)
+    {
+        Request = request ?? throw new ArgumentNullException(nameof(request));
+    }
+
+    public ApplyLayerMappingsRequestDto Request { get; }
 }
