@@ -12,14 +12,17 @@ public sealed class SectionToolboxPaletteService
 {
     private readonly IGenerateSectionPreflightUseCase _preflightUseCase;
     private readonly IWorkbenchSnapshotAssembler _workbenchSnapshotAssembler;
+    private readonly FloorConfigPaletteController _floorConfigPaletteController;
     private PaletteSet? _paletteSet;
 
     public SectionToolboxPaletteService(
         IGenerateSectionPreflightUseCase preflightUseCase,
-        IWorkbenchSnapshotAssembler workbenchSnapshotAssembler)
+        IWorkbenchSnapshotAssembler workbenchSnapshotAssembler,
+        FloorConfigPaletteController floorConfigPaletteController)
     {
         _preflightUseCase = preflightUseCase;
         _workbenchSnapshotAssembler = workbenchSnapshotAssembler;
+        _floorConfigPaletteController = floorConfigPaletteController;
     }
 
     public void Show()
@@ -32,8 +35,8 @@ public sealed class SectionToolboxPaletteService
     {
         var paletteSet = new PaletteSet("MetroToolKits 工具箱")
         {
-            MinimumSize = new Size(360, 560),
-            Size = new Size(360, 560),
+            MinimumSize = new Size(760, 720),
+            Size = new Size(760, 720),
             DockEnabled = DockSides.Left | DockSides.Right
         };
 
@@ -41,7 +44,12 @@ public sealed class SectionToolboxPaletteService
             PaletteSetStyles.ShowAutoHideButton |
             PaletteSetStyles.ShowCloseButton |
             PaletteSetStyles.ShowPropertiesMenu;
-        paletteSet.AddVisual("SectionGenerator", new SectionToolboxControl(_preflightUseCase, _workbenchSnapshotAssembler));
+        paletteSet.AddVisual(
+            "SectionGenerator",
+            new SectionToolboxControl(
+                _preflightUseCase,
+                _workbenchSnapshotAssembler,
+                _floorConfigPaletteController));
         return paletteSet;
     }
 }

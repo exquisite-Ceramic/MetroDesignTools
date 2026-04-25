@@ -13,16 +13,27 @@ public partial class SectionToolboxControl : UserControl
 {
     private readonly IGenerateSectionPreflightUseCase _preflightUseCase;
     private readonly IWorkbenchSnapshotAssembler _workbenchSnapshotAssembler;
+    private readonly FloorConfigPaletteController _floorConfigPaletteController;
     private const string ReadyMessage = "这里会汇总当前图纸的配置、构件就绪度和剖面状态。";
 
     public SectionToolboxControl(
         IGenerateSectionPreflightUseCase preflightUseCase,
-        IWorkbenchSnapshotAssembler workbenchSnapshotAssembler)
+        IWorkbenchSnapshotAssembler workbenchSnapshotAssembler,
+        FloorConfigPaletteController floorConfigPaletteController)
     {
         InitializeComponent();
         _preflightUseCase = preflightUseCase;
         _workbenchSnapshotAssembler = workbenchSnapshotAssembler;
-        Loaded += (_, _) => RefreshStatus();
+        _floorConfigPaletteController = floorConfigPaletteController;
+        _floorConfigPaletteController.StateChanged += FloorConfigPaletteController_StateChanged;
+        Loaded += SectionToolboxControl_Loaded;
+    }
+
+    private void SectionToolboxControl_Loaded(object sender, RoutedEventArgs e)
+    {
+        RefreshStatus();
+        _floorConfigPaletteController.Attach(FloorConfigPanelHost);
+        UpdateFloorConfigBindingText();
     }
 
     private void CommandButton_Click(object sender, RoutedEventArgs e)
@@ -69,8 +80,25 @@ public partial class SectionToolboxControl : UserControl
         }
     }
 
+    private void FloorConfigPaletteController_StateChanged(object? sender, EventArgs e)
+    {
+        UpdateFloorConfigBindingText();
+        RefreshStatus();
+    }
+
+    private void UpdateFloorConfigBindingText()
+    {
+        FloorConfigBindingText.Text = _floorConfigPaletteController.BoundDocumentDisplayText;
+    }
+
     private void RefreshButton_Click(object sender, RoutedEventArgs e)
     {
         RefreshStatus();
+    }
+
+    private void RefreshFloorConfigButton_Click(object sender, RoutedEventArgs e)
+    {
+        _floorConfigPaletteController.RefreshBoundDocument();
+        UpdateFloorConfigBindingText();
     }
 }

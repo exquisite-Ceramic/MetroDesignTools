@@ -137,6 +137,7 @@ public class SectionGeneratorPlugin : IPlugin
         services.AddSingleton<IElementConversionUseCase, ElementConversionUseCase>();
 
         // UI/工具箱
+        services.AddSingleton<UI.FloorConfigPaletteController>();
         services.AddSingleton<UI.SectionToolboxPaletteService>();
 
         // 命令

@@ -70,6 +70,19 @@ public partial class FloorConfigPanel : UserControl
         LoadConfig();
     }
 
+    public void LoadDocument(LoadedSectionConfig document)
+    {
+        if (!_initialized)
+        {
+            throw new InvalidOperationException("FloorConfigPanel 尚未初始化。");
+        }
+
+        var selectedFloorName = _currentFloor?.Name;
+        _document = document;
+        RefreshTemplateOptions();
+        LoadConfig(selectedFloorName);
+    }
+
     private static IReadOnlyList<TemplateOption> BuildTemplateOptions(IReadOnlyList<SlabAssemblyTemplate> slabTemplates)
     {
         var options = new List<TemplateOption>
@@ -88,7 +101,7 @@ public partial class FloorConfigPanel : UserControl
         return options;
     }
 
-    private void LoadConfig()
+    private void LoadConfig(string? selectedFloorName = null)
     {
         _floors.Clear();
         foreach (var floor in _document.Config.Floors)
@@ -108,7 +121,22 @@ public partial class FloorConfigPanel : UserControl
             BaseFloorComboBox.SelectedItem = _floors[0];
         }
 
-        RefreshFloorSummaryList();
+        _currentFloor = !string.IsNullOrWhiteSpace(selectedFloorName)
+            ? _floors.FirstOrDefault(floor =>
+                string.Equals(floor.Name, selectedFloorName, StringComparison.OrdinalIgnoreCase))
+            : null;
+
+        if (_currentFloor != null)
+        {
+            BindFloorToUI(_currentFloor);
+            EditPanel.IsEnabled = true;
+        }
+        else
+        {
+            EditPanel.IsEnabled = false;
+        }
+
+        RefreshFloorSummaryList(_currentFloor?.Name);
         _logger.LogDebug("楼层配置面板加载，楼层数: {Count}", _floors.Count);
     }
 
