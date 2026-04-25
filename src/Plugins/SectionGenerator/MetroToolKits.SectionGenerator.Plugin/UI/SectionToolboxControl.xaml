@@ -46,7 +46,6 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
@@ -70,28 +69,10 @@
                         </DockPanel>
                     </Border>
 
-                    <GroupBox Grid.Row="1" Header="构件识别摘要">
-                        <StackPanel Margin="8">
-                            <TextBlock x:Name="PreparationSummaryText" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                            <TextBlock x:Name="PreparationCountsText" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                            <TextBlock x:Name="PreparationModeText" TextWrapping="Wrap"/>
-                        </StackPanel>
-                    </GroupBox>
+                    <local:WorkbenchPreparationSummaryPanel Grid.Row="1"
+                                                            x:Name="WorkbenchPreparationSummaryPanelHost"/>
 
-                    <GroupBox Grid.Row="2" Header="图层映射入口" Margin="0,10,0,8">
-                        <StackPanel Margin="6">
-                            <Button Content="打开独立图层映射窗口"
-                                    Tag="{x:Static hosting:SectionGeneratorCommandNames.LayerMapping}"
-                                    Height="30"
-                                    Margin="0,0,0,6"
-                                    Click="CommandButton_Click"/>
-                            <TextBlock Text="墙体模板和楼板模板管理入口保留在下方图层映射面板中。"
-                                       Foreground="Gray"
-                                       TextWrapping="Wrap"/>
-                        </StackPanel>
-                    </GroupBox>
-
-                    <local:LayerMappingPanel Grid.Row="3" x:Name="LayerMappingPanelHost"/>
+                    <local:LayerMappingPanel Grid.Row="2" x:Name="LayerMappingPanelHost"/>
                 </Grid>
             </TabItem>
 

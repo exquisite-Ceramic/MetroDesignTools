@@ -25,6 +25,10 @@ public partial class SectionToolboxControl : UserControl
     private readonly ISlabTemplateCatalogMapper _slabTemplateCatalogMapper;
     private bool _templatePanelsInitialized;
     private const string ReadyMessage = "这里会汇总当前图纸的配置、构件就绪度和剖面状态。";
+    private const string OpenWallTemplateManagerAction = "OpenWallTemplateManager";
+    private const string OpenSlabTemplateManagerAction = "OpenSlabTemplateManager";
+    private const string PreparationEntryHint =
+        "图层映射会打开原图层映射窗口，墙体模板和楼板模板管理仍使用原独立模板管理窗口。";
 
     public SectionToolboxControl(
         IGenerateSectionPreflightUseCase preflightUseCase,
@@ -49,6 +53,7 @@ public partial class SectionToolboxControl : UserControl
         _layerMappingPaletteController.StateChanged += LayerMappingPaletteController_StateChanged;
         WorkbenchOverviewPanelHost.RefreshRequested += WorkbenchOverviewPanelHost_RefreshRequested;
         WorkbenchOverviewPanelHost.CommandRequested += WorkbenchOverviewPanelHost_CommandRequested;
+        WorkbenchPreparationSummaryPanelHost.CommandRequested += WorkbenchPreparationSummaryPanelHost_CommandRequested;
         WorkbenchGenerationPanelHost.CommandRequested += WorkbenchGenerationPanelHost_CommandRequested;
         WorkbenchMaintenancePanelHost.CommandRequested += WorkbenchMaintenancePanelHost_CommandRequested;
         OutputSettingsEntryPanelHost.NavigateToFloorConfigRequested += OutputSettingsEntryPanelHost_NavigateToFloorConfigRequested;
@@ -116,11 +121,11 @@ public partial class SectionToolboxControl : UserControl
 
     private void UpdatePreparationTab(SectionWorkbenchSnapshotDto snapshot)
     {
-        PreparationSummaryText.Text = snapshot.ElementReadiness.SummaryText;
-        PreparationCountsText.Text =
-            $"可识别构件 {snapshot.ElementReadiness.TotalRecognizableElementCount} 个，其中墙 {snapshot.ElementReadiness.RecognizableWallCount}、柱 {snapshot.ElementReadiness.RecognizableColumnCount}、板 {snapshot.ElementReadiness.RecognizableSlabCount}。";
-        PreparationModeText.Text =
-            $"模板模式：墙 {snapshot.ElementReadiness.TemplatedWallCount}、板 {snapshot.ElementReadiness.TemplatedSlabCount}。稳定模式：墙 {snapshot.ElementReadiness.LegacyWallCount}、板 {snapshot.ElementReadiness.LegacySlabCount}。";
+        WorkbenchPreparationSummaryPanelHost.ApplyState(
+            snapshot.ElementReadiness.SummaryText,
+            $"可识别构件 {snapshot.ElementReadiness.TotalRecognizableElementCount} 个，其中墙 {snapshot.ElementReadiness.RecognizableWallCount}、柱 {snapshot.ElementReadiness.RecognizableColumnCount}、板 {snapshot.ElementReadiness.RecognizableSlabCount}。",
+            $"模板模式：墙 {snapshot.ElementReadiness.TemplatedWallCount}、板 {snapshot.ElementReadiness.TemplatedSlabCount}。稳定模式：墙 {snapshot.ElementReadiness.LegacyWallCount}、板 {snapshot.ElementReadiness.LegacySlabCount}。",
+            PreparationEntryHint);
     }
 
     private void UpdateGenerationTab(SectionWorkbenchSnapshotDto snapshot)
@@ -159,9 +164,11 @@ public partial class SectionToolboxControl : UserControl
             "楼层配置",
             SectionGeneratorCommandNames.FloorConfig);
 
-        PreparationSummaryText.Text = "准备：暂时无法读取图纸准备状态。";
-        PreparationCountsText.Text = "构件计数：暂时无法统计。";
-        PreparationModeText.Text = "模板模式/稳定模式数量暂时无法读取。";
+        WorkbenchPreparationSummaryPanelHost.ApplyFallbackState(
+            "准备：暂时无法读取图纸准备状态。",
+            "构件计数：暂时无法统计。",
+            "模板模式/稳定模式数量暂时无法读取。",
+            PreparationEntryHint);
 
         WorkbenchGenerationPanelHost.ApplyFallbackState(
             "生成条件：暂时无法判断。",
@@ -239,6 +246,23 @@ public partial class SectionToolboxControl : UserControl
         ExecuteCommand(e.CommandName);
     }
 
+    private void WorkbenchPreparationSummaryPanelHost_CommandRequested(object? sender, WorkbenchCommandRequestedEventArgs e)
+    {
+        if (string.Equals(e.CommandName, OpenWallTemplateManagerAction, StringComparison.Ordinal))
+        {
+            OpenWallTemplateManager();
+            return;
+        }
+
+        if (string.Equals(e.CommandName, OpenSlabTemplateManagerAction, StringComparison.Ordinal))
+        {
+            OpenSlabTemplateManager();
+            return;
+        }
+
+        ExecuteCommand(e.CommandName);
+    }
+
     private void WorkbenchGenerationPanelHost_CommandRequested(object? sender, WorkbenchCommandRequestedEventArgs e)
     {
         ExecuteCommand(e.CommandName);
@@ -259,6 +283,48 @@ public partial class SectionToolboxControl : UserControl
     {
         _layerMappingPaletteController.RefreshBoundDocument();
         UpdateLayerMappingBindingText();
+    }
+
+    private void OpenWallTemplateManager()
+    {
+        var manager = new WallAssemblyTemplateManager(_wallTemplateCatalog, _wallTemplateCatalogMapper);
+        ShowTemplateManagerDialog(manager);
+
+        if (manager.DialogResult == true)
+        {
+            RefreshTemplateState(reloadWallTemplatePanel: true);
+            RefreshToolboxState();
+        }
+    }
+
+    private void OpenSlabTemplateManager()
+    {
+        var manager = new SlabAssemblyTemplateManager(_slabTemplateCatalog, _slabTemplateCatalogMapper);
+        ShowTemplateManagerDialog(manager);
+
+        if (manager.DialogResult == true)
+        {
+            RefreshTemplateState(
+                reloadSlabTemplatePanel: true,
+                reloadFloorConfigTemplateOptions: true);
+            RefreshToolboxState();
+        }
+    }
+
+    private void ShowTemplateManagerDialog(Window window)
+    {
+        var owner = Window.GetWindow(this);
+        if (owner != null)
+        {
+            window.Owner = owner;
+            window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        }
+        else
+        {
+            window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        }
+
+        window.ShowDialog();
     }
 
     private void EnterWallTemplatePanelButton_Click(object sender, RoutedEventArgs e)
