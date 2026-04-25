@@ -17,6 +17,7 @@ namespace MetroToolKits.SectionGenerator.Plugin.UI;
 public partial class LayerMappingManager : Window
 {
     private readonly ILayerMappingWorkspaceAssembler _workspaceAssembler;
+    private readonly ILayerMappingApplyRequestMapper _applyRequestMapper;
     private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly IElementConversionUseCase _conversionUseCase;
@@ -27,12 +28,14 @@ public partial class LayerMappingManager : Window
 
     public LayerMappingManager(
         ILayerMappingWorkspaceAssembler workspaceAssembler,
+        ILayerMappingApplyRequestMapper applyRequestMapper,
         IWallAssemblyTemplateCatalog wallTemplateCatalog,
         ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         IElementConversionUseCase conversionUseCase)
     {
         InitializeComponent();
         _workspaceAssembler = workspaceAssembler;
+        _applyRequestMapper = applyRequestMapper;
         _wallTemplateCatalog = wallTemplateCatalog;
         _slabTemplateCatalog = slabTemplateCatalog;
         _conversionUseCase = conversionUseCase;
@@ -256,16 +259,20 @@ public partial class LayerMappingManager : Window
 
     private void ApplyMappings()
     {
-        var result = _conversionUseCase.ApplyMappings(new ElementConversionApplyRequest
-        {
-            ApplyToEntireDrawing = true,
-            LayerMappings = _mappings.Select(static mapping => new LayerTypeAssignment
+        var requestDto = _applyRequestMapper.ToRequest(
+            _mappings.Select(static mapping => new LayerMappingDto
             {
-                SourceLayerName = mapping.LayerName,
+                LayerName = mapping.LayerName,
+                TypeName = mapping.TypeName,
                 TypeId = mapping.TypeId,
-                TemplateId = mapping.TemplateId
-            }).ToList()
-        });
+                TargetLayerPrefix = mapping.TargetLayerPrefix,
+                ColorIndex = mapping.ColorIndex,
+                TemplateId = mapping.TemplateId,
+                TemplateName = mapping.TemplateName
+            }).ToArray(),
+            applyToEntireDrawing: true);
+        var domainRequest = _applyRequestMapper.ToDomain(requestDto);
+        var result = _conversionUseCase.ApplyMappings(domainRequest);
 
         if (!result.Success)
         {

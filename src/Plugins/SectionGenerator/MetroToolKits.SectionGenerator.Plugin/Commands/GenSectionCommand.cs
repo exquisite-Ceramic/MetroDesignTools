@@ -31,6 +31,7 @@ public sealed class GenSectionCommand
     private readonly IFloorConfigSaveRequestMapper _floorConfigSaveRequestMapper;
     private readonly ISectionOutputConfigMapper _sectionOutputConfigMapper;
     private readonly ILayerMappingWorkspaceAssembler _layerMappingWorkspaceAssembler;
+    private readonly ILayerMappingApplyRequestMapper _layerMappingApplyRequestMapper;
     private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
     private readonly IElementConversionUseCase _elementConversionUseCase;
     private readonly ICheckSectionUpdatesUseCase _checkUseCase;
@@ -48,6 +49,7 @@ public sealed class GenSectionCommand
         IFloorConfigSaveRequestMapper floorConfigSaveRequestMapper,
         ISectionOutputConfigMapper sectionOutputConfigMapper,
         ILayerMappingWorkspaceAssembler layerMappingWorkspaceAssembler,
+        ILayerMappingApplyRequestMapper layerMappingApplyRequestMapper,
         IWallAssemblyTemplateCatalog wallTemplateCatalog,
         IElementConversionUseCase elementConversionUseCase,
         ICheckSectionUpdatesUseCase checkUseCase,
@@ -64,6 +66,7 @@ public sealed class GenSectionCommand
         _floorConfigSaveRequestMapper = floorConfigSaveRequestMapper;
         _sectionOutputConfigMapper = sectionOutputConfigMapper;
         _layerMappingWorkspaceAssembler = layerMappingWorkspaceAssembler;
+        _layerMappingApplyRequestMapper = layerMappingApplyRequestMapper;
         _wallTemplateCatalog = wallTemplateCatalog;
         _elementConversionUseCase = elementConversionUseCase;
         _checkUseCase = checkUseCase;
@@ -167,6 +170,7 @@ public sealed class GenSectionCommand
     {
         var window = new LayerMappingManager(
             _layerMappingWorkspaceAssembler,
+            _layerMappingApplyRequestMapper,
             _wallTemplateCatalog,
             _slabTemplateCatalog,
             _elementConversionUseCase);

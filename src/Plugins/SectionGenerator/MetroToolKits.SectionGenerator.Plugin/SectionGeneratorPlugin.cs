@@ -128,6 +128,7 @@ public class SectionGeneratorPlugin : IPlugin
         services.AddSingleton<IGenerateSectionPreflightUseCase, GenerateSectionPreflightUseCase>();
         services.AddSingleton<IWorkbenchSnapshotAssembler, WorkbenchSnapshotAssembler>();
         services.AddSingleton<ILayerMappingWorkspaceAssembler, LayerMappingWorkspaceAssembler>();
+        services.AddSingleton<ILayerMappingApplyRequestMapper, LayerMappingApplyRequestMapper>();
         services.AddSingleton<IFloorConfigDocumentAssembler, FloorConfigDocumentAssembler>();
         services.AddSingleton<IFloorConfigSaveRequestMapper, FloorConfigSaveRequestMapper>();
         services.AddSingleton<ISectionOutputConfigMapper, SectionOutputConfigMapper>();
@@ -172,17 +173,20 @@ public class SectionGeneratorPlugin : IPlugin
 public class OpenLayerMappingCommand
 {
     private readonly ILayerMappingWorkspaceAssembler _workspaceAssembler;
+    private readonly ILayerMappingApplyRequestMapper _applyRequestMapper;
     private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly IElementConversionUseCase _elementConversionUseCase;
 
     public OpenLayerMappingCommand(
         ILayerMappingWorkspaceAssembler workspaceAssembler,
+        ILayerMappingApplyRequestMapper applyRequestMapper,
         IWallAssemblyTemplateCatalog wallTemplateCatalog,
         ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         IElementConversionUseCase elementConversionUseCase)
     {
         _workspaceAssembler = workspaceAssembler;
+        _applyRequestMapper = applyRequestMapper;
         _wallTemplateCatalog = wallTemplateCatalog;
         _slabTemplateCatalog = slabTemplateCatalog;
         _elementConversionUseCase = elementConversionUseCase;
@@ -192,6 +196,7 @@ public class OpenLayerMappingCommand
     {
         var window = new UI.LayerMappingManager(
             _workspaceAssembler,
+            _applyRequestMapper,
             _wallTemplateCatalog,
             _slabTemplateCatalog,
             _elementConversionUseCase);
