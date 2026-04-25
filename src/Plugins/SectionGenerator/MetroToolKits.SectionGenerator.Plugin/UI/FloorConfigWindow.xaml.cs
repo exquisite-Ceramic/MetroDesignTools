@@ -3,7 +3,9 @@ using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Extensions.Logging;
 using MetroToolKits.Foundation.Building.Types;
+using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Models;
+using MetroToolKits.SectionGenerator.Contracts.Floors;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
 namespace MetroToolKits.SectionGenerator.Plugin.UI;
@@ -15,25 +17,30 @@ public partial class FloorConfigWindow : Window
 {
     private readonly ILogger<FloorConfigWindow> _logger;
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
+    private readonly IFloorConfigDocumentAssembler _floorConfigDocumentAssembler;
     private readonly ObservableCollection<FloorConfig> _floors = new();
+    private readonly ObservableCollection<FloorSummaryDto> _floorSummaries = new();
     private LoadedSectionConfig _document = new();
     private FloorConfig? _currentFloor;
     private IReadOnlyList<TemplateOption> _slabTemplates = Array.Empty<TemplateOption>();
     private bool _isRefreshingTemplateSelectors;
+    private bool _isRefreshingFloorSummaryList;
 
     public LoadedSectionConfig CurrentDocument => _document;
 
     public FloorConfigWindow(
         LoadedSectionConfig document,
         ISlabAssemblyTemplateCatalog slabTemplateCatalog,
+        IFloorConfigDocumentAssembler floorConfigDocumentAssembler,
         ILogger<FloorConfigWindow> logger)
     {
         InitializeComponent();
         _document = document;
         _logger = logger;
         _slabTemplateCatalog = slabTemplateCatalog;
+        _floorConfigDocumentAssembler = floorConfigDocumentAssembler;
 
-        FloorListBox.ItemsSource = _floors;
+        FloorListBox.ItemsSource = _floorSummaries;
         BaseFloorComboBox.ItemsSource = _floors;
         RefreshTemplateOptions();
         LoadConfig();
@@ -65,7 +72,6 @@ public partial class FloorConfigWindow : Window
             _floors.Add(floor);
         }
 
-        ConfigSourceStatus.Text = BuildConfigSourceStatus(_document.RuntimeState);
         GlobalSlopeCheck.IsChecked = _document.Config.GlobalSlopeEnabled;
         GlobalSlopeValueBox.Text = (_document.Config.GlobalSlopeValue * 100).ToString("F2");
         GlobalSlopeTargetBox.SelectedIndex = _document.Config.GlobalSlopeTarget == "FinishLayer" ? 1 : 0;
@@ -78,7 +84,56 @@ public partial class FloorConfigWindow : Window
             BaseFloorComboBox.SelectedItem = _floors[0];
         }
 
+        RefreshFloorSummaryList();
         _logger.LogDebug("楼层配置窗口加载，楼层数: {Count}", _floors.Count);
+    }
+
+    private void RefreshFloorSummaryList(string? selectedFloorName = null)
+    {
+        var displayDocument = new LoadedSectionConfig
+        {
+            Config = new SectionConfig
+            {
+                GlobalSlopeEnabled = _document.Config.GlobalSlopeEnabled,
+                GlobalSlopeValue = _document.Config.GlobalSlopeValue,
+                GlobalSlopeTarget = _document.Config.GlobalSlopeTarget,
+                GlobalTopSlopeEnabled = _document.Config.GlobalTopSlopeEnabled,
+                GlobalTopSlopeValue = _document.Config.GlobalTopSlopeValue,
+                GlobalTopSlopeTarget = _document.Config.GlobalTopSlopeTarget,
+                GlobalBottomSlopeEnabled = _document.Config.GlobalBottomSlopeEnabled,
+                GlobalBottomSlopeValue = _document.Config.GlobalBottomSlopeValue,
+                GlobalBottomSlopeTarget = _document.Config.GlobalBottomSlopeTarget,
+                AlignmentBaseFloorName = (BaseFloorComboBox.SelectedItem as FloorConfig)?.Name
+                    ?? _document.Config.AlignmentBaseFloorName,
+                Floors = _floors.ToList()
+            },
+            OutputConfig = _document.OutputConfig,
+            RuntimeDiagnostics = _document.RuntimeDiagnostics,
+            RuntimeState = _document.RuntimeState
+        };
+
+        var dto = _floorConfigDocumentAssembler.Assemble(displayDocument);
+        ConfigSourceStatus.Text = dto.ConfigSourceStatusText;
+
+        _isRefreshingFloorSummaryList = true;
+        try
+        {
+            _floorSummaries.Clear();
+            foreach (var summary in dto.FloorSummaries)
+            {
+                _floorSummaries.Add(summary);
+            }
+
+            var targetFloorName = selectedFloorName ?? _currentFloor?.Name;
+            FloorListBox.SelectedItem = targetFloorName == null
+                ? null
+                : _floorSummaries.FirstOrDefault(summary =>
+                    string.Equals(summary.FloorName, targetFloorName, StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            _isRefreshingFloorSummaryList = false;
+        }
     }
 
     private void RefreshTemplateOptions()
@@ -258,36 +313,30 @@ public partial class FloorConfigWindow : Window
         style.UseByLayer = byLayerCheck.IsChecked == true;
     }
 
-    private static string BuildConfigSourceStatus(SectionConfigRuntimeState state)
-    {
-        return state.Source switch
-        {
-            SectionConfigStorageSource.EmbeddedDwg =>
-                $"当前图纸 [{state.DrawingDisplayName}] 使用 DWG 内嵌楼层配置。",
-            SectionConfigStorageSource.TransientUnsavedDrawing when state.IsCurrentDrawingSaved =>
-                $"当前图纸 [{state.DrawingDisplayName}] 正在使用尚未写入 DWG 的临时楼层配置，请执行一次保存把配置写入图内。",
-            SectionConfigStorageSource.TransientUnsavedDrawing =>
-                $"当前图纸 [{state.DrawingDisplayName}] 尚未保存，楼层配置仅在本次会话有效，保存图纸后再保存配置才会写入 DWG。",
-            _ when state.IsCurrentDrawingSaved =>
-                $"当前图纸 [{state.DrawingDisplayName}] 尚未配置基准点/整层范围，保存后会直接写入该 DWG。",
-            _ =>
-                $"当前图纸 [{state.DrawingDisplayName}] 尚未建立图内楼层配置。"
-        };
-    }
-
     private void FloorListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (FloorListBox.SelectedItem is FloorConfig floor)
+        if (_isRefreshingFloorSummaryList)
+        {
+            return;
+        }
+
+        if (FloorListBox.SelectedItem is FloorSummaryDto summary)
         {
             SaveCurrentEdits();
-            _currentFloor = floor;
-            BindFloorToUI(floor);
-            EditPanel.IsEnabled = true;
+            var floor = _floors.FirstOrDefault(item =>
+                string.Equals(item.Name, summary.FloorName, StringComparison.OrdinalIgnoreCase));
+            if (floor != null)
+            {
+                _currentFloor = floor;
+                BindFloorToUI(floor);
+                EditPanel.IsEnabled = true;
+                RefreshFloorSummaryList(floor.Name);
+                return;
+            }
         }
-        else
-        {
-            EditPanel.IsEnabled = false;
-        }
+
+        _currentFloor = null;
+        EditPanel.IsEnabled = false;
     }
 
     private void AddFloor_Click(object sender, RoutedEventArgs e)
@@ -319,7 +368,10 @@ public partial class FloorConfigWindow : Window
             BaseFloorComboBox.SelectedItem = newFloor;
         }
 
-        FloorListBox.SelectedItem = newFloor;
+        _currentFloor = newFloor;
+        RefreshFloorSummaryList(newFloor.Name);
+        BindFloorToUI(newFloor);
+        EditPanel.IsEnabled = true;
         _logger.LogInformation("添加楼层: {FloorName}", newFloor.Name);
     }
 
@@ -338,8 +390,17 @@ public partial class FloorConfigWindow : Window
             BaseFloorComboBox.SelectedItem = _floors.FirstOrDefault();
         }
 
-        _currentFloor = null;
-        EditPanel.IsEnabled = false;
+        _currentFloor = _floors.FirstOrDefault();
+        RefreshFloorSummaryList(_currentFloor?.Name);
+        if (_currentFloor != null)
+        {
+            BindFloorToUI(_currentFloor);
+            EditPanel.IsEnabled = true;
+        }
+        else
+        {
+            EditPanel.IsEnabled = false;
+        }
         _logger.LogInformation("删除楼层: {FloorName}", name);
     }
 
@@ -352,6 +413,7 @@ public partial class FloorConfigWindow : Window
         }
 
         _floors.Move(index, index - 1);
+        RefreshFloorSummaryList(_currentFloor?.Name);
     }
 
     private void MoveDown_Click(object sender, RoutedEventArgs e)
@@ -363,6 +425,7 @@ public partial class FloorConfigWindow : Window
         }
 
         _floors.Move(index, index + 1);
+        RefreshFloorSummaryList(_currentFloor?.Name);
     }
 
     private void BindFloorToUI(FloorConfig floor)
@@ -526,6 +589,7 @@ public partial class FloorConfigWindow : Window
         if (_currentFloor != null)
         {
             BindFloorToUI(_currentFloor);
+            RefreshFloorSummaryList(_currentFloor.Name);
         }
     }
 
@@ -552,6 +616,7 @@ public partial class FloorConfigWindow : Window
         _currentFloor.AlignmentPoints.Clear();
         AlignmentStatus.Text = "未设置";
         AlignmentStatus.Foreground = System.Windows.Media.Brushes.Gray;
+        RefreshFloorSummaryList(_currentFloor.Name);
         _logger.LogInformation("清除楼层 {FloorName} 对齐点", _currentFloor.Name);
     }
 
@@ -578,6 +643,7 @@ public partial class FloorConfigWindow : Window
         _currentFloor.ScopeBounds = null;
         ScopeStatus.Text = "未设置";
         ScopeStatus.Foreground = System.Windows.Media.Brushes.Gray;
+        RefreshFloorSummaryList(_currentFloor.Name);
         _logger.LogInformation("清除楼层 {FloorName} 整层范围", _currentFloor.Name);
     }
 

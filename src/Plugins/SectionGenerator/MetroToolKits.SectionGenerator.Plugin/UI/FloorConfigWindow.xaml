@@ -32,8 +32,19 @@
                     </Grid.RowDefinitions>
                     <ListBox Grid.Row="0"
                              x:Name="FloorListBox"
-                             SelectionChanged="FloorListBox_SelectionChanged"
-                             DisplayMemberPath="Name"/>
+                             SelectionChanged="FloorListBox_SelectionChanged">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="2">
+                                    <TextBlock Text="{Binding FloorName}" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding StatusText}"
+                                               Foreground="Gray"
+                                               FontSize="11"
+                                               TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
                     <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,6,0,0">
                         <Button Content="添加" Width="55" Height="26" Margin="0,0,5,0" Click="AddFloor_Click"/>
                         <Button Content="删除" Width="55" Height="26" Margin="0,0,5,0" Click="DeleteFloor_Click"/>

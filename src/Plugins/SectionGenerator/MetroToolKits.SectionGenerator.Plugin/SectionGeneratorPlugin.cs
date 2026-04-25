@@ -127,6 +127,7 @@ public class SectionGeneratorPlugin : IPlugin
                 sp.GetRequiredService<ILogger<CheckSectionUpdatesUseCase>>()));
         services.AddSingleton<IGenerateSectionPreflightUseCase, GenerateSectionPreflightUseCase>();
         services.AddSingleton<IWorkbenchSnapshotAssembler, WorkbenchSnapshotAssembler>();
+        services.AddSingleton<IFloorConfigDocumentAssembler, FloorConfigDocumentAssembler>();
         services.AddSingleton<IUpdateSectionUseCase, UpdateSectionUseCase>();
         services.AddSingleton<ILocateSourceElementUseCase, LocateSourceElementUseCase>();
         services.AddSingleton<IFindRelatedSectionsUseCase, FindRelatedSectionsUseCase>();

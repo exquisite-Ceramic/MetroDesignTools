@@ -28,6 +28,7 @@ public sealed class GenSectionCommand
     private readonly IGenerateSectionPreflightUseCase _preflightUseCase;
     private readonly IFloorConfigUseCase _floorConfigUseCase;
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
+    private readonly IFloorConfigDocumentAssembler _floorConfigDocumentAssembler;
     private readonly ILayerService _layerService;
     private readonly IElementTypeCatalog _typeCatalog;
     private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
@@ -43,6 +44,7 @@ public sealed class GenSectionCommand
         IGenerateSectionPreflightUseCase preflightUseCase,
         IFloorConfigUseCase floorConfigUseCase,
         ISlabAssemblyTemplateCatalog slabTemplateCatalog,
+        IFloorConfigDocumentAssembler floorConfigDocumentAssembler,
         ILayerService layerService,
         IElementTypeCatalog typeCatalog,
         IWallAssemblyTemplateCatalog wallTemplateCatalog,
@@ -57,6 +59,7 @@ public sealed class GenSectionCommand
         _preflightUseCase = preflightUseCase;
         _floorConfigUseCase = floorConfigUseCase;
         _slabTemplateCatalog = slabTemplateCatalog;
+        _floorConfigDocumentAssembler = floorConfigDocumentAssembler;
         _layerService = layerService;
         _typeCatalog = typeCatalog;
         _wallTemplateCatalog = wallTemplateCatalog;
@@ -99,7 +102,7 @@ public sealed class GenSectionCommand
                     return;
 
                 case GenerateSectionWizardAction.OpenFloorConfig:
-                    FloorConfigDialogWorkflow.Run(_floorConfigUseCase, _slabTemplateCatalog, _userLogger, _logger);
+                    FloorConfigDialogWorkflow.Run(_floorConfigUseCase, _slabTemplateCatalog, _floorConfigDocumentAssembler, _userLogger, _logger);
                     continue;
 
                 case GenerateSectionWizardAction.OpenLayerMapping:

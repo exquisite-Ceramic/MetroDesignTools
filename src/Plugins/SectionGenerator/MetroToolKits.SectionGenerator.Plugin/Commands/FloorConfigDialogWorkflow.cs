@@ -4,6 +4,7 @@ using Autodesk.AutoCAD.EditorInput;
 using Microsoft.Extensions.Logging;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.Foundation.Core.Logging;
+using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Models;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Core.Sections;
@@ -18,6 +19,7 @@ internal static class FloorConfigDialogWorkflow
     public static void Run(
         IFloorConfigUseCase floorConfigUseCase,
         ISlabAssemblyTemplateCatalog slabTemplateCatalog,
+        IFloorConfigDocumentAssembler floorConfigDocumentAssembler,
         IUserLogger userLogger,
         ILogger logger)
     {
@@ -29,6 +31,7 @@ internal static class FloorConfigDialogWorkflow
             var window = new FloorConfigWindow(
                 configDocument,
                 slabTemplateCatalog,
+                floorConfigDocumentAssembler,
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<FloorConfigWindow>.Instance);
 
             Application.ShowModalWindow(window);
