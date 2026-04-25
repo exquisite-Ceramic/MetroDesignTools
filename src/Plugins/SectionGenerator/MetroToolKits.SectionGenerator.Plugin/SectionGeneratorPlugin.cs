@@ -126,6 +126,7 @@ public class SectionGeneratorPlugin : IPlugin
                 sp.GetRequiredService<MetroToolKits.SectionGenerator.Core.Sections.FloorVerticalProfileBuilder>(),
                 sp.GetRequiredService<ILogger<CheckSectionUpdatesUseCase>>()));
         services.AddSingleton<IGenerateSectionPreflightUseCase, GenerateSectionPreflightUseCase>();
+        services.AddSingleton<IWorkbenchSnapshotAssembler, WorkbenchSnapshotAssembler>();
         services.AddSingleton<IUpdateSectionUseCase, UpdateSectionUseCase>();
         services.AddSingleton<ILocateSourceElementUseCase, LocateSourceElementUseCase>();
         services.AddSingleton<IFindRelatedSectionsUseCase, FindRelatedSectionsUseCase>();

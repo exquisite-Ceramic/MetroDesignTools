@@ -1,5 +1,6 @@
 using System.Drawing;
 using Autodesk.AutoCAD.Windows;
+using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.UseCases;
 
 namespace MetroToolKits.SectionGenerator.Plugin.UI;
@@ -10,11 +11,15 @@ namespace MetroToolKits.SectionGenerator.Plugin.UI;
 public sealed class SectionToolboxPaletteService
 {
     private readonly IGenerateSectionPreflightUseCase _preflightUseCase;
+    private readonly IWorkbenchSnapshotAssembler _workbenchSnapshotAssembler;
     private PaletteSet? _paletteSet;
 
-    public SectionToolboxPaletteService(IGenerateSectionPreflightUseCase preflightUseCase)
+    public SectionToolboxPaletteService(
+        IGenerateSectionPreflightUseCase preflightUseCase,
+        IWorkbenchSnapshotAssembler workbenchSnapshotAssembler)
     {
         _preflightUseCase = preflightUseCase;
+        _workbenchSnapshotAssembler = workbenchSnapshotAssembler;
     }
 
     public void Show()
@@ -36,7 +41,7 @@ public sealed class SectionToolboxPaletteService
             PaletteSetStyles.ShowAutoHideButton |
             PaletteSetStyles.ShowCloseButton |
             PaletteSetStyles.ShowPropertiesMenu;
-        paletteSet.AddVisual("SectionGenerator", new SectionToolboxControl(_preflightUseCase));
+        paletteSet.AddVisual("SectionGenerator", new SectionToolboxControl(_preflightUseCase, _workbenchSnapshotAssembler));
         return paletteSet;
     }
 }
