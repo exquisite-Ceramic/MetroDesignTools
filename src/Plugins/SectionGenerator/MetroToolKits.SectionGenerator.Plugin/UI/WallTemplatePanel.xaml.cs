@@ -42,10 +42,18 @@ public partial class WallTemplatePanel : UserControl
         LoadTemplates();
     }
 
-    private void LoadTemplates()
+    public void ReloadTemplates()
+    {
+        EnsureInitialized();
+        var selectedTemplateId = _currentTemplate?.TemplateId;
+        LoadTemplates(selectedTemplateId);
+    }
+
+    private void LoadTemplates(string? selectedTemplateId = null)
     {
         EnsureInitialized();
 
+        _currentTemplate = null;
         _templates.Clear();
         var catalogDto = _templateCatalogMapper!.ToDto(_templateCatalog!.GetAllTemplates());
         foreach (var template in catalogDto.Templates)
@@ -54,7 +62,21 @@ public partial class WallTemplatePanel : UserControl
         }
 
         TemplateListBox.ItemsSource = _templates;
-        TemplateListBox.SelectedIndex = _templates.Count > 0 ? 0 : -1;
+        if (!string.IsNullOrWhiteSpace(selectedTemplateId))
+        {
+            TemplateListBox.SelectedItem = _templates.FirstOrDefault(template =>
+                string.Equals(template.TemplateId, selectedTemplateId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (TemplateListBox.SelectedItem == null)
+        {
+            TemplateListBox.SelectedIndex = _templates.Count > 0 ? 0 : -1;
+        }
+
+        if (TemplateListBox.SelectedItem == null)
+        {
+            BindCurrentTemplate();
+        }
     }
 
     private void TemplateListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

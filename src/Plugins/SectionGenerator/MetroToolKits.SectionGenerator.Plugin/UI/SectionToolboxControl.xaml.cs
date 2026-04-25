@@ -21,6 +21,9 @@ public partial class SectionToolboxControl : UserControl
     private readonly LayerMappingPaletteController _layerMappingPaletteController;
     private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
+    private readonly IWallTemplateCatalogMapper _wallTemplateCatalogMapper;
+    private readonly ISlabTemplateCatalogMapper _slabTemplateCatalogMapper;
+    private bool _templatePanelsInitialized;
     private const string ReadyMessage = "这里会汇总当前图纸的配置、构件就绪度和剖面状态。";
 
     public SectionToolboxControl(
@@ -29,7 +32,9 @@ public partial class SectionToolboxControl : UserControl
         FloorConfigPaletteController floorConfigPaletteController,
         LayerMappingPaletteController layerMappingPaletteController,
         IWallAssemblyTemplateCatalog wallTemplateCatalog,
-        ISlabAssemblyTemplateCatalog slabTemplateCatalog)
+        ISlabAssemblyTemplateCatalog slabTemplateCatalog,
+        IWallTemplateCatalogMapper wallTemplateCatalogMapper,
+        ISlabTemplateCatalogMapper slabTemplateCatalogMapper)
     {
         InitializeComponent();
         _preflightUseCase = preflightUseCase;
@@ -38,6 +43,8 @@ public partial class SectionToolboxControl : UserControl
         _layerMappingPaletteController = layerMappingPaletteController;
         _wallTemplateCatalog = wallTemplateCatalog;
         _slabTemplateCatalog = slabTemplateCatalog;
+        _wallTemplateCatalogMapper = wallTemplateCatalogMapper;
+        _slabTemplateCatalogMapper = slabTemplateCatalogMapper;
         _floorConfigPaletteController.StateChanged += FloorConfigPaletteController_StateChanged;
         _layerMappingPaletteController.StateChanged += LayerMappingPaletteController_StateChanged;
         Loaded += SectionToolboxControl_Loaded;
@@ -48,6 +55,8 @@ public partial class SectionToolboxControl : UserControl
         RefreshStatus();
         _floorConfigPaletteController.Attach(FloorConfigPanelHost);
         _layerMappingPaletteController.Attach(LayerMappingPanelHost);
+        EnsureTemplatePanelsInitialized();
+        ShowTemplateHome();
         UpdateFloorConfigBindingText();
         UpdateLayerMappingBindingText();
     }
@@ -221,16 +230,18 @@ public partial class SectionToolboxControl : UserControl
         UpdateLayerMappingBindingText();
     }
 
-    private void OpenWallTemplateManagerButton_Click(object sender, RoutedEventArgs e)
+    private void EnterWallTemplatePanelButton_Click(object sender, RoutedEventArgs e)
     {
-        ShowPaletteDialog(new WallAssemblyTemplateManager(_wallTemplateCatalog));
-        RefreshStatus();
+        EnsureTemplatePanelsInitialized();
+        WallTemplatePanelHost.ReloadTemplates();
+        ShowWallTemplatePanel();
     }
 
-    private void OpenSlabTemplateManagerButton_Click(object sender, RoutedEventArgs e)
+    private void EnterSlabTemplatePanelButton_Click(object sender, RoutedEventArgs e)
     {
-        ShowPaletteDialog(new SlabAssemblyTemplateManager(_slabTemplateCatalog));
-        RefreshStatus();
+        EnsureTemplatePanelsInitialized();
+        SlabTemplatePanelHost.ReloadTemplates();
+        ShowSlabTemplatePanel();
     }
 
     private void GoToFloorConfigTabButton_Click(object sender, RoutedEventArgs e)
@@ -238,19 +249,64 @@ public partial class SectionToolboxControl : UserControl
         WorkbenchTabs.SelectedItem = FloorConfigTabItem;
     }
 
-    private void ShowPaletteDialog(Window window)
+    private void EnsureTemplatePanelsInitialized()
     {
-        var owner = Window.GetWindow(this);
-        if (owner != null)
+        if (_templatePanelsInitialized)
         {
-            window.Owner = owner;
-            window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        }
-        else
-        {
-            window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            return;
         }
 
-        window.ShowDialog();
+        WallTemplatePanelHost.Initialize(_wallTemplateCatalog, _wallTemplateCatalogMapper);
+        SlabTemplatePanelHost.Initialize(_slabTemplateCatalog, _slabTemplateCatalogMapper);
+        WallTemplatePanelHost.SaveCompleted += WallTemplatePanelHost_SaveCompleted;
+        WallTemplatePanelHost.CancelRequested += WallTemplatePanelHost_CancelRequested;
+        SlabTemplatePanelHost.SaveCompleted += SlabTemplatePanelHost_SaveCompleted;
+        SlabTemplatePanelHost.CancelRequested += SlabTemplatePanelHost_CancelRequested;
+        _templatePanelsInitialized = true;
+    }
+
+    private void ShowTemplateHome()
+    {
+        TemplatesHomeView.Visibility = Visibility.Visible;
+        WallTemplatePanelView.Visibility = Visibility.Collapsed;
+        SlabTemplatePanelView.Visibility = Visibility.Collapsed;
+    }
+
+    private void ShowWallTemplatePanel()
+    {
+        TemplatesHomeView.Visibility = Visibility.Collapsed;
+        WallTemplatePanelView.Visibility = Visibility.Visible;
+        SlabTemplatePanelView.Visibility = Visibility.Collapsed;
+    }
+
+    private void ShowSlabTemplatePanel()
+    {
+        TemplatesHomeView.Visibility = Visibility.Collapsed;
+        WallTemplatePanelView.Visibility = Visibility.Collapsed;
+        SlabTemplatePanelView.Visibility = Visibility.Visible;
+    }
+
+    private void WallTemplatePanelHost_SaveCompleted(object? sender, EventArgs e)
+    {
+        WallTemplatePanelHost.ReloadTemplates();
+        ShowTemplateHome();
+        RefreshStatus();
+    }
+
+    private void WallTemplatePanelHost_CancelRequested(object? sender, EventArgs e)
+    {
+        ShowTemplateHome();
+    }
+
+    private void SlabTemplatePanelHost_SaveCompleted(object? sender, EventArgs e)
+    {
+        SlabTemplatePanelHost.ReloadTemplates();
+        ShowTemplateHome();
+        RefreshStatus();
+    }
+
+    private void SlabTemplatePanelHost_CancelRequested(object? sender, EventArgs e)
+    {
+        ShowTemplateHome();
     }
 }

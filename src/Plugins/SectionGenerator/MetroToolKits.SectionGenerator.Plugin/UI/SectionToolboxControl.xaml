@@ -193,34 +193,46 @@
             </TabItem>
 
             <TabItem Header="模板与输出">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="10">
-                        <GroupBox Header="模板入口">
-                            <StackPanel Margin="8">
-                                <TextBlock x:Name="TemplatesSummaryText" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                                <Button Content="墙体模板管理"
-                                        Height="30"
-                                        Margin="0,0,0,6"
-                                        Click="OpenWallTemplateManagerButton_Click"/>
-                                <Button Content="楼板模板管理"
-                                        Height="30"
-                                        Click="OpenSlabTemplateManagerButton_Click"/>
-                            </StackPanel>
-                        </GroupBox>
+                <Grid Margin="10">
+                    <Grid x:Name="TemplatesHomeView">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <GroupBox Header="模板入口">
+                                    <StackPanel Margin="8">
+                                        <TextBlock x:Name="TemplatesSummaryText" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                        <Button Content="进入墙体模板管理"
+                                                Height="30"
+                                                Margin="0,0,0,6"
+                                                Click="EnterWallTemplatePanelButton_Click"/>
+                                        <Button Content="进入楼板模板管理"
+                                                Height="30"
+                                                Click="EnterSlabTemplatePanelButton_Click"/>
+                                    </StackPanel>
+                                </GroupBox>
 
-                        <GroupBox Header="输出设置" Margin="0,10,0,0">
-                            <StackPanel Margin="8">
-                                <TextBlock x:Name="OutputSettingsHintText"
-                                           Text="输出设置仍在“楼层配置”Tab 的“输出设置”区域维护。"
-                                           TextWrapping="Wrap"
-                                           Margin="0,0,0,8"/>
-                                <Button Content="前往楼层配置"
-                                        Height="30"
-                                        Click="GoToFloorConfigTabButton_Click"/>
+                                <GroupBox Header="输出设置" Margin="0,10,0,0">
+                                    <StackPanel Margin="8">
+                                        <TextBlock x:Name="OutputSettingsHintText"
+                                                   Text="输出设置仍在“楼层配置”Tab 的“输出设置”区域维护。"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,0,0,8"/>
+                                        <Button Content="前往楼层配置"
+                                                Height="30"
+                                                Click="GoToFloorConfigTabButton_Click"/>
+                                    </StackPanel>
+                                </GroupBox>
                             </StackPanel>
-                        </GroupBox>
-                    </StackPanel>
-                </ScrollViewer>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <Grid x:Name="WallTemplatePanelView" Visibility="Collapsed">
+                        <local:WallTemplatePanel x:Name="WallTemplatePanelHost"/>
+                    </Grid>
+
+                    <Grid x:Name="SlabTemplatePanelView" Visibility="Collapsed">
+                        <local:SlabTemplatePanel x:Name="SlabTemplatePanelHost"/>
+                    </Grid>
+                </Grid>
             </TabItem>
         </TabControl>
     </Grid>

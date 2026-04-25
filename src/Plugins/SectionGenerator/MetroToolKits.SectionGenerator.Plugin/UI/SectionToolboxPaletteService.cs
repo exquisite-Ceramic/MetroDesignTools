@@ -17,6 +17,8 @@ public sealed class SectionToolboxPaletteService
     private readonly LayerMappingPaletteController _layerMappingPaletteController;
     private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
+    private readonly IWallTemplateCatalogMapper _wallTemplateCatalogMapper;
+    private readonly ISlabTemplateCatalogMapper _slabTemplateCatalogMapper;
     private PaletteSet? _paletteSet;
 
     public SectionToolboxPaletteService(
@@ -25,7 +27,9 @@ public sealed class SectionToolboxPaletteService
         FloorConfigPaletteController floorConfigPaletteController,
         LayerMappingPaletteController layerMappingPaletteController,
         IWallAssemblyTemplateCatalog wallTemplateCatalog,
-        ISlabAssemblyTemplateCatalog slabTemplateCatalog)
+        ISlabAssemblyTemplateCatalog slabTemplateCatalog,
+        IWallTemplateCatalogMapper wallTemplateCatalogMapper,
+        ISlabTemplateCatalogMapper slabTemplateCatalogMapper)
     {
         _preflightUseCase = preflightUseCase;
         _workbenchSnapshotAssembler = workbenchSnapshotAssembler;
@@ -33,6 +37,8 @@ public sealed class SectionToolboxPaletteService
         _layerMappingPaletteController = layerMappingPaletteController;
         _wallTemplateCatalog = wallTemplateCatalog;
         _slabTemplateCatalog = slabTemplateCatalog;
+        _wallTemplateCatalogMapper = wallTemplateCatalogMapper;
+        _slabTemplateCatalogMapper = slabTemplateCatalogMapper;
     }
 
     public void Show()
@@ -62,7 +68,9 @@ public sealed class SectionToolboxPaletteService
                 _floorConfigPaletteController,
                 _layerMappingPaletteController,
                 _wallTemplateCatalog,
-                _slabTemplateCatalog));
+                _slabTemplateCatalog,
+                _wallTemplateCatalogMapper,
+                _slabTemplateCatalogMapper));
         return paletteSet;
     }
 }
