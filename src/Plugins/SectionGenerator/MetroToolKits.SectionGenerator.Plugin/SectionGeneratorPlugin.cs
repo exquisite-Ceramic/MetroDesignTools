@@ -127,6 +127,7 @@ public class SectionGeneratorPlugin : IPlugin
                 sp.GetRequiredService<ILogger<CheckSectionUpdatesUseCase>>()));
         services.AddSingleton<IGenerateSectionPreflightUseCase, GenerateSectionPreflightUseCase>();
         services.AddSingleton<IWorkbenchSnapshotAssembler, WorkbenchSnapshotAssembler>();
+        services.AddSingleton<ILayerMappingWorkspaceAssembler, LayerMappingWorkspaceAssembler>();
         services.AddSingleton<IFloorConfigDocumentAssembler, FloorConfigDocumentAssembler>();
         services.AddSingleton<IFloorConfigSaveRequestMapper, FloorConfigSaveRequestMapper>();
         services.AddSingleton<ISectionOutputConfigMapper, SectionOutputConfigMapper>();
@@ -170,21 +171,18 @@ public class SectionGeneratorPlugin : IPlugin
 [CommandBinding(SectionGeneratorCommandNames.LayerMapping)]
 public class OpenLayerMappingCommand
 {
-    private readonly ILayerService _layerService;
-    private readonly IElementTypeCatalog _typeCatalog;
+    private readonly ILayerMappingWorkspaceAssembler _workspaceAssembler;
     private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly IElementConversionUseCase _elementConversionUseCase;
 
     public OpenLayerMappingCommand(
-        ILayerService layerService,
-        IElementTypeCatalog typeCatalog,
+        ILayerMappingWorkspaceAssembler workspaceAssembler,
         IWallAssemblyTemplateCatalog wallTemplateCatalog,
         ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         IElementConversionUseCase elementConversionUseCase)
     {
-        _layerService  = layerService;
-        _typeCatalog = typeCatalog;
+        _workspaceAssembler = workspaceAssembler;
         _wallTemplateCatalog = wallTemplateCatalog;
         _slabTemplateCatalog = slabTemplateCatalog;
         _elementConversionUseCase = elementConversionUseCase;
@@ -193,8 +191,7 @@ public class OpenLayerMappingCommand
     public void Execute()
     {
         var window = new UI.LayerMappingManager(
-            _layerService,
-            _typeCatalog,
+            _workspaceAssembler,
             _wallTemplateCatalog,
             _slabTemplateCatalog,
             _elementConversionUseCase);

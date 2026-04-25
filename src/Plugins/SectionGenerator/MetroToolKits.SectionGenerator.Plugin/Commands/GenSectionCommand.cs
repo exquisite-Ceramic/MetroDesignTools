@@ -2,7 +2,6 @@ using System.Diagnostics;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using Microsoft.Extensions.Logging;
-using MetroToolKits.Foundation.Cad.Layering.Services;
 using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.Foundation.Core.Hosting;
@@ -31,8 +30,7 @@ public sealed class GenSectionCommand
     private readonly IFloorConfigDocumentAssembler _floorConfigDocumentAssembler;
     private readonly IFloorConfigSaveRequestMapper _floorConfigSaveRequestMapper;
     private readonly ISectionOutputConfigMapper _sectionOutputConfigMapper;
-    private readonly ILayerService _layerService;
-    private readonly IElementTypeCatalog _typeCatalog;
+    private readonly ILayerMappingWorkspaceAssembler _layerMappingWorkspaceAssembler;
     private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
     private readonly IElementConversionUseCase _elementConversionUseCase;
     private readonly ICheckSectionUpdatesUseCase _checkUseCase;
@@ -49,8 +47,7 @@ public sealed class GenSectionCommand
         IFloorConfigDocumentAssembler floorConfigDocumentAssembler,
         IFloorConfigSaveRequestMapper floorConfigSaveRequestMapper,
         ISectionOutputConfigMapper sectionOutputConfigMapper,
-        ILayerService layerService,
-        IElementTypeCatalog typeCatalog,
+        ILayerMappingWorkspaceAssembler layerMappingWorkspaceAssembler,
         IWallAssemblyTemplateCatalog wallTemplateCatalog,
         IElementConversionUseCase elementConversionUseCase,
         ICheckSectionUpdatesUseCase checkUseCase,
@@ -66,8 +63,7 @@ public sealed class GenSectionCommand
         _floorConfigDocumentAssembler = floorConfigDocumentAssembler;
         _floorConfigSaveRequestMapper = floorConfigSaveRequestMapper;
         _sectionOutputConfigMapper = sectionOutputConfigMapper;
-        _layerService = layerService;
-        _typeCatalog = typeCatalog;
+        _layerMappingWorkspaceAssembler = layerMappingWorkspaceAssembler;
         _wallTemplateCatalog = wallTemplateCatalog;
         _elementConversionUseCase = elementConversionUseCase;
         _checkUseCase = checkUseCase;
@@ -170,8 +166,7 @@ public sealed class GenSectionCommand
     private void OpenLayerMappingWindow()
     {
         var window = new LayerMappingManager(
-            _layerService,
-            _typeCatalog,
+            _layerMappingWorkspaceAssembler,
             _wallTemplateCatalog,
             _slabTemplateCatalog,
             _elementConversionUseCase);

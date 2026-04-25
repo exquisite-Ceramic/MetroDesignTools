@@ -3,9 +3,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using MetroToolKits.Foundation.Cad.Layering.Services;
 using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.SectionGenerator.App.Abstractions;
+using MetroToolKits.SectionGenerator.Contracts.LayerMapping;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
@@ -16,8 +16,7 @@ namespace MetroToolKits.SectionGenerator.Plugin.UI;
 /// </summary>
 public partial class LayerMappingManager : Window
 {
-    private readonly ILayerService _layerService;
-    private readonly IElementTypeCatalog _typeCatalog;
+    private readonly ILayerMappingWorkspaceAssembler _workspaceAssembler;
     private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly IElementConversionUseCase _conversionUseCase;
@@ -27,15 +26,13 @@ public partial class LayerMappingManager : Window
     private List<ElementTypeDefinition> _allTypes = new();
 
     public LayerMappingManager(
-        ILayerService layerService,
-        IElementTypeCatalog typeCatalog,
+        ILayerMappingWorkspaceAssembler workspaceAssembler,
         IWallAssemblyTemplateCatalog wallTemplateCatalog,
         ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         IElementConversionUseCase conversionUseCase)
     {
         InitializeComponent();
-        _layerService = layerService;
-        _typeCatalog = typeCatalog;
+        _workspaceAssembler = workspaceAssembler;
         _wallTemplateCatalog = wallTemplateCatalog;
         _slabTemplateCatalog = slabTemplateCatalog;
         _conversionUseCase = conversionUseCase;
@@ -45,26 +42,47 @@ public partial class LayerMappingManager : Window
 
     private void LoadData()
     {
-        // 加载图层
+        var workspace = _workspaceAssembler.Assemble();
+
         _layers.Clear();
-        var layerNames = _layerService.GetAllLayerNames();
-        foreach (var name in layerNames.OrderBy(n => n))
+        foreach (var layer in workspace.Layers)
         {
-            _layers.Add(new LayerInfo { LayerName = name });
+            _layers.Add(new LayerInfo { LayerName = layer.LayerName });
         }
         LayerListBox.ItemsSource = _layers;
 
-        // 加载构件类型
         _types.Clear();
-        _allTypes = _typeCatalog.GetAllTypes().ToList();
-        foreach (var type in _allTypes.Where(t => t.IsEnabled))
+        _allTypes = workspace.ElementTypes
+            .Select(static type => new ElementTypeDefinition
+            {
+                TypeId = type.TypeId,
+                TypeName = type.TypeName,
+                ShortcutKey = type.ShortcutKey,
+                TargetLayerPrefix = type.TargetLayerPrefix,
+                LayerColorIndex = type.ColorIndex,
+                IsEnabled = type.IsEnabled
+            })
+            .ToList();
+        foreach (var type in _allTypes)
         {
             _types.Add(type);
         }
         TypeListBox.ItemsSource = _types;
 
-        // 清空映射
         _mappings.Clear();
+        foreach (var mapping in workspace.Mappings)
+        {
+            _mappings.Add(new LayerMapping
+            {
+                LayerName = mapping.LayerName,
+                TypeName = mapping.TypeName,
+                TypeId = mapping.TypeId,
+                TargetLayerPrefix = mapping.TargetLayerPrefix,
+                ColorIndex = mapping.ColorIndex,
+                TemplateId = mapping.TemplateId,
+                TemplateName = mapping.TemplateName
+            });
+        }
         MappingListBox.ItemsSource = _mappings;
     }
 
