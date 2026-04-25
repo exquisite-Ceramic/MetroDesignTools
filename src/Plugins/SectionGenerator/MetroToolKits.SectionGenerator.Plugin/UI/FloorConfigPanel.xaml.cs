@@ -219,6 +219,59 @@ public partial class FloorConfigPanel : UserControl
         BottomBoundaryTemplateBox.ItemsSource = _slabTemplates;
     }
 
+    private IReadOnlyCollection<string> GetAvailableTemplateIds()
+        => _slabTemplates
+            .Where(option => !string.IsNullOrWhiteSpace(option.TemplateId))
+            .Select(option => option.TemplateId)
+            .ToArray();
+
+    private string ReadBoundaryTemplateId(ComboBox templateBox, string currentTemplateId)
+    {
+        var selectedTemplateId = templateBox.SelectedValue?.ToString();
+        if (string.IsNullOrWhiteSpace(selectedTemplateId) && templateBox.SelectedItem is TemplateOption selectedOption)
+        {
+            selectedTemplateId = selectedOption.TemplateId;
+        }
+
+        var isExplicitUnboundSelection = templateBox.SelectedItem is TemplateOption option &&
+                                         string.IsNullOrWhiteSpace(option.TemplateId);
+
+        return ResolveBoundaryTemplateIdForSave(
+            selectedTemplateId,
+            isExplicitUnboundSelection,
+            currentTemplateId,
+            GetAvailableTemplateIds());
+    }
+
+    public static string ResolveBoundaryTemplateIdForSave(
+        string? selectedTemplateId,
+        bool isExplicitUnboundSelection,
+        string? currentTemplateId,
+        IReadOnlyCollection<string> availableTemplateIds)
+    {
+        static bool ContainsTemplateId(IReadOnlyCollection<string> ids, string candidate)
+            => ids.Any(id => string.Equals(id, candidate, StringComparison.OrdinalIgnoreCase));
+
+        if (isExplicitUnboundSelection)
+        {
+            return string.Empty;
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedTemplateId) &&
+            ContainsTemplateId(availableTemplateIds, selectedTemplateId))
+        {
+            return selectedTemplateId;
+        }
+
+        if (!string.IsNullOrWhiteSpace(currentTemplateId) &&
+            ContainsTemplateId(availableTemplateIds, currentTemplateId))
+        {
+            return currentTemplateId;
+        }
+
+        return string.Empty;
+    }
+
     private static string NormalizeTemplateId(string? templateId, IReadOnlyList<TemplateOption> options)
     {
         if (!string.IsNullOrWhiteSpace(templateId) &&
@@ -575,8 +628,12 @@ public partial class FloorConfigPanel : UserControl
 
         _currentFloor.TopBoundarySlab.SlopeEnabled = TopSlopeCheck.IsChecked == true;
         _currentFloor.BottomBoundarySlab.SlopeEnabled = BottomSlopeCheck.IsChecked == true;
-        _currentFloor.TopBoundarySlab.TemplateId = TopBoundaryTemplateBox.SelectedValue?.ToString() ?? string.Empty;
-        _currentFloor.BottomBoundarySlab.TemplateId = BottomBoundaryTemplateBox.SelectedValue?.ToString() ?? string.Empty;
+        _currentFloor.TopBoundarySlab.TemplateId = ReadBoundaryTemplateId(
+            TopBoundaryTemplateBox,
+            _currentFloor.TopBoundarySlab.TemplateId);
+        _currentFloor.BottomBoundarySlab.TemplateId = ReadBoundaryTemplateId(
+            BottomBoundaryTemplateBox,
+            _currentFloor.BottomBoundarySlab.TemplateId);
         if (double.TryParse(TopSlopeValueBox.Text, out var topSlope))
         {
             _currentFloor.TopBoundarySlab.SlopeValue = topSlope / 100.0;
@@ -604,7 +661,9 @@ public partial class FloorConfigPanel : UserControl
             return;
         }
 
-        _currentFloor.TopBoundarySlab.TemplateId = TopBoundaryTemplateBox.SelectedValue?.ToString() ?? string.Empty;
+        _currentFloor.TopBoundarySlab.TemplateId = ReadBoundaryTemplateId(
+            TopBoundaryTemplateBox,
+            _currentFloor.TopBoundarySlab.TemplateId);
         RefreshBoundaryTemplateDisplays(_currentFloor);
     }
 
@@ -615,7 +674,9 @@ public partial class FloorConfigPanel : UserControl
             return;
         }
 
-        _currentFloor.BottomBoundarySlab.TemplateId = BottomBoundaryTemplateBox.SelectedValue?.ToString() ?? string.Empty;
+        _currentFloor.BottomBoundarySlab.TemplateId = ReadBoundaryTemplateId(
+            BottomBoundaryTemplateBox,
+            _currentFloor.BottomBoundarySlab.TemplateId);
         RefreshBoundaryTemplateDisplays(_currentFloor);
     }
 
