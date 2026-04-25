@@ -53,11 +53,11 @@ public partial class SectionToolboxControl : UserControl
         _floorConfigPaletteController.StateChanged += FloorConfigPaletteController_StateChanged;
         _layerMappingPaletteController.StateChanged += LayerMappingPaletteController_StateChanged;
         WorkbenchOverviewPanelHost.RefreshRequested += WorkbenchOverviewPanelHost_RefreshRequested;
-        WorkbenchOverviewPanelHost.CommandRequested += WorkbenchOverviewPanelHost_CommandRequested;
-        WorkbenchPreparationSummaryPanelHost.CommandRequested += WorkbenchPreparationSummaryPanelHost_CommandRequested;
-        WorkbenchGenerationPanelHost.CommandRequested += WorkbenchGenerationPanelHost_CommandRequested;
-        WorkbenchMaintenancePanelHost.CommandRequested += WorkbenchMaintenancePanelHost_CommandRequested;
-        WorkbenchTemplatesOutputPanelHost.CommandRequested += WorkbenchTemplatesOutputPanelHost_CommandRequested;
+        WorkbenchOverviewPanelHost.CommandRequested += WorkbenchPanel_CommandRequested;
+        WorkbenchPreparationSummaryPanelHost.CommandRequested += WorkbenchPanel_CommandRequested;
+        WorkbenchGenerationPanelHost.CommandRequested += WorkbenchPanel_CommandRequested;
+        WorkbenchMaintenancePanelHost.CommandRequested += WorkbenchPanel_CommandRequested;
+        WorkbenchTemplatesOutputPanelHost.CommandRequested += WorkbenchPanel_CommandRequested;
         Loaded += SectionToolboxControl_Loaded;
     }
 
@@ -70,16 +70,6 @@ public partial class SectionToolboxControl : UserControl
         ShowTemplateHome();
         UpdateFloorConfigBindingText();
         UpdateLayerMappingBindingText();
-    }
-
-    private void CommandButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button button || button.Tag is not string commandName)
-        {
-            return;
-        }
-
-        ExecuteCommand(commandName);
     }
 
     private void ExecuteCommand(string commandName)
@@ -230,65 +220,27 @@ public partial class SectionToolboxControl : UserControl
         LayerMappingBindingText.Text = _layerMappingPaletteController.BoundDocumentDisplayText;
     }
 
-    private void RefreshButton_Click(object sender, RoutedEventArgs e)
-    {
-        RefreshStatus();
-    }
-
     private void WorkbenchOverviewPanelHost_RefreshRequested(object? sender, EventArgs e)
     {
         RefreshStatus();
     }
 
-    private void WorkbenchOverviewPanelHost_CommandRequested(object? sender, WorkbenchCommandRequestedEventArgs e)
+    private void WorkbenchPanel_CommandRequested(object? sender, WorkbenchCommandRequestedEventArgs e)
     {
-        ExecuteCommand(e.CommandName);
-    }
-
-    private void WorkbenchPreparationSummaryPanelHost_CommandRequested(object? sender, WorkbenchCommandRequestedEventArgs e)
-    {
-        if (string.Equals(e.CommandName, OpenWallTemplateManagerAction, StringComparison.Ordinal))
+        switch (e.CommandName)
         {
-            OpenWallTemplateManager();
-            return;
-        }
-
-        if (string.Equals(e.CommandName, OpenSlabTemplateManagerAction, StringComparison.Ordinal))
-        {
-            OpenSlabTemplateManager();
-            return;
-        }
-
-        ExecuteCommand(e.CommandName);
-    }
-
-    private void WorkbenchGenerationPanelHost_CommandRequested(object? sender, WorkbenchCommandRequestedEventArgs e)
-    {
-        ExecuteCommand(e.CommandName);
-    }
-
-    private void WorkbenchMaintenancePanelHost_CommandRequested(object? sender, WorkbenchCommandRequestedEventArgs e)
-    {
-        ExecuteCommand(e.CommandName);
-    }
-
-    private void WorkbenchTemplatesOutputPanelHost_CommandRequested(object? sender, WorkbenchCommandRequestedEventArgs e)
-    {
-        if (string.Equals(e.CommandName, OpenWallTemplateManagerAction, StringComparison.Ordinal))
-        {
-            OpenWallTemplateManager();
-            return;
-        }
-
-        if (string.Equals(e.CommandName, OpenSlabTemplateManagerAction, StringComparison.Ordinal))
-        {
-            OpenSlabTemplateManager();
-            return;
-        }
-
-        if (string.Equals(e.CommandName, GoToFloorConfigTabAction, StringComparison.Ordinal))
-        {
-            WorkbenchTabs.SelectedItem = FloorConfigTabItem;
+            case OpenWallTemplateManagerAction:
+                OpenWallTemplateManager();
+                break;
+            case OpenSlabTemplateManagerAction:
+                OpenSlabTemplateManager();
+                break;
+            case GoToFloorConfigTabAction:
+                WorkbenchTabs.SelectedItem = FloorConfigTabItem;
+                break;
+            default:
+                ExecuteCommand(e.CommandName);
+                break;
         }
     }
 
