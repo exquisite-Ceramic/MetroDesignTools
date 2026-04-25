@@ -2,6 +2,7 @@ using System.Drawing;
 using Autodesk.AutoCAD.Windows;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.UseCases;
+using MetroToolKits.SectionGenerator.Core.Sections;
 
 namespace MetroToolKits.SectionGenerator.Plugin.UI;
 
@@ -13,16 +14,22 @@ public sealed class SectionToolboxPaletteService
     private readonly IGenerateSectionPreflightUseCase _preflightUseCase;
     private readonly IWorkbenchSnapshotAssembler _workbenchSnapshotAssembler;
     private readonly FloorConfigPaletteController _floorConfigPaletteController;
+    private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
+    private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private PaletteSet? _paletteSet;
 
     public SectionToolboxPaletteService(
         IGenerateSectionPreflightUseCase preflightUseCase,
         IWorkbenchSnapshotAssembler workbenchSnapshotAssembler,
-        FloorConfigPaletteController floorConfigPaletteController)
+        FloorConfigPaletteController floorConfigPaletteController,
+        IWallAssemblyTemplateCatalog wallTemplateCatalog,
+        ISlabAssemblyTemplateCatalog slabTemplateCatalog)
     {
         _preflightUseCase = preflightUseCase;
         _workbenchSnapshotAssembler = workbenchSnapshotAssembler;
         _floorConfigPaletteController = floorConfigPaletteController;
+        _wallTemplateCatalog = wallTemplateCatalog;
+        _slabTemplateCatalog = slabTemplateCatalog;
     }
 
     public void Show()
@@ -49,7 +56,9 @@ public sealed class SectionToolboxPaletteService
             new SectionToolboxControl(
                 _preflightUseCase,
                 _workbenchSnapshotAssembler,
-                _floorConfigPaletteController));
+                _floorConfigPaletteController,
+                _wallTemplateCatalog,
+                _slabTemplateCatalog));
         return paletteSet;
     }
 }

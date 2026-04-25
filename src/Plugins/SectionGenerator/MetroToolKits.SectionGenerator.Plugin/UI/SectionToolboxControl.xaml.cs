@@ -1,7 +1,11 @@
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using MetroToolKits.Foundation.Core.Hosting;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.UseCases;
+using MetroToolKits.SectionGenerator.Contracts.Workbench;
+using MetroToolKits.SectionGenerator.Core.Sections;
 using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace MetroToolKits.SectionGenerator.Plugin.UI;
@@ -14,17 +18,23 @@ public partial class SectionToolboxControl : UserControl
     private readonly IGenerateSectionPreflightUseCase _preflightUseCase;
     private readonly IWorkbenchSnapshotAssembler _workbenchSnapshotAssembler;
     private readonly FloorConfigPaletteController _floorConfigPaletteController;
+    private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
+    private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private const string ReadyMessage = "这里会汇总当前图纸的配置、构件就绪度和剖面状态。";
 
     public SectionToolboxControl(
         IGenerateSectionPreflightUseCase preflightUseCase,
         IWorkbenchSnapshotAssembler workbenchSnapshotAssembler,
-        FloorConfigPaletteController floorConfigPaletteController)
+        FloorConfigPaletteController floorConfigPaletteController,
+        IWallAssemblyTemplateCatalog wallTemplateCatalog,
+        ISlabAssemblyTemplateCatalog slabTemplateCatalog)
     {
         InitializeComponent();
         _preflightUseCase = preflightUseCase;
         _workbenchSnapshotAssembler = workbenchSnapshotAssembler;
         _floorConfigPaletteController = floorConfigPaletteController;
+        _wallTemplateCatalog = wallTemplateCatalog;
+        _slabTemplateCatalog = slabTemplateCatalog;
         _floorConfigPaletteController.StateChanged += FloorConfigPaletteController_StateChanged;
         Loaded += SectionToolboxControl_Loaded;
     }
@@ -62,22 +72,108 @@ public partial class SectionToolboxControl : UserControl
             var result = _preflightUseCase.Execute();
             var snapshot = _workbenchSnapshotAssembler.Assemble(result);
 
-            ConfigSummaryText.Text = snapshot.FloorConfig.SummaryText;
-            ReadinessSummaryText.Text = snapshot.ElementReadiness.SummaryText;
-            SectionsSummaryText.Text = snapshot.ExistingSections.SummaryText;
-            RecommendedActionText.Text = snapshot.RecommendedAction.Message;
-            PrimaryActionButton.Content = snapshot.RecommendedAction.ButtonText;
-            PrimaryActionButton.Tag = snapshot.RecommendedAction.CommandTag;
+            UpdateOverviewTab(snapshot);
+            UpdatePreparationTab(snapshot);
+            UpdateGenerationTab(snapshot);
+            UpdateMaintenanceTab(snapshot);
+            UpdateTemplatesTab(snapshot);
         }
         catch (Exception ex)
         {
-            ConfigSummaryText.Text = "配置：暂时无法读取当前图纸配置状态。";
-            ReadinessSummaryText.Text = "构件：暂时无法检查当前图纸的构件就绪度。";
-            SectionsSummaryText.Text = $"剖面：状态刷新失败。{ex.Message}";
-            RecommendedActionText.Text = "状态刷新失败时，仍可直接进入楼层配置或重新刷新。";
-            PrimaryActionButton.Content = "楼层配置";
-            PrimaryActionButton.Tag = "FloorConfig";
+            ApplyRefreshFailure(ex);
         }
+    }
+
+    private void UpdateOverviewTab(SectionWorkbenchSnapshotDto snapshot)
+    {
+        ConfigSummaryText.Text = snapshot.FloorConfig.SummaryText;
+        ReadinessSummaryText.Text = snapshot.ElementReadiness.SummaryText;
+        SectionsSummaryText.Text = snapshot.ExistingSections.SummaryText;
+        RecommendedActionText.Text = snapshot.RecommendedAction.Message;
+        PrimaryActionButton.Content = snapshot.RecommendedAction.ButtonText;
+        PrimaryActionButton.Tag = snapshot.RecommendedAction.CommandTag;
+    }
+
+    private void UpdatePreparationTab(SectionWorkbenchSnapshotDto snapshot)
+    {
+        PreparationSummaryText.Text = snapshot.ElementReadiness.SummaryText;
+        PreparationCountsText.Text =
+            $"可识别构件 {snapshot.ElementReadiness.TotalRecognizableElementCount} 个，其中墙 {snapshot.ElementReadiness.RecognizableWallCount}、柱 {snapshot.ElementReadiness.RecognizableColumnCount}、板 {snapshot.ElementReadiness.RecognizableSlabCount}。";
+        PreparationModeText.Text =
+            $"模板模式：墙 {snapshot.ElementReadiness.TemplatedWallCount}、板 {snapshot.ElementReadiness.TemplatedSlabCount}。稳定模式：墙 {snapshot.ElementReadiness.LegacyWallCount}、板 {snapshot.ElementReadiness.LegacySlabCount}。";
+    }
+
+    private void UpdateGenerationTab(SectionWorkbenchSnapshotDto snapshot)
+    {
+        GenerationStatusText.Text = snapshot.FloorConfig.CanGenerate
+            ? "当前已满足生成条件。"
+            : "当前未满足生成条件。";
+        GenerationSummaryText.Text = snapshot.FloorConfig.SummaryText;
+        MissingItemsSummaryText.Text = $"缺失项：{FormatMissingIssues(snapshot.Issues)}";
+    }
+
+    private void UpdateMaintenanceTab(SectionWorkbenchSnapshotDto snapshot)
+    {
+        MaintenanceSummaryText.Text = snapshot.ExistingSections.SummaryText;
+        MaintenanceCountsText.Text =
+            $"已有剖面 {snapshot.ExistingSections.TotalCount} 个，其中最新 {snapshot.ExistingSections.UpToDateCount}、需更新 {snapshot.ExistingSections.OutdatedCount}、未知 {snapshot.ExistingSections.UnknownCount}、部分检查 {snapshot.ExistingSections.PartialCount}。";
+    }
+
+    private void UpdateTemplatesTab(SectionWorkbenchSnapshotDto snapshot)
+    {
+        var wallTemplateCount = _wallTemplateCatalog.GetAllTemplates().Count;
+        var slabTemplateCount = _slabTemplateCatalog.GetAllTemplates().Count;
+        TemplatesSummaryText.Text =
+            $"当前图纸：{snapshot.Drawing.DrawingDisplayName}。现有墙体模板 {wallTemplateCount} 个，楼板模板 {slabTemplateCount} 个。输出设置仍在“楼层配置”Tab 中维护。";
+    }
+
+    private void ApplyRefreshFailure(Exception ex)
+    {
+        ConfigSummaryText.Text = "配置：暂时无法读取当前图纸配置状态。";
+        ReadinessSummaryText.Text = "构件：暂时无法检查当前图纸的构件就绪度。";
+        SectionsSummaryText.Text = $"剖面：状态刷新失败。{ex.Message}";
+        RecommendedActionText.Text = "状态刷新失败时，仍可直接进入楼层配置或重新刷新。";
+        PrimaryActionButton.Content = "楼层配置";
+        PrimaryActionButton.Tag = SectionGeneratorCommandNames.FloorConfig;
+
+        PreparationSummaryText.Text = "准备：暂时无法读取图纸准备状态。";
+        PreparationCountsText.Text = "构件计数：暂时无法统计。";
+        PreparationModeText.Text = "模板模式/稳定模式数量暂时无法读取。";
+
+        GenerationStatusText.Text = "生成条件：暂时无法判断。";
+        GenerationSummaryText.Text = "楼层配置摘要暂时无法读取。";
+        MissingItemsSummaryText.Text = "缺失项：暂时无法读取。";
+
+        MaintenanceSummaryText.Text = "维护：暂时无法读取剖面状态。";
+        MaintenanceCountsText.Text = "剖面数量统计暂时无法读取。";
+
+        TemplatesSummaryText.Text = "模板与输出入口仍可继续使用。";
+    }
+
+    private static string FormatMissingIssues(IReadOnlyList<ValidationIssueDto> issues)
+    {
+        if (issues.Count == 0)
+        {
+            return "无缺失项";
+        }
+
+        var messages = issues
+            .Select(issue => issue.Message.Trim())
+            .Where(message => !string.IsNullOrWhiteSpace(message))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (messages.Count == 0)
+        {
+            return "无缺失项";
+        }
+
+        if (messages.Count <= 3)
+        {
+            return string.Join("；", messages);
+        }
+
+        return $"{string.Join("；", messages.Take(3))}；等 {messages.Count} 项";
     }
 
     private void FloorConfigPaletteController_StateChanged(object? sender, EventArgs e)
@@ -100,5 +196,38 @@ public partial class SectionToolboxControl : UserControl
     {
         _floorConfigPaletteController.RefreshBoundDocument();
         UpdateFloorConfigBindingText();
+    }
+
+    private void OpenWallTemplateManagerButton_Click(object sender, RoutedEventArgs e)
+    {
+        ShowPaletteDialog(new WallAssemblyTemplateManager(_wallTemplateCatalog));
+        RefreshStatus();
+    }
+
+    private void OpenSlabTemplateManagerButton_Click(object sender, RoutedEventArgs e)
+    {
+        ShowPaletteDialog(new SlabAssemblyTemplateManager(_slabTemplateCatalog));
+        RefreshStatus();
+    }
+
+    private void GoToFloorConfigTabButton_Click(object sender, RoutedEventArgs e)
+    {
+        WorkbenchTabs.SelectedItem = FloorConfigTabItem;
+    }
+
+    private void ShowPaletteDialog(Window window)
+    {
+        var owner = Window.GetWindow(this);
+        if (owner != null)
+        {
+            window.Owner = owner;
+            window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        }
+        else
+        {
+            window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        }
+
+        window.ShowDialog();
     }
 }

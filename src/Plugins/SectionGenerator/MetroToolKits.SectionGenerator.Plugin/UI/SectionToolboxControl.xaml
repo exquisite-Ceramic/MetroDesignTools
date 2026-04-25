@@ -1,6 +1,7 @@
 <UserControl x:Class="MetroToolKits.SectionGenerator.Plugin.UI.SectionToolboxControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:hosting="clr-namespace:MetroToolKits.Foundation.Core.Hosting;assembly=MetroToolKits.Foundation.Core"
              xmlns:local="clr-namespace:MetroToolKits.SectionGenerator.Plugin.UI"
              Width="360">
     <Grid>
@@ -17,7 +18,11 @@
                                 <TextBlock x:Name="RecommendedActionText" Margin="0,6,0,8" TextWrapping="Wrap"/>
                                 <DockPanel>
                                     <Button Content="刷新状态" Width="84" Height="28" DockPanel.Dock="Right" Click="RefreshButton_Click"/>
-                                    <Button x:Name="PrimaryActionButton" Content="开始生成剖面" Tag="GenSection" Height="32" Click="CommandButton_Click"/>
+                                    <Button x:Name="PrimaryActionButton"
+                                            Content="开始生成剖面"
+                                            Tag="{x:Static hosting:SectionGeneratorCommandNames.GenSection}"
+                                            Height="32"
+                                            Click="CommandButton_Click"/>
                                 </DockPanel>
                             </StackPanel>
                         </Border>
@@ -32,45 +37,32 @@
 
                         <GroupBox Header="快捷操作" Margin="0,10,0,0">
                             <StackPanel Margin="6">
-                                <Button Content="开始生成剖面" Tag="GenSection" Height="30" Margin="0,0,0,6" Click="CommandButton_Click"/>
-                                <Button Content="楼层配置" Tag="FloorConfig" Height="30" Margin="0,0,0,6" Click="CommandButton_Click"/>
-                                <Button Content="图层映射" Tag="LayerMapping" Height="30" Margin="0,0,0,6" Click="CommandButton_Click"/>
-                                <Button Content="检测更新" Tag="CheckSectionUpdates" Height="30" Click="CommandButton_Click"/>
+                                <Button Content="开始生成剖面"
+                                        Tag="{x:Static hosting:SectionGeneratorCommandNames.GenSection}"
+                                        Height="30"
+                                        Margin="0,0,0,6"
+                                        Click="CommandButton_Click"/>
+                                <Button Content="楼层配置"
+                                        Tag="{x:Static hosting:SectionGeneratorCommandNames.FloorConfig}"
+                                        Height="30"
+                                        Margin="0,0,0,6"
+                                        Click="CommandButton_Click"/>
+                                <Button Content="图层映射"
+                                        Tag="{x:Static hosting:SectionGeneratorCommandNames.LayerMapping}"
+                                        Height="30"
+                                        Margin="0,0,0,6"
+                                        Click="CommandButton_Click"/>
+                                <Button Content="查看或更新剖面"
+                                        Tag="{x:Static hosting:SectionGeneratorCommandNames.CheckSectionUpdates}"
+                                        Height="30"
+                                        Click="CommandButton_Click"/>
                             </StackPanel>
                         </GroupBox>
-
-                        <Expander Header="更多命令" Margin="0,10,0,0">
-                            <StackPanel Margin="0,8,0,0">
-                                <GroupBox Header="剖面">
-                                    <StackPanel Margin="6">
-                                        <Button Content="生成剖面" Tag="GenSection" Height="30" Margin="0,0,0,6" Click="CommandButton_Click"/>
-                                        <Button Content="检测更新" Tag="CheckSectionUpdates" Height="30" Margin="0,0,0,6" Click="CommandButton_Click"/>
-                                        <Button Content="更新剖面" Tag="UpdateSection" Height="30" Click="CommandButton_Click"/>
-                                    </StackPanel>
-                                </GroupBox>
-
-                                <GroupBox Header="双向定位" Margin="0,8,0,0">
-                                    <StackPanel Margin="6">
-                                        <Button Content="剖面定位源构件" Tag="LocateSourceElement" Height="30" Margin="0,0,0,6" Click="CommandButton_Click"/>
-                                        <Button Content="查询关联剖面" Tag="FindRelatedSections" Height="30" Click="CommandButton_Click"/>
-                                    </StackPanel>
-                                </GroupBox>
-
-                                <GroupBox Header="转换与配置" Margin="0,8,0,0">
-                                    <StackPanel Margin="6">
-                                        <Button Content="楼层配置" Tag="FloorConfig" Height="30" Margin="0,0,0,6" Click="CommandButton_Click"/>
-                                        <Button Content="图层映射" Tag="LayerMapping" Height="30" Margin="0,0,0,6" Click="CommandButton_Click"/>
-                                        <Button Content="区域转换" Tag="ConvertRegion" Height="30" Margin="0,0,0,6" Click="CommandButton_Click"/>
-                                        <Button Content="恢复转换" Tag="RevertConversion" Height="30" Click="CommandButton_Click"/>
-                                    </StackPanel>
-                                </GroupBox>
-                            </StackPanel>
-                        </Expander>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="楼层配置">
+            <TabItem x:Name="FloorConfigTabItem" Header="楼层配置">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -99,6 +91,113 @@
 
                     <local:FloorConfigPanel Grid.Row="1" x:Name="FloorConfigPanelHost"/>
                 </Grid>
+            </TabItem>
+
+            <TabItem Header="图纸准备">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="10">
+                        <GroupBox Header="构件识别摘要">
+                            <StackPanel Margin="8">
+                                <TextBlock x:Name="PreparationSummaryText" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                <TextBlock x:Name="PreparationCountsText" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                <TextBlock x:Name="PreparationModeText" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <GroupBox Header="准备入口" Margin="0,10,0,0">
+                            <StackPanel Margin="6">
+                                <Button Content="图层映射"
+                                        Tag="{x:Static hosting:SectionGeneratorCommandNames.LayerMapping}"
+                                        Height="30"
+                                        Margin="0,0,0,6"
+                                        Click="CommandButton_Click"/>
+                                <Button Content="墙体模板管理"
+                                        Height="30"
+                                        Margin="0,0,0,6"
+                                        Click="OpenWallTemplateManagerButton_Click"/>
+                                <Button Content="楼板模板管理"
+                                        Height="30"
+                                        Click="OpenSlabTemplateManagerButton_Click"/>
+                            </StackPanel>
+                        </GroupBox>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="剖面生成">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="10">
+                        <GroupBox Header="生成条件">
+                            <StackPanel Margin="8">
+                                <TextBlock x:Name="GenerationStatusText" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                <TextBlock x:Name="GenerationSummaryText" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                <TextBlock x:Name="MissingItemsSummaryText" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <GroupBox Header="生成入口" Margin="0,10,0,0">
+                            <StackPanel Margin="6">
+                                <Button Content="开始生成剖面"
+                                        Tag="{x:Static hosting:SectionGeneratorCommandNames.GenSection}"
+                                        Height="30"
+                                        Click="CommandButton_Click"/>
+                            </StackPanel>
+                        </GroupBox>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="剖面维护">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="10">
+                        <GroupBox Header="剖面状态摘要">
+                            <StackPanel Margin="8">
+                                <TextBlock x:Name="MaintenanceSummaryText" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                <TextBlock x:Name="MaintenanceCountsText" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <GroupBox Header="维护入口" Margin="0,10,0,0">
+                            <StackPanel Margin="6">
+                                <Button Content="查看或更新剖面"
+                                        Tag="{x:Static hosting:SectionGeneratorCommandNames.CheckSectionUpdates}"
+                                        Height="30"
+                                        Click="CommandButton_Click"/>
+                            </StackPanel>
+                        </GroupBox>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="模板与输出">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="10">
+                        <GroupBox Header="模板入口">
+                            <StackPanel Margin="8">
+                                <TextBlock x:Name="TemplatesSummaryText" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                <Button Content="墙体模板管理"
+                                        Height="30"
+                                        Margin="0,0,0,6"
+                                        Click="OpenWallTemplateManagerButton_Click"/>
+                                <Button Content="楼板模板管理"
+                                        Height="30"
+                                        Click="OpenSlabTemplateManagerButton_Click"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <GroupBox Header="输出设置" Margin="0,10,0,0">
+                            <StackPanel Margin="8">
+                                <TextBlock x:Name="OutputSettingsHintText"
+                                           Text="输出设置仍在“楼层配置”Tab 的“输出设置”区域维护。"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,8"/>
+                                <Button Content="前往楼层配置"
+                                        Height="30"
+                                        Click="GoToFloorConfigTabButton_Click"/>
+                            </StackPanel>
+                        </GroupBox>
+                    </StackPanel>
+                </ScrollViewer>
             </TabItem>
         </TabControl>
     </Grid>
