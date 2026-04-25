@@ -27,6 +27,7 @@ public partial class SectionToolboxControl : UserControl
     private const string ReadyMessage = "这里会汇总当前图纸的配置、构件就绪度和剖面状态。";
     private const string OpenWallTemplateManagerAction = "OpenWallTemplateManager";
     private const string OpenSlabTemplateManagerAction = "OpenSlabTemplateManager";
+    private const string GoToFloorConfigTabAction = "GoToFloorConfigTab";
     private const string PreparationEntryHint =
         "图层映射会打开原图层映射窗口，墙体模板和楼板模板管理仍使用原独立模板管理窗口。";
 
@@ -56,7 +57,7 @@ public partial class SectionToolboxControl : UserControl
         WorkbenchPreparationSummaryPanelHost.CommandRequested += WorkbenchPreparationSummaryPanelHost_CommandRequested;
         WorkbenchGenerationPanelHost.CommandRequested += WorkbenchGenerationPanelHost_CommandRequested;
         WorkbenchMaintenancePanelHost.CommandRequested += WorkbenchMaintenancePanelHost_CommandRequested;
-        OutputSettingsEntryPanelHost.NavigateToFloorConfigRequested += OutputSettingsEntryPanelHost_NavigateToFloorConfigRequested;
+        WorkbenchTemplatesOutputPanelHost.CommandRequested += WorkbenchTemplatesOutputPanelHost_CommandRequested;
         Loaded += SectionToolboxControl_Loaded;
     }
 
@@ -151,7 +152,6 @@ public partial class SectionToolboxControl : UserControl
         var slabTemplateCount = _slabTemplateCatalog.GetAllTemplates().Count;
         TemplatesSummaryText.Text =
             $"当前图纸：{snapshot.Drawing.DrawingDisplayName}。现有墙体模板 {wallTemplateCount} 个，楼板模板 {slabTemplateCount} 个。输出设置仍在“楼层配置”Tab 中维护。";
-        OutputSettingsEntryPanelHost.SetHintText("输出设置仍在“楼层配置”Tab 的“输出设置”区域维护。");
     }
 
     private void ApplyRefreshFailure(Exception ex)
@@ -180,7 +180,6 @@ public partial class SectionToolboxControl : UserControl
             "剖面数量统计暂时无法读取。");
 
         TemplatesSummaryText.Text = "模板与输出入口仍可继续使用。";
-        OutputSettingsEntryPanelHost.SetHintText("输出设置入口暂时不可刷新，仍可前往“楼层配置”Tab 继续维护。");
     }
 
     private static string FormatMissingIssues(IReadOnlyList<ValidationIssueDto> issues)
@@ -273,6 +272,26 @@ public partial class SectionToolboxControl : UserControl
         ExecuteCommand(e.CommandName);
     }
 
+    private void WorkbenchTemplatesOutputPanelHost_CommandRequested(object? sender, WorkbenchCommandRequestedEventArgs e)
+    {
+        if (string.Equals(e.CommandName, OpenWallTemplateManagerAction, StringComparison.Ordinal))
+        {
+            OpenWallTemplateManager();
+            return;
+        }
+
+        if (string.Equals(e.CommandName, OpenSlabTemplateManagerAction, StringComparison.Ordinal))
+        {
+            OpenSlabTemplateManager();
+            return;
+        }
+
+        if (string.Equals(e.CommandName, GoToFloorConfigTabAction, StringComparison.Ordinal))
+        {
+            WorkbenchTabs.SelectedItem = FloorConfigTabItem;
+        }
+    }
+
     private void RefreshFloorConfigButton_Click(object sender, RoutedEventArgs e)
     {
         _floorConfigPaletteController.RefreshBoundDocument();
@@ -325,25 +344,6 @@ public partial class SectionToolboxControl : UserControl
         }
 
         window.ShowDialog();
-    }
-
-    private void EnterWallTemplatePanelButton_Click(object sender, RoutedEventArgs e)
-    {
-        EnsureTemplatePanelsInitialized();
-        WallTemplatePanelHost.ReloadTemplates();
-        ShowWallTemplatePanel();
-    }
-
-    private void EnterSlabTemplatePanelButton_Click(object sender, RoutedEventArgs e)
-    {
-        EnsureTemplatePanelsInitialized();
-        SlabTemplatePanelHost.ReloadTemplates();
-        ShowSlabTemplatePanel();
-    }
-
-    private void OutputSettingsEntryPanelHost_NavigateToFloorConfigRequested(object? sender, EventArgs e)
-    {
-        WorkbenchTabs.SelectedItem = FloorConfigTabItem;
     }
 
     private void EnsureTemplatePanelsInitialized()

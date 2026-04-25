@@ -1,0 +1,26 @@
+<UserControl x:Class="MetroToolKits.SectionGenerator.Plugin.UI.WorkbenchTemplatesOutputPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:local="clr-namespace:MetroToolKits.SectionGenerator.Plugin.UI"
+             mc:Ignorable="d">
+    <StackPanel>
+        <GroupBox Header="模板入口">
+            <StackPanel Margin="8">
+                <Button Content="墙体模板管理"
+                        Height="30"
+                        Margin="0,0,0,6"
+                        Tag="OpenWallTemplateManager"
+                        Click="CommandButton_Click"/>
+                <Button Content="楼板模板管理"
+                        Height="30"
+                        Tag="OpenSlabTemplateManager"
+                        Click="CommandButton_Click"/>
+            </StackPanel>
+        </GroupBox>
+
+        <local:OutputSettingsEntryPanel x:Name="OutputSettingsEntryPanelHost"
+                                        Margin="0,10,0,0"/>
+    </StackPanel>
+</UserControl>
