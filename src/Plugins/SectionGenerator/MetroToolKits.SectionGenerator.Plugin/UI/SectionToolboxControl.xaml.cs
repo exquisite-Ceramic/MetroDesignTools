@@ -18,6 +18,7 @@ public partial class SectionToolboxControl : UserControl
     private readonly IGenerateSectionPreflightUseCase _preflightUseCase;
     private readonly IWorkbenchSnapshotAssembler _workbenchSnapshotAssembler;
     private readonly FloorConfigPaletteController _floorConfigPaletteController;
+    private readonly LayerMappingPaletteController _layerMappingPaletteController;
     private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private const string ReadyMessage = "这里会汇总当前图纸的配置、构件就绪度和剖面状态。";
@@ -26,6 +27,7 @@ public partial class SectionToolboxControl : UserControl
         IGenerateSectionPreflightUseCase preflightUseCase,
         IWorkbenchSnapshotAssembler workbenchSnapshotAssembler,
         FloorConfigPaletteController floorConfigPaletteController,
+        LayerMappingPaletteController layerMappingPaletteController,
         IWallAssemblyTemplateCatalog wallTemplateCatalog,
         ISlabAssemblyTemplateCatalog slabTemplateCatalog)
     {
@@ -33,9 +35,11 @@ public partial class SectionToolboxControl : UserControl
         _preflightUseCase = preflightUseCase;
         _workbenchSnapshotAssembler = workbenchSnapshotAssembler;
         _floorConfigPaletteController = floorConfigPaletteController;
+        _layerMappingPaletteController = layerMappingPaletteController;
         _wallTemplateCatalog = wallTemplateCatalog;
         _slabTemplateCatalog = slabTemplateCatalog;
         _floorConfigPaletteController.StateChanged += FloorConfigPaletteController_StateChanged;
+        _layerMappingPaletteController.StateChanged += LayerMappingPaletteController_StateChanged;
         Loaded += SectionToolboxControl_Loaded;
     }
 
@@ -43,7 +47,9 @@ public partial class SectionToolboxControl : UserControl
     {
         RefreshStatus();
         _floorConfigPaletteController.Attach(FloorConfigPanelHost);
+        _layerMappingPaletteController.Attach(LayerMappingPanelHost);
         UpdateFloorConfigBindingText();
+        UpdateLayerMappingBindingText();
     }
 
     private void CommandButton_Click(object sender, RoutedEventArgs e)
@@ -182,9 +188,20 @@ public partial class SectionToolboxControl : UserControl
         RefreshStatus();
     }
 
+    private void LayerMappingPaletteController_StateChanged(object? sender, EventArgs e)
+    {
+        UpdateLayerMappingBindingText();
+        RefreshStatus();
+    }
+
     private void UpdateFloorConfigBindingText()
     {
         FloorConfigBindingText.Text = _floorConfigPaletteController.BoundDocumentDisplayText;
+    }
+
+    private void UpdateLayerMappingBindingText()
+    {
+        LayerMappingBindingText.Text = _layerMappingPaletteController.BoundDocumentDisplayText;
     }
 
     private void RefreshButton_Click(object sender, RoutedEventArgs e)
@@ -196,6 +213,12 @@ public partial class SectionToolboxControl : UserControl
     {
         _floorConfigPaletteController.RefreshBoundDocument();
         UpdateFloorConfigBindingText();
+    }
+
+    private void RefreshLayerMappingButton_Click(object sender, RoutedEventArgs e)
+    {
+        _layerMappingPaletteController.RefreshBoundDocument();
+        UpdateLayerMappingBindingText();
     }
 
     private void OpenWallTemplateManagerButton_Click(object sender, RoutedEventArgs e)

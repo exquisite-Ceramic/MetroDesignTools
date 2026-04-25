@@ -140,6 +140,7 @@ public class SectionGeneratorPlugin : IPlugin
 
         // UI/工具箱
         services.AddSingleton<UI.FloorConfigPaletteController>();
+        services.AddSingleton<UI.LayerMappingPaletteController>();
         services.AddSingleton<UI.SectionToolboxPaletteService>();
 
         // 命令

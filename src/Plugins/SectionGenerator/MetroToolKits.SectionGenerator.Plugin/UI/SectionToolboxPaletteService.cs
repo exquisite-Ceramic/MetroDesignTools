@@ -14,6 +14,7 @@ public sealed class SectionToolboxPaletteService
     private readonly IGenerateSectionPreflightUseCase _preflightUseCase;
     private readonly IWorkbenchSnapshotAssembler _workbenchSnapshotAssembler;
     private readonly FloorConfigPaletteController _floorConfigPaletteController;
+    private readonly LayerMappingPaletteController _layerMappingPaletteController;
     private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private PaletteSet? _paletteSet;
@@ -22,12 +23,14 @@ public sealed class SectionToolboxPaletteService
         IGenerateSectionPreflightUseCase preflightUseCase,
         IWorkbenchSnapshotAssembler workbenchSnapshotAssembler,
         FloorConfigPaletteController floorConfigPaletteController,
+        LayerMappingPaletteController layerMappingPaletteController,
         IWallAssemblyTemplateCatalog wallTemplateCatalog,
         ISlabAssemblyTemplateCatalog slabTemplateCatalog)
     {
         _preflightUseCase = preflightUseCase;
         _workbenchSnapshotAssembler = workbenchSnapshotAssembler;
         _floorConfigPaletteController = floorConfigPaletteController;
+        _layerMappingPaletteController = layerMappingPaletteController;
         _wallTemplateCatalog = wallTemplateCatalog;
         _slabTemplateCatalog = slabTemplateCatalog;
     }
@@ -42,8 +45,8 @@ public sealed class SectionToolboxPaletteService
     {
         var paletteSet = new PaletteSet("MetroToolKits 工具箱")
         {
-            MinimumSize = new Size(760, 720),
-            Size = new Size(760, 720),
+            MinimumSize = new Size(980, 860),
+            Size = new Size(980, 860),
             DockEnabled = DockSides.Left | DockSides.Right
         };
 
@@ -57,6 +60,7 @@ public sealed class SectionToolboxPaletteService
                 _preflightUseCase,
                 _workbenchSnapshotAssembler,
                 _floorConfigPaletteController,
+                _layerMappingPaletteController,
                 _wallTemplateCatalog,
                 _slabTemplateCatalog));
         return paletteSet;

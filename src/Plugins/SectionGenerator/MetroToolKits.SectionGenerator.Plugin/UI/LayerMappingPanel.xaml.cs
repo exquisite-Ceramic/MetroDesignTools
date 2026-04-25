@@ -50,6 +50,12 @@ public partial class LayerMappingPanel : UserControl
         LoadData();
     }
 
+    public void ReloadWorkspace()
+    {
+        EnsureInitialized();
+        LoadData();
+    }
+
     private void LoadData()
     {
         EnsureInitialized();

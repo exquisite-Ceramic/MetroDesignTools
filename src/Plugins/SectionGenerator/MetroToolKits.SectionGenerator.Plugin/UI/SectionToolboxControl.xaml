@@ -94,34 +94,57 @@
             </TabItem>
 
             <TabItem Header="图纸准备">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="10">
-                        <GroupBox Header="构件识别摘要">
-                            <StackPanel Margin="8">
-                                <TextBlock x:Name="PreparationSummaryText" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                                <TextBlock x:Name="PreparationCountsText" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                                <TextBlock x:Name="PreparationModeText" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </GroupBox>
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
 
-                        <GroupBox Header="准备入口" Margin="0,10,0,0">
-                            <StackPanel Margin="6">
-                                <Button Content="图层映射"
-                                        Tag="{x:Static hosting:SectionGeneratorCommandNames.LayerMapping}"
-                                        Height="30"
-                                        Margin="0,0,0,6"
-                                        Click="CommandButton_Click"/>
-                                <Button Content="墙体模板管理"
-                                        Height="30"
-                                        Margin="0,0,0,6"
-                                        Click="OpenWallTemplateManagerButton_Click"/>
-                                <Button Content="楼板模板管理"
-                                        Height="30"
-                                        Click="OpenSlabTemplateManagerButton_Click"/>
-                            </StackPanel>
-                        </GroupBox>
-                    </StackPanel>
-                </ScrollViewer>
+                    <Border Grid.Row="0"
+                            Background="#F4F7FB"
+                            BorderBrush="#D7E0EC"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="8"
+                            Margin="0,0,0,8">
+                        <DockPanel LastChildFill="True">
+                            <Button Content="刷新图层映射"
+                                    Width="108"
+                                    Height="28"
+                                    DockPanel.Dock="Right"
+                                    Click="RefreshLayerMappingButton_Click"/>
+                            <TextBlock x:Name="LayerMappingBindingText"
+                                       VerticalAlignment="Center"
+                                       Foreground="Gray"
+                                       TextWrapping="Wrap"/>
+                        </DockPanel>
+                    </Border>
+
+                    <GroupBox Grid.Row="1" Header="构件识别摘要">
+                        <StackPanel Margin="8">
+                            <TextBlock x:Name="PreparationSummaryText" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                            <TextBlock x:Name="PreparationCountsText" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                            <TextBlock x:Name="PreparationModeText" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox Grid.Row="2" Header="图层映射入口" Margin="0,10,0,8">
+                        <StackPanel Margin="6">
+                            <Button Content="打开独立图层映射窗口"
+                                    Tag="{x:Static hosting:SectionGeneratorCommandNames.LayerMapping}"
+                                    Height="30"
+                                    Margin="0,0,0,6"
+                                    Click="CommandButton_Click"/>
+                            <TextBlock Text="墙体模板和楼板模板管理入口保留在下方图层映射面板中。"
+                                       Foreground="Gray"
+                                       TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <local:LayerMappingPanel Grid.Row="3" x:Name="LayerMappingPanelHost"/>
+                </Grid>
             </TabItem>
 
             <TabItem Header="剖面生成">
