@@ -70,9 +70,14 @@
                     </Border>
 
                     <local:WorkbenchPreparationSummaryPanel Grid.Row="1"
+                                                            Margin="0,0,0,8"
                                                             x:Name="WorkbenchPreparationSummaryPanelHost"/>
 
-                    <local:LayerMappingPanel Grid.Row="2" x:Name="LayerMappingPanelHost"/>
+                    <GroupBox Grid.Row="2" Header="图层映射编辑">
+                        <Grid Margin="8,6,8,8">
+                            <local:LayerMappingPanel x:Name="LayerMappingPanelHost"/>
+                        </Grid>
+                    </GroupBox>
                 </Grid>
             </TabItem>
 
