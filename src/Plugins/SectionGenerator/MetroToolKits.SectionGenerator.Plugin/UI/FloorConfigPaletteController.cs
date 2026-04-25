@@ -27,6 +27,7 @@ public sealed class FloorConfigPaletteController
     private FloorConfigPanel? _panel;
     private Document? _boundDocument;
     private bool _panelInitialized;
+    private Func<IDisposable>? _cadPickSuspensionFactory;
 
     public FloorConfigPaletteController(
         IFloorConfigUseCase floorConfigUseCase,
@@ -49,6 +50,11 @@ public sealed class FloorConfigPaletteController
     public event EventHandler? StateChanged;
 
     public string BoundDocumentDisplayText { get; private set; } = "当前未绑定楼层配置图纸。";
+
+    public void ConfigureCadPickSuspension(Func<IDisposable> cadPickSuspensionFactory)
+    {
+        _cadPickSuspensionFactory = cadPickSuspensionFactory;
+    }
 
     public void Attach(FloorConfigPanel panel)
     {
@@ -133,20 +139,20 @@ public sealed class FloorConfigPaletteController
             return;
         }
 
-        if (!TrySavePanelDocumentBeforePick())
+        using var paletteScope = _cadPickSuspensionFactory?.Invoke();
+        try
         {
-            return;
+            FloorConfigDialogWorkflow.PickAlignmentPoints(
+                _panel!.CurrentDocument.Config,
+                e.Floor,
+                _logger,
+                _userLogger);
         }
-
-        FloorConfigDialogWorkflow.Run(
-            _floorConfigUseCase,
-            _slabTemplateCatalog,
-            _floorConfigDocumentAssembler,
-            _floorConfigSaveRequestMapper,
-            _sectionOutputConfigMapper,
-            _userLogger,
-            _logger);
-        ReloadBoundDocument();
+        finally
+        {
+            _panel!.LoadDocument(_panel.CurrentDocument);
+            RaiseStateChanged();
+        }
     }
 
     private void Panel_PickScopeRequested(object? sender, FloorConfigSelectionRequestedEventArgs e)
@@ -156,39 +162,16 @@ public sealed class FloorConfigPaletteController
             return;
         }
 
-        if (!TrySavePanelDocumentBeforePick())
+        using var paletteScope = _cadPickSuspensionFactory?.Invoke();
+        try
         {
-            return;
+            FloorConfigDialogWorkflow.PickScopeBounds(e.Floor, _logger);
         }
-
-        FloorConfigDialogWorkflow.Run(
-            _floorConfigUseCase,
-            _slabTemplateCatalog,
-            _floorConfigDocumentAssembler,
-            _floorConfigSaveRequestMapper,
-            _sectionOutputConfigMapper,
-            _userLogger,
-            _logger);
-        ReloadBoundDocument();
-    }
-
-    private bool TrySavePanelDocumentBeforePick()
-    {
-        var saveResult = _floorConfigUseCase.Save(_panel!.CurrentDocument);
-        if (saveResult.Success)
+        finally
         {
-            _userLogger.FloorConfigSaved(
-                _panel.CurrentDocument.Config.Floors.Count,
-                _panel.CurrentDocument.Config.Floors.Select(f => f.Name).ToArray());
-            return true;
+            _panel!.LoadDocument(_panel.CurrentDocument);
+            RaiseStateChanged();
         }
-
-        MessageBox.Show(
-            saveResult.ErrorMessage ?? "楼层配置保存失败。",
-            "保存失败",
-            MessageBoxButton.OK,
-            MessageBoxImage.Warning);
-        return false;
     }
 
     private void ReloadBoundDocument()

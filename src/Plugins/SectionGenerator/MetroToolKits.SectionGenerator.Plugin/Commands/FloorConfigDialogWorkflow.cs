@@ -77,7 +77,7 @@ internal static class FloorConfigDialogWorkflow
         logger.LogDebug("楼层配置工作流结束");
     }
 
-    private static void PickAlignmentPoints(SectionConfig config, FloorConfig floor, ILogger logger, IUserLogger userLogger)
+    internal static void PickAlignmentPoints(SectionConfig config, FloorConfig floor, ILogger logger, IUserLogger userLogger)
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
         if (doc == null) return;
@@ -119,7 +119,7 @@ internal static class FloorConfigDialogWorkflow
         ed.WriteMessage($"\n楼层 [{floor.Name}] 对齐点已记录，请在配置窗口中保存。");
     }
 
-    private static void PickScopeBounds(FloorConfig floor, ILogger logger)
+    internal static void PickScopeBounds(FloorConfig floor, ILogger logger)
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
         if (doc == null) return;
