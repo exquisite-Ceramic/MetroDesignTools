@@ -16,6 +16,7 @@ public sealed class FloorConfigCommand
     private readonly IFloorConfigUseCase _floorConfigUseCase;
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly IFloorConfigDocumentAssembler _floorConfigDocumentAssembler;
+    private readonly IFloorConfigSaveRequestMapper _floorConfigSaveRequestMapper;
     private readonly ILogger<FloorConfigCommand> _logger;
     private readonly IUserLogger _userLogger;
 
@@ -23,12 +24,14 @@ public sealed class FloorConfigCommand
         IFloorConfigUseCase floorConfigUseCase,
         ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         IFloorConfigDocumentAssembler floorConfigDocumentAssembler,
+        IFloorConfigSaveRequestMapper floorConfigSaveRequestMapper,
         ILogger<FloorConfigCommand> logger,
         IUserLogger userLogger)
     {
         _floorConfigUseCase = floorConfigUseCase;
         _slabTemplateCatalog = slabTemplateCatalog;
         _floorConfigDocumentAssembler = floorConfigDocumentAssembler;
+        _floorConfigSaveRequestMapper = floorConfigSaveRequestMapper;
         _logger     = logger;
         _userLogger = userLogger;
     }
@@ -37,6 +40,12 @@ public sealed class FloorConfigCommand
     {
         _userLogger.CommandStarted("FloorConfig");
         _logger.LogInformation("打开楼层配置窗口");
-        FloorConfigDialogWorkflow.Run(_floorConfigUseCase, _slabTemplateCatalog, _floorConfigDocumentAssembler, _userLogger, _logger);
+        FloorConfigDialogWorkflow.Run(
+            _floorConfigUseCase,
+            _slabTemplateCatalog,
+            _floorConfigDocumentAssembler,
+            _floorConfigSaveRequestMapper,
+            _userLogger,
+            _logger);
     }
 }

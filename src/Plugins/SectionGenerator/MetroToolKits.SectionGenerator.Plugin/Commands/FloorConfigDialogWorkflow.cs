@@ -20,6 +20,7 @@ internal static class FloorConfigDialogWorkflow
         IFloorConfigUseCase floorConfigUseCase,
         ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         IFloorConfigDocumentAssembler floorConfigDocumentAssembler,
+        IFloorConfigSaveRequestMapper floorConfigSaveRequestMapper,
         IUserLogger userLogger,
         ILogger logger)
     {
@@ -32,6 +33,7 @@ internal static class FloorConfigDialogWorkflow
                 configDocument,
                 slabTemplateCatalog,
                 floorConfigDocumentAssembler,
+                floorConfigSaveRequestMapper,
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<FloorConfigWindow>.Instance);
 
             Application.ShowModalWindow(window);

@@ -29,6 +29,7 @@ public sealed class GenSectionCommand
     private readonly IFloorConfigUseCase _floorConfigUseCase;
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly IFloorConfigDocumentAssembler _floorConfigDocumentAssembler;
+    private readonly IFloorConfigSaveRequestMapper _floorConfigSaveRequestMapper;
     private readonly ILayerService _layerService;
     private readonly IElementTypeCatalog _typeCatalog;
     private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
@@ -45,6 +46,7 @@ public sealed class GenSectionCommand
         IFloorConfigUseCase floorConfigUseCase,
         ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         IFloorConfigDocumentAssembler floorConfigDocumentAssembler,
+        IFloorConfigSaveRequestMapper floorConfigSaveRequestMapper,
         ILayerService layerService,
         IElementTypeCatalog typeCatalog,
         IWallAssemblyTemplateCatalog wallTemplateCatalog,
@@ -60,6 +62,7 @@ public sealed class GenSectionCommand
         _floorConfigUseCase = floorConfigUseCase;
         _slabTemplateCatalog = slabTemplateCatalog;
         _floorConfigDocumentAssembler = floorConfigDocumentAssembler;
+        _floorConfigSaveRequestMapper = floorConfigSaveRequestMapper;
         _layerService = layerService;
         _typeCatalog = typeCatalog;
         _wallTemplateCatalog = wallTemplateCatalog;
@@ -102,7 +105,13 @@ public sealed class GenSectionCommand
                     return;
 
                 case GenerateSectionWizardAction.OpenFloorConfig:
-                    FloorConfigDialogWorkflow.Run(_floorConfigUseCase, _slabTemplateCatalog, _floorConfigDocumentAssembler, _userLogger, _logger);
+                    FloorConfigDialogWorkflow.Run(
+                        _floorConfigUseCase,
+                        _slabTemplateCatalog,
+                        _floorConfigDocumentAssembler,
+                        _floorConfigSaveRequestMapper,
+                        _userLogger,
+                        _logger);
                     continue;
 
                 case GenerateSectionWizardAction.OpenLayerMapping:

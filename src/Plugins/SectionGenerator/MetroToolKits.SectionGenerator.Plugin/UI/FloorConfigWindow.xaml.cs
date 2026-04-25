@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Models;
+using MetroToolKits.SectionGenerator.Contracts.Common;
 using MetroToolKits.SectionGenerator.Contracts.Floors;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
@@ -18,6 +19,7 @@ public partial class FloorConfigWindow : Window
     private readonly ILogger<FloorConfigWindow> _logger;
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly IFloorConfigDocumentAssembler _floorConfigDocumentAssembler;
+    private readonly IFloorConfigSaveRequestMapper _saveRequestMapper;
     private readonly ObservableCollection<FloorConfig> _floors = new();
     private readonly ObservableCollection<FloorSummaryDto> _floorSummaries = new();
     private LoadedSectionConfig _document = new();
@@ -32,6 +34,7 @@ public partial class FloorConfigWindow : Window
         LoadedSectionConfig document,
         ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         IFloorConfigDocumentAssembler floorConfigDocumentAssembler,
+        IFloorConfigSaveRequestMapper saveRequestMapper,
         ILogger<FloorConfigWindow> logger)
     {
         InitializeComponent();
@@ -39,6 +42,7 @@ public partial class FloorConfigWindow : Window
         _logger = logger;
         _slabTemplateCatalog = slabTemplateCatalog;
         _floorConfigDocumentAssembler = floorConfigDocumentAssembler;
+        _saveRequestMapper = saveRequestMapper;
 
         FloorListBox.ItemsSource = _floorSummaries;
         BaseFloorComboBox.ItemsSource = _floors;
@@ -593,6 +597,118 @@ public partial class FloorConfigWindow : Window
         }
     }
 
+    private SaveFloorConfigRequestDto BuildSaveRequestFromUi()
+    {
+        SaveCurrentEdits();
+
+        var globalSlopePercent = _document.Config.GlobalSlopeValue * 100.0;
+        if (double.TryParse(GlobalSlopeValueBox.Text, out var parsedGlobalSlopePercent))
+        {
+            globalSlopePercent = parsedGlobalSlopePercent;
+        }
+
+        var globalSlopeEnabled = GlobalSlopeCheck.IsChecked == true;
+        var globalSlopeTarget = (GlobalSlopeTargetBox.SelectedItem as ComboBoxItem)?.Tag?.ToString()
+            ?? _document.Config.GlobalSlopeTarget
+            ?? "StructuralSlab";
+
+        return new SaveFloorConfigRequestDto
+        {
+            AlignmentBaseFloorName = (BaseFloorComboBox.SelectedItem as FloorConfig)?.Name ?? string.Empty,
+            GlobalSlopeEnabled = globalSlopeEnabled,
+            GlobalSlopePercent = globalSlopePercent,
+            GlobalSlopeTarget = globalSlopeTarget,
+            GlobalTopSlopeEnabled = globalSlopeEnabled,
+            GlobalTopSlopePercent = globalSlopePercent,
+            GlobalTopSlopeTarget = globalSlopeTarget,
+            GlobalBottomSlopeEnabled = _document.Config.GlobalBottomSlopeEnabled,
+            GlobalBottomSlopePercent = _document.Config.GlobalBottomSlopeValue * 100.0,
+            GlobalBottomSlopeTarget = _document.Config.GlobalBottomSlopeTarget,
+            Floors = _floors.Select(floor => new FloorConfigEditDto
+            {
+                Name = floor.Name,
+                Height = floor.Height,
+                FinishThickness = floor.FinishThickness,
+                BottomSlabThickness = floor.BottomSlabThickness,
+                TopSlabThickness = floor.TopSlabThickness,
+                LegacySlopeEnabled = floor.HasSlope,
+                LegacySlopePercent = floor.SlopeValue * 100.0,
+                LegacySlopeTarget = floor.SlopeTarget,
+                AlignmentPoints = floor.AlignmentPoints
+                    .Select(point => new Point3DDto
+                    {
+                        X = point.X,
+                        Y = point.Y,
+                        Z = point.Z
+                    })
+                    .ToArray(),
+                ScopeBounds = floor.ScopeBounds.HasValue
+                    ? new ScopeBoundsDto
+                    {
+                        MinX = floor.ScopeBounds.Value.MinX,
+                        MinY = floor.ScopeBounds.Value.MinY,
+                        MaxX = floor.ScopeBounds.Value.MaxX,
+                        MaxY = floor.ScopeBounds.Value.MaxY
+                    }
+                    : null,
+                TopBoundarySlab = new BoundarySlabEditDto
+                {
+                    TemplateId = floor.TopBoundarySlab.TemplateId,
+                    SlopeEnabled = floor.TopBoundarySlab.SlopeEnabled,
+                    SlopePercent = floor.TopBoundarySlab.SlopeValue * 100.0,
+                    SlopeTarget = floor.TopBoundarySlab.SlopeTarget
+                },
+                BottomBoundarySlab = new BoundarySlabEditDto
+                {
+                    TemplateId = floor.BottomBoundarySlab.TemplateId,
+                    SlopeEnabled = floor.BottomBoundarySlab.SlopeEnabled,
+                    SlopePercent = floor.BottomBoundarySlab.SlopeValue * 100.0,
+                    SlopeTarget = floor.BottomBoundarySlab.SlopeTarget
+                }
+            }).ToArray()
+        };
+    }
+
+    private void SyncEditingFloorsFromDocument(string? currentFloorName, int currentFloorIndex)
+    {
+        _floors.Clear();
+        foreach (var floor in _document.Config.Floors)
+        {
+            _floors.Add(floor);
+        }
+
+        _currentFloor = null;
+        BaseFloorComboBox.SelectedItem = _floors.FirstOrDefault(floor =>
+            string.Equals(floor.Name, _document.Config.AlignmentBaseFloorName, StringComparison.OrdinalIgnoreCase));
+        if (BaseFloorComboBox.SelectedItem == null && _floors.Count == 1)
+        {
+            BaseFloorComboBox.SelectedItem = _floors[0];
+        }
+
+        var resolvedFloor = !string.IsNullOrWhiteSpace(currentFloorName)
+            ? _floors.FirstOrDefault(floor =>
+                string.Equals(floor.Name, currentFloorName, StringComparison.OrdinalIgnoreCase))
+            : null;
+
+        if (resolvedFloor == null && currentFloorIndex >= 0 && currentFloorIndex < _floors.Count)
+        {
+            resolvedFloor = _floors[currentFloorIndex];
+        }
+
+        _currentFloor = resolvedFloor ?? _floors.FirstOrDefault();
+        if (_currentFloor != null)
+        {
+            BindFloorToUI(_currentFloor);
+            EditPanel.IsEnabled = true;
+        }
+        else
+        {
+            EditPanel.IsEnabled = false;
+        }
+
+        RefreshFloorSummaryList(_currentFloor?.Name);
+    }
+
     private void PickAlignment_Click(object sender, RoutedEventArgs e)
     {
         if (_currentFloor == null)
@@ -707,21 +823,14 @@ public partial class FloorConfigWindow : Window
 
     private void SaveFormEdits()
     {
-        SaveCurrentEdits();
+        var currentFloorIndex = _currentFloor == null ? -1 : _floors.IndexOf(_currentFloor);
+        var request = BuildSaveRequestFromUi();
+        var savedFloorName = currentFloorIndex >= 0 && currentFloorIndex < request.Floors.Count
+            ? request.Floors[currentFloorIndex].Name
+            : _currentFloor?.Name;
 
-        _document.Config.Floors = _floors.ToList();
-        _document.Config.GlobalSlopeEnabled = GlobalSlopeCheck.IsChecked == true;
-        if (double.TryParse(GlobalSlopeValueBox.Text, out var globalSlope))
-        {
-            _document.Config.GlobalSlopeValue = globalSlope / 100.0;
-        }
-
-        _document.Config.GlobalSlopeTarget = (GlobalSlopeTargetBox.SelectedItem as ComboBoxItem)?.Tag?.ToString()
-                                    ?? "StructuralSlab";
-        _document.Config.GlobalTopSlopeEnabled = _document.Config.GlobalSlopeEnabled;
-        _document.Config.GlobalTopSlopeValue = _document.Config.GlobalSlopeValue;
-        _document.Config.GlobalTopSlopeTarget = _document.Config.GlobalSlopeTarget;
-        _document.Config.AlignmentBaseFloorName = (BaseFloorComboBox.SelectedItem as FloorConfig)?.Name ?? string.Empty;
+        _saveRequestMapper.ApplyToDocument(request, _document);
+        SyncEditingFloorsFromDocument(savedFloorName, currentFloorIndex);
         SaveOutputConfig();
     }
 }
