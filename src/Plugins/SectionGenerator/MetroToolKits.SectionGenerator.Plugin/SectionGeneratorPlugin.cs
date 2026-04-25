@@ -129,6 +129,8 @@ public class SectionGeneratorPlugin : IPlugin
         services.AddSingleton<IWorkbenchSnapshotAssembler, WorkbenchSnapshotAssembler>();
         services.AddSingleton<ILayerMappingWorkspaceAssembler, LayerMappingWorkspaceAssembler>();
         services.AddSingleton<ILayerMappingApplyRequestMapper, LayerMappingApplyRequestMapper>();
+        services.AddSingleton<IWallTemplateCatalogMapper, WallTemplateCatalogMapper>();
+        services.AddSingleton<ISlabTemplateCatalogMapper, SlabTemplateCatalogMapper>();
         services.AddSingleton<IFloorConfigDocumentAssembler, FloorConfigDocumentAssembler>();
         services.AddSingleton<IFloorConfigSaveRequestMapper, FloorConfigSaveRequestMapper>();
         services.AddSingleton<ISectionOutputConfigMapper, SectionOutputConfigMapper>();

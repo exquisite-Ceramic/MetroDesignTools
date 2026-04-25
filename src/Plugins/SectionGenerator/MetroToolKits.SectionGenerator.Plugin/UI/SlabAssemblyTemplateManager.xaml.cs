@@ -2,22 +2,34 @@ using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
 using MetroToolKits.Foundation.Building.Types;
+using MetroToolKits.SectionGenerator.App.Abstractions;
+using MetroToolKits.SectionGenerator.App.Support;
 using MetroToolKits.SectionGenerator.Core.Sections;
+using MetroToolKits.SectionGenerator.Contracts.Templates;
 
 namespace MetroToolKits.SectionGenerator.Plugin.UI;
 
 public partial class SlabAssemblyTemplateManager : Window
 {
     private readonly ISlabAssemblyTemplateCatalog _templateCatalog;
-    private readonly ObservableCollection<SlabAssemblyTemplate> _templates = new();
-    private SlabAssemblyTemplate? _currentTemplate;
+    private readonly ISlabTemplateCatalogMapper _templateCatalogMapper;
+    private readonly ObservableCollection<SlabAssemblyTemplateDto> _templates = new();
+    private SlabAssemblyTemplateDto? _currentTemplate;
 
     public string SelectedTemplateId { get; private set; } = string.Empty;
 
     public SlabAssemblyTemplateManager(ISlabAssemblyTemplateCatalog templateCatalog)
+        : this(templateCatalog, new SlabTemplateCatalogMapper())
+    {
+    }
+
+    public SlabAssemblyTemplateManager(
+        ISlabAssemblyTemplateCatalog templateCatalog,
+        ISlabTemplateCatalogMapper templateCatalogMapper)
     {
         InitializeComponent();
         _templateCatalog = templateCatalog;
+        _templateCatalogMapper = templateCatalogMapper;
 
         WallJunctionModeBox.ItemsSource = Enum.GetValues<SlabWallJunctionMode>();
         LoadTemplates();
@@ -26,9 +38,10 @@ public partial class SlabAssemblyTemplateManager : Window
     private void LoadTemplates()
     {
         _templates.Clear();
-        foreach (var template in _templateCatalog.GetAllTemplates())
+        var catalogDto = _templateCatalogMapper.ToDto(_templateCatalog.GetAllTemplates());
+        foreach (var template in catalogDto.Templates)
         {
-            _templates.Add(CloneTemplate(template));
+            _templates.Add(template);
         }
 
         TemplateListBox.ItemsSource = _templates;
@@ -38,19 +51,19 @@ public partial class SlabAssemblyTemplateManager : Window
     private void TemplateListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         CommitCurrentTemplate();
-        _currentTemplate = TemplateListBox.SelectedItem as SlabAssemblyTemplate;
+        _currentTemplate = TemplateListBox.SelectedItem as SlabAssemblyTemplateDto;
         BindCurrentTemplate();
     }
 
     private void AddTemplate_Click(object sender, RoutedEventArgs e)
     {
         CommitCurrentTemplate();
-        var template = new SlabAssemblyTemplate
+        var template = new SlabAssemblyTemplateDto
         {
             TemplateId = $"slab-template-{_templates.Count + 1}",
             TemplateName = $"楼板模板 {_templates.Count + 1}",
-            WallJunctionMode = SlabWallJunctionMode.StopAtWallFace,
-            CoreRule = new SlabCoreRule
+            WallJunctionMode = SlabWallJunctionMode.StopAtWallFace.ToString(),
+            CoreRule = new SlabCoreRuleDto
             {
                 Name = "结构板",
                 Thickness = 120,
@@ -90,10 +103,10 @@ public partial class SlabAssemblyTemplateManager : Window
     private void AddTopLayer_Click(object sender, RoutedEventArgs e)
     {
         EnsureCurrentTemplate();
-        _currentTemplate!.TopLayers.Add(new SlabLayerRule
+        _currentTemplate!.TopLayers.Add(new SlabLayerRuleDto
         {
             Name = $"顶层 {_currentTemplate.TopLayers.Count + 1}",
-            Side = SlabLayerSide.Top,
+            Side = SlabLayerSide.Top.ToString(),
             Order = _currentTemplate.TopLayers.Count + 1,
             Thickness = 20,
             MaterialOrCategory = "装修",
@@ -105,7 +118,7 @@ public partial class SlabAssemblyTemplateManager : Window
     private void RemoveTopLayer_Click(object sender, RoutedEventArgs e)
     {
         EnsureCurrentTemplate();
-        if (TopLayerGrid.SelectedItem is not SlabLayerRule rule)
+        if (TopLayerGrid.SelectedItem is not SlabLayerRuleDto rule)
         {
             return;
         }
@@ -117,10 +130,10 @@ public partial class SlabAssemblyTemplateManager : Window
     private void AddBottomLayer_Click(object sender, RoutedEventArgs e)
     {
         EnsureCurrentTemplate();
-        _currentTemplate!.BottomLayers.Add(new SlabLayerRule
+        _currentTemplate!.BottomLayers.Add(new SlabLayerRuleDto
         {
             Name = $"底层 {_currentTemplate.BottomLayers.Count + 1}",
-            Side = SlabLayerSide.Bottom,
+            Side = SlabLayerSide.Bottom.ToString(),
             Order = _currentTemplate.BottomLayers.Count + 1,
             Thickness = 20,
             MaterialOrCategory = "装修",
@@ -132,7 +145,7 @@ public partial class SlabAssemblyTemplateManager : Window
     private void RemoveBottomLayer_Click(object sender, RoutedEventArgs e)
     {
         EnsureCurrentTemplate();
-        if (BottomLayerGrid.SelectedItem is not SlabLayerRule rule)
+        if (BottomLayerGrid.SelectedItem is not SlabLayerRuleDto rule)
         {
             return;
         }
@@ -163,8 +176,12 @@ public partial class SlabAssemblyTemplateManager : Window
             return;
         }
 
-        _templateCatalog.SaveAll(_templates.ToList());
-        SelectedTemplateId = (TemplateListBox.SelectedItem as SlabAssemblyTemplate)?.TemplateId
+        var catalogDto = new SlabTemplateCatalogDto
+        {
+            Templates = _templates.ToList()
+        };
+        _templateCatalog.SaveAll(_templateCatalogMapper.ToDomain(catalogDto));
+        SelectedTemplateId = (TemplateListBox.SelectedItem as SlabAssemblyTemplateDto)?.TemplateId
                              ?? _currentTemplate?.TemplateId
                              ?? string.Empty;
         DialogResult = true;
@@ -207,7 +224,7 @@ public partial class SlabAssemblyTemplateManager : Window
         CoreNameBox.Text = _currentTemplate.CoreRule.Name;
         CoreThicknessBox.Text = _currentTemplate.CoreRule.Thickness.ToString("F0");
         CoreCategoryBox.Text = _currentTemplate.CoreRule.MaterialOrCategory;
-        WallJunctionModeBox.SelectedItem = _currentTemplate.WallJunctionMode;
+        WallJunctionModeBox.SelectedItem = ParseEnum(_currentTemplate.WallJunctionMode, new SlabAssemblyTemplate().WallJunctionMode);
         RefreshLayerGrids();
     }
 
@@ -220,8 +237,8 @@ public partial class SlabAssemblyTemplateManager : Window
             return;
         }
 
-        TopLayerGrid.ItemsSource = new ObservableCollection<SlabLayerRule>(_currentTemplate.TopLayers.OrderBy(layer => layer.Order));
-        BottomLayerGrid.ItemsSource = new ObservableCollection<SlabLayerRule>(_currentTemplate.BottomLayers.OrderBy(layer => layer.Order));
+        TopLayerGrid.ItemsSource = new ObservableCollection<SlabLayerRuleDto>(_currentTemplate.TopLayers.OrderBy(layer => layer.Order));
+        BottomLayerGrid.ItemsSource = new ObservableCollection<SlabLayerRuleDto>(_currentTemplate.BottomLayers.OrderBy(layer => layer.Order));
     }
 
     private void CommitCurrentTemplate()
@@ -235,23 +252,23 @@ public partial class SlabAssemblyTemplateManager : Window
         _currentTemplate.TemplateId = TemplateIdBox.Text.Trim();
         _currentTemplate.CoreRule.Name = CoreNameBox.Text.Trim();
         _currentTemplate.CoreRule.MaterialOrCategory = CoreCategoryBox.Text.Trim();
-        _currentTemplate.WallJunctionMode = WallJunctionModeBox.SelectedItem is SlabWallJunctionMode mode
+        _currentTemplate.WallJunctionMode = (WallJunctionModeBox.SelectedItem is SlabWallJunctionMode mode
             ? mode
-            : SlabWallJunctionMode.StopAtWallFace;
+            : SlabWallJunctionMode.StopAtWallFace).ToString();
 
         if (double.TryParse(CoreThicknessBox.Text, out var coreThickness) && coreThickness > 0)
         {
             _currentTemplate.CoreRule.Thickness = coreThickness;
         }
 
-        _currentTemplate.TopLayers = ReadGridRules(TopLayerGrid, SlabLayerSide.Top);
-        _currentTemplate.BottomLayers = ReadGridRules(BottomLayerGrid, SlabLayerSide.Bottom);
+        _currentTemplate.TopLayers = ReadGridRules(TopLayerGrid, SlabLayerSide.Top.ToString());
+        _currentTemplate.BottomLayers = ReadGridRules(BottomLayerGrid, SlabLayerSide.Bottom.ToString());
     }
 
-    private static List<SlabLayerRule> ReadGridRules(DataGrid grid, SlabLayerSide side)
+    private static List<SlabLayerRuleDto> ReadGridRules(DataGrid grid, string side)
     {
-        var rules = new List<SlabLayerRule>();
-        foreach (var item in grid.Items.OfType<SlabLayerRule>())
+        var rules = new List<SlabLayerRuleDto>();
+        foreach (var item in grid.Items.OfType<SlabLayerRuleDto>())
         {
             item.Side = side;
             rules.Add(item);
@@ -273,35 +290,9 @@ public partial class SlabAssemblyTemplateManager : Window
         AddTemplate_Click(this, new RoutedEventArgs());
     }
 
-    private static SlabAssemblyTemplate CloneTemplate(SlabAssemblyTemplate template)
-    {
-        return new SlabAssemblyTemplate
-        {
-            TemplateId = template.TemplateId,
-            TemplateName = template.TemplateName,
-            WallJunctionMode = template.WallJunctionMode,
-            CoreRule = new SlabCoreRule
-            {
-                Name = template.CoreRule.Name,
-                Thickness = template.CoreRule.Thickness,
-                MaterialOrCategory = template.CoreRule.MaterialOrCategory,
-                VisibleInSection = template.CoreRule.VisibleInSection
-            },
-            TopLayers = template.TopLayers.Select(CloneRule).ToList(),
-            BottomLayers = template.BottomLayers.Select(CloneRule).ToList()
-        };
-    }
-
-    private static SlabLayerRule CloneRule(SlabLayerRule rule)
-    {
-        return new SlabLayerRule
-        {
-            Name = rule.Name,
-            Side = rule.Side,
-            Order = rule.Order,
-            Thickness = rule.Thickness,
-            MaterialOrCategory = rule.MaterialOrCategory,
-            VisibleInSection = rule.VisibleInSection
-        };
-    }
+    private static TEnum ParseEnum<TEnum>(string? value, TEnum fallback)
+        where TEnum : struct, Enum
+        => Enum.TryParse<TEnum>(value, ignoreCase: true, out var parsed)
+            ? parsed
+            : fallback;
 }

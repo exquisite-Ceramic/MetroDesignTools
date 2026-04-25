@@ -3,19 +3,30 @@ using System.Windows;
 using System.Windows.Controls;
 using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.SectionGenerator.App.Abstractions;
+using MetroToolKits.SectionGenerator.App.Support;
+using MetroToolKits.SectionGenerator.Contracts.Templates;
 
 namespace MetroToolKits.SectionGenerator.Plugin.UI;
 
 public partial class WallAssemblyTemplateManager : Window
 {
     private readonly IWallAssemblyTemplateCatalog _templateCatalog;
-    private readonly ObservableCollection<WallAssemblyTemplate> _templates = new();
-    private WallAssemblyTemplate? _currentTemplate;
+    private readonly IWallTemplateCatalogMapper _templateCatalogMapper;
+    private readonly ObservableCollection<WallAssemblyTemplateDto> _templates = new();
+    private WallAssemblyTemplateDto? _currentTemplate;
 
     public WallAssemblyTemplateManager(IWallAssemblyTemplateCatalog templateCatalog)
+        : this(templateCatalog, new WallTemplateCatalogMapper())
+    {
+    }
+
+    public WallAssemblyTemplateManager(
+        IWallAssemblyTemplateCatalog templateCatalog,
+        IWallTemplateCatalogMapper templateCatalogMapper)
     {
         InitializeComponent();
         _templateCatalog = templateCatalog;
+        _templateCatalogMapper = templateCatalogMapper;
 
         RecognitionModeBox.ItemsSource = Enum.GetValues<WallCoreRecognitionMode>();
         VerticalAnchorModeBox.ItemsSource = Enum.GetValues<WallVerticalAnchorMode>();
@@ -25,9 +36,10 @@ public partial class WallAssemblyTemplateManager : Window
     private void LoadTemplates()
     {
         _templates.Clear();
-        foreach (var template in _templateCatalog.GetAllTemplates())
+        var catalogDto = _templateCatalogMapper.ToDto(_templateCatalog.GetAllTemplates());
+        foreach (var template in catalogDto.Templates)
         {
-            _templates.Add(CloneTemplate(template));
+            _templates.Add(template);
         }
 
         TemplateListBox.ItemsSource = _templates;
@@ -37,26 +49,26 @@ public partial class WallAssemblyTemplateManager : Window
     private void TemplateListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         CommitCurrentTemplate();
-        _currentTemplate = TemplateListBox.SelectedItem as WallAssemblyTemplate;
+        _currentTemplate = TemplateListBox.SelectedItem as WallAssemblyTemplateDto;
         BindCurrentTemplate();
     }
 
     private void AddTemplate_Click(object sender, RoutedEventArgs e)
     {
         CommitCurrentTemplate();
-        var template = new WallAssemblyTemplate
+        var template = new WallAssemblyTemplateDto
         {
             TemplateId = $"wall-template-{_templates.Count + 1}",
             TemplateName = $"墙体模板 {_templates.Count + 1}",
-            CoreRule = new WallCoreRule
+            CoreRule = new WallCoreRuleDto
             {
                 Name = "结构芯",
                 Thickness = 200,
                 MaterialOrCategory = "结构",
                 VisibleInSection = true,
-                RecognitionMode = WallCoreRecognitionMode.BoundaryPair
+                RecognitionMode = WallCoreRecognitionMode.BoundaryPair.ToString()
             },
-            VerticalAnchorMode = WallVerticalAnchorMode.StructuralSlabFaces
+            VerticalAnchorMode = WallVerticalAnchorMode.StructuralSlabFaces.ToString()
         };
 
         _templates.Add(template);
@@ -90,10 +102,10 @@ public partial class WallAssemblyTemplateManager : Window
     private void AddLeftLayer_Click(object sender, RoutedEventArgs e)
     {
         EnsureCurrentTemplate();
-        _currentTemplate!.LeftLayers.Add(new WallLayerRule
+        _currentTemplate!.LeftLayers.Add(new WallLayerRuleDto
         {
             Name = $"左层 {_currentTemplate.LeftLayers.Count + 1}",
-            Side = WallLayerSide.Left,
+            Side = WallLayerSide.Left.ToString(),
             Order = _currentTemplate.LeftLayers.Count + 1,
             Thickness = 20,
             MaterialOrCategory = "附加层",
@@ -105,7 +117,7 @@ public partial class WallAssemblyTemplateManager : Window
     private void RemoveLeftLayer_Click(object sender, RoutedEventArgs e)
     {
         EnsureCurrentTemplate();
-        if (LeftLayerGrid.SelectedItem is not WallLayerRule rule)
+        if (LeftLayerGrid.SelectedItem is not WallLayerRuleDto rule)
         {
             return;
         }
@@ -117,10 +129,10 @@ public partial class WallAssemblyTemplateManager : Window
     private void AddRightLayer_Click(object sender, RoutedEventArgs e)
     {
         EnsureCurrentTemplate();
-        _currentTemplate!.RightLayers.Add(new WallLayerRule
+        _currentTemplate!.RightLayers.Add(new WallLayerRuleDto
         {
             Name = $"右层 {_currentTemplate.RightLayers.Count + 1}",
-            Side = WallLayerSide.Right,
+            Side = WallLayerSide.Right.ToString(),
             Order = _currentTemplate.RightLayers.Count + 1,
             Thickness = 20,
             MaterialOrCategory = "附加层",
@@ -132,7 +144,7 @@ public partial class WallAssemblyTemplateManager : Window
     private void RemoveRightLayer_Click(object sender, RoutedEventArgs e)
     {
         EnsureCurrentTemplate();
-        if (RightLayerGrid.SelectedItem is not WallLayerRule rule)
+        if (RightLayerGrid.SelectedItem is not WallLayerRuleDto rule)
         {
             return;
         }
@@ -163,7 +175,11 @@ public partial class WallAssemblyTemplateManager : Window
             return;
         }
 
-        _templateCatalog.SaveAll(_templates.ToList());
+        var catalogDto = new WallTemplateCatalogDto
+        {
+            Templates = _templates.ToList()
+        };
+        _templateCatalog.SaveAll(_templateCatalogMapper.ToDomain(catalogDto));
         DialogResult = true;
         Close();
     }
@@ -206,8 +222,8 @@ public partial class WallAssemblyTemplateManager : Window
         CoreNameBox.Text = _currentTemplate.CoreRule.Name;
         CoreThicknessBox.Text = _currentTemplate.CoreRule.Thickness.ToString("F0");
         CoreCategoryBox.Text = _currentTemplate.CoreRule.MaterialOrCategory;
-        VerticalAnchorModeBox.SelectedItem = _currentTemplate.VerticalAnchorMode;
-        RecognitionModeBox.SelectedItem = _currentTemplate.CoreRule.RecognitionMode;
+        VerticalAnchorModeBox.SelectedItem = ParseEnum(_currentTemplate.VerticalAnchorMode, new WallAssemblyTemplate().VerticalAnchorMode);
+        RecognitionModeBox.SelectedItem = ParseEnum(_currentTemplate.CoreRule.RecognitionMode, new WallCoreRule().RecognitionMode);
         RefreshLayerGrids();
     }
 
@@ -220,8 +236,8 @@ public partial class WallAssemblyTemplateManager : Window
             return;
         }
 
-        LeftLayerGrid.ItemsSource = new ObservableCollection<WallLayerRule>(_currentTemplate.LeftLayers.OrderBy(layer => layer.Order));
-        RightLayerGrid.ItemsSource = new ObservableCollection<WallLayerRule>(_currentTemplate.RightLayers.OrderBy(layer => layer.Order));
+        LeftLayerGrid.ItemsSource = new ObservableCollection<WallLayerRuleDto>(_currentTemplate.LeftLayers.OrderBy(layer => layer.Order));
+        RightLayerGrid.ItemsSource = new ObservableCollection<WallLayerRuleDto>(_currentTemplate.RightLayers.OrderBy(layer => layer.Order));
     }
 
     private void CommitCurrentTemplate()
@@ -235,26 +251,26 @@ public partial class WallAssemblyTemplateManager : Window
         _currentTemplate.TemplateId = TemplateIdBox.Text.Trim();
         _currentTemplate.CoreRule.Name = CoreNameBox.Text.Trim();
         _currentTemplate.CoreRule.MaterialOrCategory = CoreCategoryBox.Text.Trim();
-        _currentTemplate.VerticalAnchorMode = VerticalAnchorModeBox.SelectedItem is WallVerticalAnchorMode anchorMode
+        _currentTemplate.VerticalAnchorMode = (VerticalAnchorModeBox.SelectedItem is WallVerticalAnchorMode anchorMode
             ? anchorMode
-            : WallVerticalAnchorMode.StructuralSlabFaces;
-        _currentTemplate.CoreRule.RecognitionMode = RecognitionModeBox.SelectedItem is WallCoreRecognitionMode mode
+            : WallVerticalAnchorMode.StructuralSlabFaces).ToString();
+        _currentTemplate.CoreRule.RecognitionMode = (RecognitionModeBox.SelectedItem is WallCoreRecognitionMode mode
             ? mode
-            : WallCoreRecognitionMode.BoundaryPair;
+            : WallCoreRecognitionMode.BoundaryPair).ToString();
 
         if (double.TryParse(CoreThicknessBox.Text, out var coreThickness) && coreThickness > 0)
         {
             _currentTemplate.CoreRule.Thickness = coreThickness;
         }
 
-        _currentTemplate.LeftLayers = ReadGridRules(LeftLayerGrid, WallLayerSide.Left);
-        _currentTemplate.RightLayers = ReadGridRules(RightLayerGrid, WallLayerSide.Right);
+        _currentTemplate.LeftLayers = ReadGridRules(LeftLayerGrid, WallLayerSide.Left.ToString());
+        _currentTemplate.RightLayers = ReadGridRules(RightLayerGrid, WallLayerSide.Right.ToString());
     }
 
-    private static List<WallLayerRule> ReadGridRules(DataGrid grid, WallLayerSide side)
+    private static List<WallLayerRuleDto> ReadGridRules(DataGrid grid, string side)
     {
-        var rules = new List<WallLayerRule>();
-        foreach (var item in grid.Items.OfType<WallLayerRule>())
+        var rules = new List<WallLayerRuleDto>();
+        foreach (var item in grid.Items.OfType<WallLayerRuleDto>())
         {
             item.Side = side;
             rules.Add(item);
@@ -276,40 +292,9 @@ public partial class WallAssemblyTemplateManager : Window
         AddTemplate_Click(this, new RoutedEventArgs());
     }
 
-    private static WallAssemblyTemplate CloneTemplate(WallAssemblyTemplate template)
-    {
-        return new WallAssemblyTemplate
-        {
-            TemplateId = template.TemplateId,
-            TemplateName = template.TemplateName,
-            VerticalAnchorMode = template.VerticalAnchorMode,
-            CoreRule = new WallCoreRule
-            {
-                Name = template.CoreRule.Name,
-                Thickness = template.CoreRule.Thickness,
-                MaterialOrCategory = template.CoreRule.MaterialOrCategory,
-                VisibleInSection = template.CoreRule.VisibleInSection,
-                RecognitionMode = template.CoreRule.RecognitionMode
-            },
-            LeftLayers = template.LeftLayers
-                .Select(CloneRule)
-                .ToList(),
-            RightLayers = template.RightLayers
-                .Select(CloneRule)
-                .ToList()
-        };
-    }
-
-    private static WallLayerRule CloneRule(WallLayerRule rule)
-    {
-        return new WallLayerRule
-        {
-            Name = rule.Name,
-            Side = rule.Side,
-            Order = rule.Order,
-            Thickness = rule.Thickness,
-            MaterialOrCategory = rule.MaterialOrCategory,
-            VisibleInSection = rule.VisibleInSection
-        };
-    }
+    private static TEnum ParseEnum<TEnum>(string? value, TEnum fallback)
+        where TEnum : struct, Enum
+        => Enum.TryParse<TEnum>(value, ignoreCase: true, out var parsed)
+            ? parsed
+            : fallback;
 }
