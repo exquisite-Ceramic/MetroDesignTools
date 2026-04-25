@@ -47,6 +47,7 @@ public partial class SectionToolboxControl : UserControl
         _slabTemplateCatalogMapper = slabTemplateCatalogMapper;
         _floorConfigPaletteController.StateChanged += FloorConfigPaletteController_StateChanged;
         _layerMappingPaletteController.StateChanged += LayerMappingPaletteController_StateChanged;
+        OutputSettingsEntryPanelHost.NavigateToFloorConfigRequested += OutputSettingsEntryPanelHost_NavigateToFloorConfigRequested;
         Loaded += SectionToolboxControl_Loaded;
     }
 
@@ -140,6 +141,7 @@ public partial class SectionToolboxControl : UserControl
         var slabTemplateCount = _slabTemplateCatalog.GetAllTemplates().Count;
         TemplatesSummaryText.Text =
             $"当前图纸：{snapshot.Drawing.DrawingDisplayName}。现有墙体模板 {wallTemplateCount} 个，楼板模板 {slabTemplateCount} 个。输出设置仍在“楼层配置”Tab 中维护。";
+        OutputSettingsEntryPanelHost.SetHintText("输出设置仍在“楼层配置”Tab 的“输出设置”区域维护。");
     }
 
     private void ApplyRefreshFailure(Exception ex)
@@ -163,6 +165,7 @@ public partial class SectionToolboxControl : UserControl
         MaintenanceCountsText.Text = "剖面数量统计暂时无法读取。";
 
         TemplatesSummaryText.Text = "模板与输出入口仍可继续使用。";
+        OutputSettingsEntryPanelHost.SetHintText("输出设置入口暂时不可刷新，仍可前往“楼层配置”Tab 继续维护。");
     }
 
     private static string FormatMissingIssues(IReadOnlyList<ValidationIssueDto> issues)
@@ -244,7 +247,7 @@ public partial class SectionToolboxControl : UserControl
         ShowSlabTemplatePanel();
     }
 
-    private void GoToFloorConfigTabButton_Click(object sender, RoutedEventArgs e)
+    private void OutputSettingsEntryPanelHost_NavigateToFloorConfigRequested(object? sender, EventArgs e)
     {
         WorkbenchTabs.SelectedItem = FloorConfigTabItem;
     }

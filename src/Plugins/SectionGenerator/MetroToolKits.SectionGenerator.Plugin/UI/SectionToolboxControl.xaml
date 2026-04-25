@@ -210,17 +210,8 @@
                                     </StackPanel>
                                 </GroupBox>
 
-                                <GroupBox Header="输出设置" Margin="0,10,0,0">
-                                    <StackPanel Margin="8">
-                                        <TextBlock x:Name="OutputSettingsHintText"
-                                                   Text="输出设置仍在“楼层配置”Tab 的“输出设置”区域维护。"
-                                                   TextWrapping="Wrap"
-                                                   Margin="0,0,0,8"/>
-                                        <Button Content="前往楼层配置"
-                                                Height="30"
-                                                Click="GoToFloorConfigTabButton_Click"/>
-                                    </StackPanel>
-                                </GroupBox>
+                                <local:OutputSettingsEntryPanel x:Name="OutputSettingsEntryPanelHost"
+                                                                Margin="0,10,0,0"/>
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>
