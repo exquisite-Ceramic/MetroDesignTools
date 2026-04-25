@@ -100,25 +100,7 @@
             </TabItem>
 
             <TabItem Header="剖面维护">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="10">
-                        <GroupBox Header="剖面状态摘要">
-                            <StackPanel Margin="8">
-                                <TextBlock x:Name="MaintenanceSummaryText" TextWrapping="Wrap" Margin="0,0,0,8"/>
-                                <TextBlock x:Name="MaintenanceCountsText" TextWrapping="Wrap"/>
-                            </StackPanel>
-                        </GroupBox>
-
-                        <GroupBox Header="维护入口" Margin="0,10,0,0">
-                            <StackPanel Margin="6">
-                                <Button Content="查看或更新剖面"
-                                        Tag="{x:Static hosting:SectionGeneratorCommandNames.CheckSectionUpdates}"
-                                        Height="30"
-                                        Click="CommandButton_Click"/>
-                            </StackPanel>
-                        </GroupBox>
-                    </StackPanel>
-                </ScrollViewer>
+                <local:WorkbenchMaintenancePanel x:Name="WorkbenchMaintenancePanelHost"/>
             </TabItem>
 
             <TabItem Header="模板与输出">

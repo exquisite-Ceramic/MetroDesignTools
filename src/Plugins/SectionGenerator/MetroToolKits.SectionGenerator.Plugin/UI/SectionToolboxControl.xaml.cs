@@ -50,6 +50,7 @@ public partial class SectionToolboxControl : UserControl
         WorkbenchOverviewPanelHost.RefreshRequested += WorkbenchOverviewPanelHost_RefreshRequested;
         WorkbenchOverviewPanelHost.CommandRequested += WorkbenchOverviewPanelHost_CommandRequested;
         WorkbenchGenerationPanelHost.CommandRequested += WorkbenchGenerationPanelHost_CommandRequested;
+        WorkbenchMaintenancePanelHost.CommandRequested += WorkbenchMaintenancePanelHost_CommandRequested;
         OutputSettingsEntryPanelHost.NavigateToFloorConfigRequested += OutputSettingsEntryPanelHost_NavigateToFloorConfigRequested;
         Loaded += SectionToolboxControl_Loaded;
     }
@@ -134,9 +135,9 @@ public partial class SectionToolboxControl : UserControl
 
     private void UpdateMaintenanceTab(SectionWorkbenchSnapshotDto snapshot)
     {
-        MaintenanceSummaryText.Text = snapshot.ExistingSections.SummaryText;
-        MaintenanceCountsText.Text =
-            $"已有剖面 {snapshot.ExistingSections.TotalCount} 个，其中最新 {snapshot.ExistingSections.UpToDateCount}、需更新 {snapshot.ExistingSections.OutdatedCount}、未知 {snapshot.ExistingSections.UnknownCount}、部分检查 {snapshot.ExistingSections.PartialCount}。";
+        WorkbenchMaintenancePanelHost.ApplyState(
+            snapshot.ExistingSections.SummaryText,
+            $"已有剖面 {snapshot.ExistingSections.TotalCount} 个，其中最新 {snapshot.ExistingSections.UpToDateCount}、需更新 {snapshot.ExistingSections.OutdatedCount}、未知 {snapshot.ExistingSections.UnknownCount}、部分检查 {snapshot.ExistingSections.PartialCount}。");
     }
 
     private void UpdateTemplatesTab(SectionWorkbenchSnapshotDto snapshot)
@@ -167,8 +168,9 @@ public partial class SectionToolboxControl : UserControl
             "楼层配置摘要暂时无法读取。",
             "缺失项：暂时无法读取。");
 
-        MaintenanceSummaryText.Text = "维护：暂时无法读取剖面状态。";
-        MaintenanceCountsText.Text = "剖面数量统计暂时无法读取。";
+        WorkbenchMaintenancePanelHost.ApplyFallbackState(
+            "维护：暂时无法读取剖面状态。",
+            "剖面数量统计暂时无法读取。");
 
         TemplatesSummaryText.Text = "模板与输出入口仍可继续使用。";
         OutputSettingsEntryPanelHost.SetHintText("输出设置入口暂时不可刷新，仍可前往“楼层配置”Tab 继续维护。");
@@ -238,6 +240,11 @@ public partial class SectionToolboxControl : UserControl
     }
 
     private void WorkbenchGenerationPanelHost_CommandRequested(object? sender, WorkbenchCommandRequestedEventArgs e)
+    {
+        ExecuteCommand(e.CommandName);
+    }
+
+    private void WorkbenchMaintenancePanelHost_CommandRequested(object? sender, WorkbenchCommandRequestedEventArgs e)
     {
         ExecuteCommand(e.CommandName);
     }
