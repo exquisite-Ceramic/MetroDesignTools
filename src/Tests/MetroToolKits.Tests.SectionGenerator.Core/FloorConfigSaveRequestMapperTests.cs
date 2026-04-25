@@ -306,6 +306,47 @@ public class FloorConfigSaveRequestMapperTests
         document.RuntimeDiagnostics.Should().BeSameAs(diagnostics);
     }
 
+    [Fact]
+    public void ApplyToDocument_PreservesBoundaryTemplateIds_WhenOnlyTemplateSelectionChanges()
+    {
+        var document = CreateDocument(new SectionConfig
+        {
+            Floors =
+            [
+                new FloorConfig
+                {
+                    Name = "F1",
+                    TopBoundarySlab = new BoundarySlabConfig { TemplateId = string.Empty },
+                    BottomBoundarySlab = new BoundarySlabConfig { TemplateId = string.Empty }
+                }
+            ]
+        });
+        var request = new SaveFloorConfigRequestDto
+        {
+            Floors =
+            [
+                new FloorConfigEditDto
+                {
+                    Name = "F1",
+                    TopBoundarySlab = new BoundarySlabEditDto
+                    {
+                        TemplateId = "TOP-TEMPLATE"
+                    },
+                    BottomBoundarySlab = new BoundarySlabEditDto
+                    {
+                        TemplateId = "BOTTOM-TEMPLATE"
+                    }
+                }
+            ]
+        };
+
+        _mapper.ApplyToDocument(request, document);
+
+        document.Config.Floors.Should().ContainSingle();
+        document.Config.Floors[0].TopBoundarySlab.TemplateId.Should().Be("TOP-TEMPLATE");
+        document.Config.Floors[0].BottomBoundarySlab.TemplateId.Should().Be("BOTTOM-TEMPLATE");
+    }
+
     private static LoadedSectionConfig CreateDocument(SectionConfig config)
         => new()
         {

@@ -637,9 +637,6 @@ public partial class FloorConfigPanel : UserControl
             return;
         }
 
-        var existingTemplateIds = _slabTemplateCatalog.GetAllTemplates()
-            .Select(template => template.TemplateId)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var currentTopTemplateId = _currentFloor.TopBoundarySlab.TemplateId;
         var currentBottomTemplateId = _currentFloor.BottomBoundarySlab.TemplateId;
         var manager = new SlabAssemblyTemplateManager(_slabTemplateCatalog);
@@ -659,10 +656,7 @@ public partial class FloorConfigPanel : UserControl
         var selectedTemplateId = manager.SelectedTemplateId;
         var nextTopTemplateId = currentTopTemplateId;
         var nextBottomTemplateId = currentBottomTemplateId;
-        var selectedTemplateIsNew = !string.IsNullOrWhiteSpace(selectedTemplateId) &&
-                                    !existingTemplateIds.Contains(selectedTemplateId);
-
-        if (selectedTemplateIsNew)
+        if (!string.IsNullOrWhiteSpace(selectedTemplateId))
         {
             if (context == SlabTemplateLaunchContext.BottomThickness)
             {
