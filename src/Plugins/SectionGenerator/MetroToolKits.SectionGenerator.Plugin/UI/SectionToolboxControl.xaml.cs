@@ -286,11 +286,39 @@ public partial class SectionToolboxControl : UserControl
         SlabTemplatePanelView.Visibility = Visibility.Visible;
     }
 
+    private void RefreshToolboxState()
+    {
+        RefreshStatus();
+    }
+
+    private void RefreshTemplateState(
+        bool reloadWallTemplatePanel = false,
+        bool reloadSlabTemplatePanel = false,
+        bool reloadFloorConfigTemplateOptions = false)
+    {
+        if (reloadWallTemplatePanel)
+        {
+            EnsureTemplatePanelsInitialized();
+            WallTemplatePanelHost.ReloadTemplates();
+        }
+
+        if (reloadSlabTemplatePanel)
+        {
+            EnsureTemplatePanelsInitialized();
+            SlabTemplatePanelHost.ReloadTemplates();
+        }
+
+        if (reloadFloorConfigTemplateOptions)
+        {
+            FloorConfigPanelHost.ReloadTemplateOptions();
+        }
+    }
+
     private void WallTemplatePanelHost_SaveCompleted(object? sender, EventArgs e)
     {
-        WallTemplatePanelHost.ReloadTemplates();
+        RefreshTemplateState(reloadWallTemplatePanel: true);
         ShowTemplateHome();
-        RefreshStatus();
+        RefreshToolboxState();
     }
 
     private void WallTemplatePanelHost_CancelRequested(object? sender, EventArgs e)
@@ -300,9 +328,11 @@ public partial class SectionToolboxControl : UserControl
 
     private void SlabTemplatePanelHost_SaveCompleted(object? sender, EventArgs e)
     {
-        SlabTemplatePanelHost.ReloadTemplates();
+        RefreshTemplateState(
+            reloadSlabTemplatePanel: true,
+            reloadFloorConfigTemplateOptions: true);
         ShowTemplateHome();
-        RefreshStatus();
+        RefreshToolboxState();
     }
 
     private void SlabTemplatePanelHost_CancelRequested(object? sender, EventArgs e)

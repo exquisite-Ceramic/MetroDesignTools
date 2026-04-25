@@ -83,6 +83,27 @@ public partial class FloorConfigPanel : UserControl
         LoadConfig(selectedFloorName);
     }
 
+    public void ReloadTemplateOptions()
+    {
+        if (!_initialized)
+        {
+            throw new InvalidOperationException("FloorConfigPanel 尚未初始化。");
+        }
+
+        var currentTopTemplateId = _currentFloor?.TopBoundarySlab.TemplateId ?? string.Empty;
+        var currentBottomTemplateId = _currentFloor?.BottomBoundarySlab.TemplateId ?? string.Empty;
+
+        RefreshTemplateOptions();
+
+        if (_currentFloor == null)
+        {
+            return;
+        }
+
+        ApplyBoundaryTemplateSelection(_currentFloor, currentTopTemplateId, currentBottomTemplateId);
+        RefreshBoundaryTemplateDisplays(_currentFloor);
+    }
+
     private static IReadOnlyList<TemplateOption> BuildTemplateOptions(IReadOnlyList<SlabAssemblyTemplate> slabTemplates)
     {
         var options = new List<TemplateOption>
