@@ -49,6 +49,7 @@ public partial class SectionToolboxControl : UserControl
         _layerMappingPaletteController.StateChanged += LayerMappingPaletteController_StateChanged;
         WorkbenchOverviewPanelHost.RefreshRequested += WorkbenchOverviewPanelHost_RefreshRequested;
         WorkbenchOverviewPanelHost.CommandRequested += WorkbenchOverviewPanelHost_CommandRequested;
+        WorkbenchGenerationPanelHost.CommandRequested += WorkbenchGenerationPanelHost_CommandRequested;
         OutputSettingsEntryPanelHost.NavigateToFloorConfigRequested += OutputSettingsEntryPanelHost_NavigateToFloorConfigRequested;
         Loaded += SectionToolboxControl_Loaded;
     }
@@ -123,11 +124,12 @@ public partial class SectionToolboxControl : UserControl
 
     private void UpdateGenerationTab(SectionWorkbenchSnapshotDto snapshot)
     {
-        GenerationStatusText.Text = snapshot.FloorConfig.CanGenerate
-            ? "当前已满足生成条件。"
-            : "当前未满足生成条件。";
-        GenerationSummaryText.Text = snapshot.FloorConfig.SummaryText;
-        MissingItemsSummaryText.Text = $"缺失项：{FormatMissingIssues(snapshot.Issues)}";
+        WorkbenchGenerationPanelHost.ApplyState(
+            snapshot.FloorConfig.CanGenerate
+                ? "当前已满足生成条件。"
+                : "当前未满足生成条件。",
+            snapshot.FloorConfig.SummaryText,
+            $"缺失项：{FormatMissingIssues(snapshot.Issues)}");
     }
 
     private void UpdateMaintenanceTab(SectionWorkbenchSnapshotDto snapshot)
@@ -160,9 +162,10 @@ public partial class SectionToolboxControl : UserControl
         PreparationCountsText.Text = "构件计数：暂时无法统计。";
         PreparationModeText.Text = "模板模式/稳定模式数量暂时无法读取。";
 
-        GenerationStatusText.Text = "生成条件：暂时无法判断。";
-        GenerationSummaryText.Text = "楼层配置摘要暂时无法读取。";
-        MissingItemsSummaryText.Text = "缺失项：暂时无法读取。";
+        WorkbenchGenerationPanelHost.ApplyFallbackState(
+            "生成条件：暂时无法判断。",
+            "楼层配置摘要暂时无法读取。",
+            "缺失项：暂时无法读取。");
 
         MaintenanceSummaryText.Text = "维护：暂时无法读取剖面状态。";
         MaintenanceCountsText.Text = "剖面数量统计暂时无法读取。";
@@ -230,6 +233,11 @@ public partial class SectionToolboxControl : UserControl
     }
 
     private void WorkbenchOverviewPanelHost_CommandRequested(object? sender, WorkbenchCommandRequestedEventArgs e)
+    {
+        ExecuteCommand(e.CommandName);
+    }
+
+    private void WorkbenchGenerationPanelHost_CommandRequested(object? sender, WorkbenchCommandRequestedEventArgs e)
     {
         ExecuteCommand(e.CommandName);
     }
