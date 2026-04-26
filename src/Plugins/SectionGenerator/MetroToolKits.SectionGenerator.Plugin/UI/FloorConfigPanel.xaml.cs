@@ -43,6 +43,8 @@ public partial class FloorConfigPanel : UserControl
         InitializeComponent();
         FloorListBox.ItemsSource = _floorSummaries;
         BaseFloorComboBox.ItemsSource = _floors;
+        GlobalSlopeCheck.Checked += GlobalSlopeCheck_Changed;
+        GlobalSlopeCheck.Unchecked += GlobalSlopeCheck_Changed;
     }
 
     public void Initialize(
@@ -157,6 +159,7 @@ public partial class FloorConfigPanel : UserControl
             EditPanel.IsEnabled = false;
         }
 
+        UpdateSlopeControlAvailability();
         RefreshFloorSummaryList(_currentFloor?.Name);
         _logger.LogDebug("楼层配置面板加载，楼层数: {Count}", _floors.Count);
     }
@@ -577,16 +580,14 @@ public partial class FloorConfigPanel : UserControl
         HeightBox.Text = floor.Height.ToString("F0");
         SlopeCheck.IsChecked = floor.HasSlope;
         SlopeValueBox.Text = (floor.SlopeValue * 100).ToString("F2");
-        SlopeValueBox.IsEnabled = floor.HasSlope;
         TopSlopeCheck.IsChecked = floor.TopBoundarySlab.SlopeEnabled;
         TopSlopeValueBox.Text = (floor.TopBoundarySlab.SlopeValue * 100).ToString("F2");
-        TopSlopeValueBox.IsEnabled = floor.TopBoundarySlab.SlopeEnabled;
         BottomSlopeCheck.IsChecked = floor.BottomBoundarySlab.SlopeEnabled;
         BottomSlopeValueBox.Text = (floor.BottomBoundarySlab.SlopeValue * 100).ToString("F2");
-        BottomSlopeValueBox.IsEnabled = floor.BottomBoundarySlab.SlopeEnabled;
         RefreshTemplateOptions();
         ApplyBoundaryTemplateSelection(floor, floor.TopBoundarySlab.TemplateId, floor.BottomBoundarySlab.TemplateId);
         RefreshBoundaryTemplateDisplays(floor);
+        UpdateSlopeControlAvailability();
 
         var pointCount = floor.AlignmentPoints.Count;
         AlignmentLabel.Content = BaseFloorComboBox.SelectedItem is FloorConfig baseFloor &&
@@ -646,13 +647,63 @@ public partial class FloorConfigPanel : UserControl
     }
 
     private void SlopeCheck_Changed(object sender, RoutedEventArgs e)
-        => SlopeValueBox.IsEnabled = SlopeCheck.IsChecked == true;
+        => UpdateSlopeControlAvailability();
 
     private void TopSlopeCheck_Changed(object sender, RoutedEventArgs e)
-        => TopSlopeValueBox.IsEnabled = TopSlopeCheck.IsChecked == true;
+        => UpdateSlopeControlAvailability();
 
     private void BottomSlopeCheck_Changed(object sender, RoutedEventArgs e)
-        => BottomSlopeValueBox.IsEnabled = BottomSlopeCheck.IsChecked == true;
+        => UpdateSlopeControlAvailability();
+
+    private void GlobalSlopeCheck_Changed(object sender, RoutedEventArgs e)
+        => UpdateSlopeControlAvailability();
+
+    private void UpdateSlopeControlAvailability()
+    {
+        var legacySlopeOverriddenByGlobal = GlobalSlopeCheck.IsChecked == true;
+        var topSlopeOverriddenByGlobal = GlobalSlopeCheck.IsChecked == true;
+        var bottomSlopeOverriddenByGlobal = _document.Config.GlobalBottomSlopeEnabled;
+
+        ApplySlopeEditorState(
+            SlopeCheck,
+            SlopeValueBox,
+            !legacySlopeOverriddenByGlobal,
+            SlopeCheck.IsChecked == true,
+            legacySlopeOverriddenByGlobal
+                ? "已启用图纸级全局坡度，楼层级兼容坡度暂不生效。关闭全局坡度后可恢复编辑。"
+                : null);
+
+        ApplySlopeEditorState(
+            TopSlopeCheck,
+            TopSlopeValueBox,
+            !topSlopeOverriddenByGlobal,
+            TopSlopeCheck.IsChecked == true,
+            topSlopeOverriddenByGlobal
+                ? "已启用图纸级全局坡度，顶边界板坡度暂不生效。关闭全局坡度后可恢复编辑。"
+                : null);
+
+        ApplySlopeEditorState(
+            BottomSlopeCheck,
+            BottomSlopeValueBox,
+            !bottomSlopeOverriddenByGlobal,
+            BottomSlopeCheck.IsChecked == true,
+            bottomSlopeOverriddenByGlobal
+                ? "已启用图纸级全局底板坡度，底边界板坡度暂不生效。关闭全局底板坡度后可恢复编辑。"
+                : null);
+    }
+
+    private static void ApplySlopeEditorState(
+        CheckBox checkBox,
+        TextBox valueBox,
+        bool editorEnabled,
+        bool valueEnabledWhenEditorAvailable,
+        string? tooltip)
+    {
+        checkBox.IsEnabled = editorEnabled;
+        valueBox.IsEnabled = editorEnabled && valueEnabledWhenEditorAvailable;
+        checkBox.ToolTip = tooltip;
+        valueBox.ToolTip = tooltip;
+    }
 
     private void TopBoundaryTemplateBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {

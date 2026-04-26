@@ -118,22 +118,27 @@ internal static class SectionExecutionConfigBuilder
 
     private static void ApplyGlobalSlopeDefaults(FloorConfig floor, SectionConfig sourceConfig)
     {
-        if (!floor.TopBoundarySlab.SlopeEnabled && !floor.HasSlope)
+        if (sourceConfig.GlobalSlopeEnabled)
         {
-            var useGlobalTopSlope = sourceConfig.GlobalTopSlopeEnabled || sourceConfig.GlobalSlopeEnabled;
-            if (useGlobalTopSlope)
-            {
-                floor.TopBoundarySlab.SlopeEnabled = true;
-                floor.TopBoundarySlab.SlopeValue = sourceConfig.GlobalTopSlopeEnabled
-                    ? sourceConfig.GlobalTopSlopeValue
-                    : sourceConfig.GlobalSlopeValue;
-                floor.TopBoundarySlab.SlopeTarget = sourceConfig.GlobalTopSlopeEnabled
-                    ? sourceConfig.GlobalTopSlopeTarget
-                    : sourceConfig.GlobalSlopeTarget;
-            }
+            // 图纸级全局坡度开启后，楼层 legacy 坡度值仍可保留在配置里，
+            // 但执行态不再参与生效，避免与全局坡度同时作用。
+            floor.HasSlope = false;
         }
 
-        if (!floor.BottomBoundarySlab.SlopeEnabled && sourceConfig.GlobalBottomSlopeEnabled)
+        if (sourceConfig.GlobalTopSlopeEnabled)
+        {
+            floor.TopBoundarySlab.SlopeEnabled = true;
+            floor.TopBoundarySlab.SlopeValue = sourceConfig.GlobalTopSlopeValue;
+            floor.TopBoundarySlab.SlopeTarget = sourceConfig.GlobalTopSlopeTarget;
+        }
+        else if (sourceConfig.GlobalSlopeEnabled && !floor.TopBoundarySlab.SlopeEnabled)
+        {
+            floor.TopBoundarySlab.SlopeEnabled = true;
+            floor.TopBoundarySlab.SlopeValue = sourceConfig.GlobalSlopeValue;
+            floor.TopBoundarySlab.SlopeTarget = sourceConfig.GlobalSlopeTarget;
+        }
+
+        if (sourceConfig.GlobalBottomSlopeEnabled)
         {
             floor.BottomBoundarySlab.SlopeEnabled = true;
             floor.BottomBoundarySlab.SlopeValue = sourceConfig.GlobalBottomSlopeValue;
