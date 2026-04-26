@@ -54,8 +54,8 @@
                             BorderBrush="#D7E0EC"
                             BorderThickness="1"
                             CornerRadius="4"
-                            Padding="8"
-                            Margin="0,0,0,8">
+                            Padding="8,6"
+                            Margin="0,0,0,6">
                         <DockPanel LastChildFill="True">
                             <Button Content="刷新图层映射"
                                     Width="108"
@@ -70,11 +70,11 @@
                     </Border>
 
                     <local:WorkbenchPreparationSummaryPanel Grid.Row="1"
-                                                            Margin="0,0,0,8"
+                                                            Margin="0,0,0,6"
                                                             x:Name="WorkbenchPreparationSummaryPanelHost"/>
 
                     <GroupBox Grid.Row="2" Header="图层映射编辑">
-                        <Grid Margin="8,6,8,8">
+                        <Grid Margin="6,4,6,6">
                             <local:LayerMappingPanel x:Name="LayerMappingPanelHost"/>
                         </Grid>
                     </GroupBox>

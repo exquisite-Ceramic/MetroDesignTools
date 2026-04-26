@@ -97,16 +97,30 @@
             </GroupBox>
         </Grid>
 
-        <StackPanel Grid.Row="2" Orientation="Horizontal"
-                    HorizontalAlignment="Right" Margin="0,10,0,0">
-            <Button Content="墙体模板..." Width="100" Height="30" Margin="5,0"
-                    Click="WallTemplatesButton_Click"/>
-            <Button Content="楼板模板..." Width="100" Height="30" Margin="5,0"
-                    Click="SlabTemplatesButton_Click"/>
-            <Button Content="应用映射" Width="100" Height="30" Margin="5,0"
-                    Click="ApplyButton_Click" IsDefault="True"/>
-            <Button Content="取消" Width="80" Height="30" Margin="5,0"
-                    Click="CancelButton_Click" IsCancel="True"/>
-        </StackPanel>
+        <Grid Grid.Row="2" Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                       VerticalAlignment="Center"
+                       Foreground="Gray"
+                       Text="应用映射会修改图元图层；放弃映射仅清除当前未应用的映射编辑。"
+                       TextWrapping="Wrap"
+                       Margin="0,0,12,0"/>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal"
+                        HorizontalAlignment="Right">
+                <Button Content="墙体模板..." Width="100" Height="30" Margin="5,0"
+                        Click="WallTemplatesButton_Click"/>
+                <Button Content="楼板模板..." Width="100" Height="30" Margin="5,0"
+                        Click="SlabTemplatesButton_Click"/>
+                <Button Content="应用映射" Width="100" Height="30" Margin="5,0"
+                        Click="ApplyButton_Click" IsDefault="True"/>
+                <Button Content="放弃映射" Width="88" Height="30" Margin="5,0"
+                        Click="CancelButton_Click" IsCancel="True"/>
+            </StackPanel>
+        </Grid>
     </Grid>
 </UserControl>

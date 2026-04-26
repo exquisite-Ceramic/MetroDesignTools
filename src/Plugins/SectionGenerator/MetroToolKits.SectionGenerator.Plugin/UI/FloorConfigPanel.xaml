@@ -348,9 +348,23 @@
             </TabItem>
         </TabControl>
 
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-            <Button Content="保存" Width="80" Height="30" Margin="5,0" Click="Save_Click"/>
-            <Button Content="取消" Width="80" Height="30" Margin="5,0" Click="Cancel_Click" IsCancel="True"/>
-        </StackPanel>
+        <Grid Grid.Row="3" Margin="0,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                       VerticalAlignment="Center"
+                       Foreground="Gray"
+                       Text="保存会写入当前 DWG；放弃修改会重新加载上次保存的配置。"
+                       TextWrapping="Wrap"
+                       Margin="0,0,12,0"/>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="保存配置" Width="88" Height="30" Margin="5,0" Click="Save_Click"/>
+                <Button Content="放弃修改" Width="88" Height="30" Margin="5,0" Click="Cancel_Click" IsCancel="True"/>
+            </StackPanel>
+        </Grid>
     </Grid>
 </UserControl>
