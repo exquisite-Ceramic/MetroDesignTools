@@ -28,7 +28,7 @@ public partial class FloorConfigPanel : UserControl
     private bool _isRefreshingFloorSummaryList;
     private bool _initialized;
 
-    public event EventHandler? SaveCompleted;
+    public event EventHandler<FloorConfigSaveRequestedEventArgs>? SaveRequested;
 
     public event EventHandler? CancelRequested;
 
@@ -395,12 +395,72 @@ public partial class FloorConfigPanel : UserControl
         byLayerCheck.IsChecked = resolvedStyle.UseByLayer;
     }
 
-    private void SaveOutputConfig()
+    private bool TrySaveOutputConfig(bool strictNumericParsing, out string errorMessage)
     {
         ArgumentNullException.ThrowIfNull(_sectionOutputConfigMapper);
 
         var existingDto = _sectionOutputConfigMapper.ToDto(_document.OutputConfig);
-        var dto = new SectionOutputConfigDto
+        if (!TryBuildOutputConfigDto(existingDto, strictNumericParsing, out var dto, out errorMessage))
+        {
+            return false;
+        }
+
+        _sectionOutputConfigMapper.ApplyToDocument(dto, _document);
+        return true;
+    }
+
+    private bool TryBuildOutputConfigDto(
+        SectionOutputConfigDto existingDto,
+        bool strictNumericParsing,
+        out SectionOutputConfigDto dto,
+        out string errorMessage)
+    {
+        if (!TryBuildHatchStyleDto(
+                existingDto.HatchOptions?.WallHatch,
+                WallHatchPatternBox,
+                WallHatchScaleBox,
+                WallHatchAngleBox,
+                WallHatchByLayerCheck,
+                strictNumericParsing,
+                "墙填充",
+                out var wallHatch,
+                out errorMessage))
+        {
+            dto = new SectionOutputConfigDto();
+            return false;
+        }
+
+        if (!TryBuildHatchStyleDto(
+                existingDto.HatchOptions?.ColumnHatch,
+                ColumnHatchPatternBox,
+                ColumnHatchScaleBox,
+                ColumnHatchAngleBox,
+                ColumnHatchByLayerCheck,
+                strictNumericParsing,
+                "柱填充",
+                out var columnHatch,
+                out errorMessage))
+        {
+            dto = new SectionOutputConfigDto();
+            return false;
+        }
+
+        if (!TryBuildHatchStyleDto(
+                existingDto.HatchOptions?.SlabHatch,
+                SlabHatchPatternBox,
+                SlabHatchScaleBox,
+                SlabHatchAngleBox,
+                SlabHatchByLayerCheck,
+                strictNumericParsing,
+                "楼板填充",
+                out var slabHatch,
+                out errorMessage))
+        {
+            dto = new SectionOutputConfigDto();
+            return false;
+        }
+
+        dto = new SectionOutputConfigDto
         {
             AnnotationOptions = new AnnotationOptionsDto
             {
@@ -409,9 +469,9 @@ public partial class FloorConfigPanel : UserControl
             HatchOptions = new HatchOptionsDto
             {
                 Enabled = EnableHatchCheck.IsChecked == true,
-                WallHatch = BuildHatchStyleDto(existingDto.HatchOptions?.WallHatch, WallHatchPatternBox, WallHatchScaleBox, WallHatchAngleBox, WallHatchByLayerCheck),
-                ColumnHatch = BuildHatchStyleDto(existingDto.HatchOptions?.ColumnHatch, ColumnHatchPatternBox, ColumnHatchScaleBox, ColumnHatchAngleBox, ColumnHatchByLayerCheck),
-                SlabHatch = BuildHatchStyleDto(existingDto.HatchOptions?.SlabHatch, SlabHatchPatternBox, SlabHatchScaleBox, SlabHatchAngleBox, SlabHatchByLayerCheck)
+                WallHatch = wallHatch,
+                ColumnHatch = columnHatch,
+                SlabHatch = slabHatch
             },
             LayerOptions = new LayerOptionsDto
             {
@@ -425,16 +485,20 @@ public partial class FloorConfigPanel : UserControl
                 FinishLayer = FinishLayerBox.Text.Trim()
             }
         };
-
-        _sectionOutputConfigMapper.ApplyToDocument(dto, _document);
+        errorMessage = string.Empty;
+        return true;
     }
 
-    private static HatchStyleDto BuildHatchStyleDto(
+    private bool TryBuildHatchStyleDto(
         HatchStyleDto? existingStyle,
         TextBox patternBox,
         TextBox scaleBox,
         TextBox angleBox,
-        CheckBox byLayerCheck)
+        CheckBox byLayerCheck,
+        bool strictNumericParsing,
+        string displayName,
+        out HatchStyleDto dto,
+        out string errorMessage)
     {
         var resolvedStyle = existingStyle ?? new HatchStyleDto();
         var resolvedScale = resolvedStyle.Scale;
@@ -444,19 +508,33 @@ public partial class FloorConfigPanel : UserControl
         {
             resolvedScale = parsedScale;
         }
+        else if (strictNumericParsing)
+        {
+            dto = new HatchStyleDto();
+            errorMessage = $"{displayName}填充比例必须为有效数字。";
+            return false;
+        }
 
         if (double.TryParse(angleBox.Text, out var parsedAngle))
         {
             resolvedAngle = parsedAngle;
         }
+        else if (strictNumericParsing)
+        {
+            dto = new HatchStyleDto();
+            errorMessage = $"{displayName}填充角度必须为有效数字。";
+            return false;
+        }
 
-        return new HatchStyleDto
+        dto = new HatchStyleDto
         {
             PatternName = patternBox.Text.Trim(),
             Scale = resolvedScale,
             Angle = resolvedAngle,
             UseByLayer = byLayerCheck.IsChecked == true
         };
+        errorMessage = string.Empty;
+        return true;
     }
 
     private void FloorListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -610,9 +688,15 @@ public partial class FloorConfigPanel : UserControl
 
     private void SaveCurrentEdits()
     {
+        TrySaveCurrentEdits(strictNumericParsing: false, out _);
+    }
+
+    private bool TrySaveCurrentEdits(bool strictNumericParsing, out string errorMessage)
+    {
         if (_currentFloor == null)
         {
-            return;
+            errorMessage = string.Empty;
+            return true;
         }
 
         _currentFloor.Name = NameBox.Text.Trim();
@@ -620,11 +704,25 @@ public partial class FloorConfigPanel : UserControl
         {
             _currentFloor.Height = height;
         }
+        else if (strictNumericParsing)
+        {
+            errorMessage = "层高必须为有效数字。";
+            return false;
+        }
 
         _currentFloor.HasSlope = SlopeCheck.IsChecked == true;
-        if (double.TryParse(SlopeValueBox.Text, out var legacySlope))
+        if (!_currentFloor.HasSlope || !SlopeValueBox.IsEnabled)
+        {
+            // Disabled slope editors keep the last committed numeric value.
+        }
+        else if (double.TryParse(SlopeValueBox.Text, out var legacySlope))
         {
             _currentFloor.SlopeValue = legacySlope / 100.0;
+        }
+        else if (strictNumericParsing)
+        {
+            errorMessage = "楼层兼容坡度必须为有效数字。";
+            return false;
         }
 
         _currentFloor.TopBoundarySlab.SlopeEnabled = TopSlopeCheck.IsChecked == true;
@@ -635,15 +733,36 @@ public partial class FloorConfigPanel : UserControl
         _currentFloor.BottomBoundarySlab.TemplateId = ReadBoundaryTemplateId(
             BottomBoundaryTemplateBox,
             _currentFloor.BottomBoundarySlab.TemplateId);
-        if (double.TryParse(TopSlopeValueBox.Text, out var topSlope))
+        if (!_currentFloor.TopBoundarySlab.SlopeEnabled || !TopSlopeValueBox.IsEnabled)
+        {
+            // Disabled slope editors keep the last committed numeric value.
+        }
+        else if (double.TryParse(TopSlopeValueBox.Text, out var topSlope))
         {
             _currentFloor.TopBoundarySlab.SlopeValue = topSlope / 100.0;
         }
+        else if (strictNumericParsing)
+        {
+            errorMessage = "顶边界板坡度必须为有效数字。";
+            return false;
+        }
 
-        if (double.TryParse(BottomSlopeValueBox.Text, out var bottomSlope))
+        if (!_currentFloor.BottomBoundarySlab.SlopeEnabled || !BottomSlopeValueBox.IsEnabled)
+        {
+            // Disabled slope editors keep the last committed numeric value.
+        }
+        else if (double.TryParse(BottomSlopeValueBox.Text, out var bottomSlope))
         {
             _currentFloor.BottomBoundarySlab.SlopeValue = bottomSlope / 100.0;
         }
+        else if (strictNumericParsing)
+        {
+            errorMessage = "底边界板坡度必须为有效数字。";
+            return false;
+        }
+
+        errorMessage = string.Empty;
+        return true;
     }
 
     private void SlopeCheck_Changed(object sender, RoutedEventArgs e)
@@ -793,14 +912,21 @@ public partial class FloorConfigPanel : UserControl
         }
     }
 
-    private SaveFloorConfigRequestDto BuildSaveRequestFromUi()
+    private bool TryCommitGlobalConfig(bool strictNumericParsing, out string errorMessage)
     {
-        SaveCurrentEdits();
-
         var globalSlopePercent = _document.Config.GlobalSlopeValue * 100.0;
-        if (double.TryParse(GlobalSlopeValueBox.Text, out var parsedGlobalSlopePercent))
+        if (!GlobalSlopeCheck.IsChecked.HasValue || GlobalSlopeCheck.IsChecked == false || !GlobalSlopeValueBox.IsEnabled)
+        {
+            // Disabled global slope editor keeps the last committed numeric value.
+        }
+        else if (double.TryParse(GlobalSlopeValueBox.Text, out var parsedGlobalSlopePercent))
         {
             globalSlopePercent = parsedGlobalSlopePercent;
+        }
+        else if (strictNumericParsing)
+        {
+            errorMessage = "图纸级全局坡度必须为有效数字。";
+            return false;
         }
 
         var globalSlopeEnabled = GlobalSlopeCheck.IsChecked == true;
@@ -808,118 +934,58 @@ public partial class FloorConfigPanel : UserControl
             ?? _document.Config.GlobalSlopeTarget
             ?? "StructuralSlab";
 
-        return new SaveFloorConfigRequestDto
+        _document.Config.AlignmentBaseFloorName = (BaseFloorComboBox.SelectedItem as FloorConfig)?.Name?.Trim() ?? string.Empty;
+        _document.Config.GlobalSlopeEnabled = globalSlopeEnabled;
+        _document.Config.GlobalSlopeValue = globalSlopePercent / 100.0;
+        _document.Config.GlobalSlopeTarget = globalSlopeTarget;
+        _document.Config.GlobalTopSlopeEnabled = globalSlopeEnabled;
+        _document.Config.GlobalTopSlopeValue = globalSlopePercent / 100.0;
+        _document.Config.GlobalTopSlopeTarget = globalSlopeTarget;
+        errorMessage = string.Empty;
+        return true;
+    }
+
+    private bool TryCommitUiStateToDocument(bool strictNumericParsing, out string errorMessage)
+    {
+        if (!TrySaveCurrentEdits(strictNumericParsing, out errorMessage))
         {
-            AlignmentBaseFloorName = (BaseFloorComboBox.SelectedItem as FloorConfig)?.Name ?? string.Empty,
-            GlobalSlopeEnabled = globalSlopeEnabled,
-            GlobalSlopePercent = globalSlopePercent,
-            GlobalSlopeTarget = globalSlopeTarget,
-            GlobalTopSlopeEnabled = globalSlopeEnabled,
-            GlobalTopSlopePercent = globalSlopePercent,
-            GlobalTopSlopeTarget = globalSlopeTarget,
-            GlobalBottomSlopeEnabled = _document.Config.GlobalBottomSlopeEnabled,
-            GlobalBottomSlopePercent = _document.Config.GlobalBottomSlopeValue * 100.0,
-            GlobalBottomSlopeTarget = _document.Config.GlobalBottomSlopeTarget,
-            Floors = _floors.Select(floor => new FloorConfigEditDto
-            {
-                Name = floor.Name,
-                Height = floor.Height,
-                FinishThickness = floor.FinishThickness,
-                BottomSlabThickness = floor.BottomSlabThickness,
-                TopSlabThickness = floor.TopSlabThickness,
-                LegacySlopeEnabled = floor.HasSlope,
-                LegacySlopePercent = floor.SlopeValue * 100.0,
-                LegacySlopeTarget = floor.SlopeTarget,
-                AlignmentPoints = floor.AlignmentPoints
-                    .Select(point => new Point3DDto
-                    {
-                        X = point.X,
-                        Y = point.Y,
-                        Z = point.Z
-                    })
-                    .ToArray(),
-                ScopeBounds = floor.ScopeBounds.HasValue
-                    ? new ScopeBoundsDto
-                    {
-                        MinX = floor.ScopeBounds.Value.MinX,
-                        MinY = floor.ScopeBounds.Value.MinY,
-                        MaxX = floor.ScopeBounds.Value.MaxX,
-                        MaxY = floor.ScopeBounds.Value.MaxY
-                    }
-                    : null,
-                TopBoundarySlab = new BoundarySlabEditDto
-                {
-                    TemplateId = floor.TopBoundarySlab.TemplateId,
-                    SlopeEnabled = floor.TopBoundarySlab.SlopeEnabled,
-                    SlopePercent = floor.TopBoundarySlab.SlopeValue * 100.0,
-                    SlopeTarget = floor.TopBoundarySlab.SlopeTarget
-                },
-                BottomBoundarySlab = new BoundarySlabEditDto
-                {
-                    TemplateId = floor.BottomBoundarySlab.TemplateId,
-                    SlopeEnabled = floor.BottomBoundarySlab.SlopeEnabled,
-                    SlopePercent = floor.BottomBoundarySlab.SlopeValue * 100.0,
-                    SlopeTarget = floor.BottomBoundarySlab.SlopeTarget
-                }
-            }).ToArray()
+            return false;
+        }
+
+        if (!TryCommitGlobalConfig(strictNumericParsing, out errorMessage))
+        {
+            return false;
+        }
+
+        if (!TrySaveOutputConfig(strictNumericParsing, out errorMessage))
+        {
+            return false;
+        }
+
+        _document.Config.Floors = _floors.ToList();
+        errorMessage = string.Empty;
+        return true;
+    }
+
+    private bool TryBuildSaveRequest(
+        out SaveFloorConfigDocumentRequestDto request,
+        out string errorMessage)
+    {
+        ArgumentNullException.ThrowIfNull(_saveRequestMapper);
+        ArgumentNullException.ThrowIfNull(_sectionOutputConfigMapper);
+
+        if (!TryCommitUiStateToDocument(strictNumericParsing: true, out errorMessage))
+        {
+            request = new SaveFloorConfigDocumentRequestDto();
+            return false;
+        }
+
+        request = new SaveFloorConfigDocumentRequestDto
+        {
+            FloorConfig = _saveRequestMapper.ToRequest(_document),
+            OutputConfig = _sectionOutputConfigMapper.ToDto(_document.OutputConfig)
         };
-    }
-
-    private void SyncEditingFloorsFromDocument(string? currentFloorName, int currentFloorIndex)
-    {
-        _floors.Clear();
-        foreach (var floor in _document.Config.Floors)
-        {
-            _floors.Add(floor);
-        }
-
-        _currentFloor = null;
-        BaseFloorComboBox.SelectedItem = _floors.FirstOrDefault(floor =>
-            string.Equals(floor.Name, _document.Config.AlignmentBaseFloorName, StringComparison.OrdinalIgnoreCase));
-        if (BaseFloorComboBox.SelectedItem == null && _floors.Count == 1)
-        {
-            BaseFloorComboBox.SelectedItem = _floors[0];
-        }
-
-        var resolvedFloor = !string.IsNullOrWhiteSpace(currentFloorName)
-            ? _floors.FirstOrDefault(floor =>
-                string.Equals(floor.Name, currentFloorName, StringComparison.OrdinalIgnoreCase))
-            : null;
-
-        if (resolvedFloor == null && currentFloorIndex >= 0 && currentFloorIndex < _floors.Count)
-        {
-            resolvedFloor = _floors[currentFloorIndex];
-        }
-
-        _currentFloor = resolvedFloor ?? _floors.FirstOrDefault();
-        if (_currentFloor != null)
-        {
-            BindFloorToUI(_currentFloor);
-            EditPanel.IsEnabled = true;
-        }
-        else
-        {
-            EditPanel.IsEnabled = false;
-        }
-
-        RefreshFloorSummaryList(_currentFloor?.Name);
-    }
-
-    private FloorConfig? ResolveCurrentDocumentFloor()
-    {
-        if (_currentFloor == null)
-        {
-            return null;
-        }
-
-        var currentIndex = _floors.IndexOf(_currentFloor);
-        if (currentIndex >= 0 && currentIndex < _document.Config.Floors.Count)
-        {
-            return _document.Config.Floors[currentIndex];
-        }
-
-        return _document.Config.Floors.FirstOrDefault(floor =>
-            string.Equals(floor.Name, _currentFloor.Name, StringComparison.OrdinalIgnoreCase));
+        return true;
     }
 
     private void PickAlignment_Click(object sender, RoutedEventArgs e)
@@ -930,13 +996,12 @@ public partial class FloorConfigPanel : UserControl
         }
 
         SaveFormEdits();
-        var floor = ResolveCurrentDocumentFloor();
-        if (floor == null)
+        if (_currentFloor == null)
         {
             return;
         }
 
-        PickAlignmentRequested?.Invoke(this, new FloorConfigSelectionRequestedEventArgs(floor));
+        PickAlignmentRequested?.Invoke(this, new FloorConfigSelectionRequestedEventArgs(_currentFloor));
     }
 
     private void ClearAlignment_Click(object sender, RoutedEventArgs e)
@@ -961,13 +1026,12 @@ public partial class FloorConfigPanel : UserControl
         }
 
         SaveFormEdits();
-        var floor = ResolveCurrentDocumentFloor();
-        if (floor == null)
+        if (_currentFloor == null)
         {
             return;
         }
 
-        PickScopeRequested?.Invoke(this, new FloorConfigSelectionRequestedEventArgs(floor));
+        PickScopeRequested?.Invoke(this, new FloorConfigSelectionRequestedEventArgs(_currentFloor));
     }
 
     private void ClearScope_Click(object sender, RoutedEventArgs e)
@@ -986,16 +1050,14 @@ public partial class FloorConfigPanel : UserControl
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
-        SaveFormEdits();
-
-        if (!ValidateBeforeSave(out var validationMessage))
+        if (!TryBuildSaveRequest(out var saveRequest, out var validationMessage))
         {
             MessageBox.Show(validationMessage, "配置无效", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         _logger.LogInformation("楼层配置编辑完成，待命令层保存，楼层数: {Count}", _document.Config.Floors.Count);
-        SaveCompleted?.Invoke(this, EventArgs.Empty);
+        SaveRequested?.Invoke(this, new FloorConfigSaveRequestedEventArgs(saveRequest));
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e)
@@ -1004,56 +1066,21 @@ public partial class FloorConfigPanel : UserControl
         CancelRequested?.Invoke(this, EventArgs.Empty);
     }
 
-    private bool ValidateBeforeSave(out string message)
-    {
-        if (_document.Config.Floors.Count <= 1)
-        {
-            message = string.Empty;
-            return true;
-        }
-
-        if (BaseFloorComboBox.SelectedItem is not FloorConfig baseFloor)
-        {
-            message = "多楼层模式下必须选择基准层。";
-            return false;
-        }
-
-        if (!FloorSectionLineTransformer.TryValidateAlignmentPoints(baseFloor.AlignmentPoints, out var baseError))
-        {
-            message = $"基准层 {baseFloor.Name} 的对齐点无效: {baseError}";
-            return false;
-        }
-
-        if (!baseFloor.ScopeBounds.HasValue)
-        {
-            message = $"基准层 {baseFloor.Name} 缺少整层范围框。";
-            return false;
-        }
-
-        if (!baseFloor.ScopeBounds.Value.IsValid())
-        {
-            message = $"基准层 {baseFloor.Name} 的整层范围框无效。";
-            return false;
-        }
-
-        message = string.Empty;
-        return true;
-    }
-
     private void SaveFormEdits()
     {
-        ArgumentNullException.ThrowIfNull(_saveRequestMapper);
-
-        var currentFloorIndex = _currentFloor == null ? -1 : _floors.IndexOf(_currentFloor);
-        var request = BuildSaveRequestFromUi();
-        var savedFloorName = currentFloorIndex >= 0 && currentFloorIndex < request.Floors.Count
-            ? request.Floors[currentFloorIndex].Name
-            : _currentFloor?.Name;
-
-        _saveRequestMapper.ApplyToDocument(request, _document);
-        SyncEditingFloorsFromDocument(savedFloorName, currentFloorIndex);
-        SaveOutputConfig();
+        TryCommitUiStateToDocument(strictNumericParsing: false, out _);
     }
+}
+
+public sealed class FloorConfigSaveRequestedEventArgs : EventArgs
+{
+    public FloorConfigSaveRequestedEventArgs(SaveFloorConfigDocumentRequestDto request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        Request = request;
+    }
+
+    public SaveFloorConfigDocumentRequestDto Request { get; }
 }
 
 public sealed class FloorConfigSelectionRequestedEventArgs : EventArgs

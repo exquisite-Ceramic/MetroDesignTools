@@ -1,4 +1,5 @@
 using MetroToolKits.SectionGenerator.App.Models;
+using MetroToolKits.SectionGenerator.Contracts.Floors;
 
 namespace MetroToolKits.SectionGenerator.App.UseCases;
 
@@ -8,5 +9,5 @@ namespace MetroToolKits.SectionGenerator.App.UseCases;
 public interface IFloorConfigUseCase
 {
     LoadedSectionConfig Load();
-    FloorConfigSaveResult Save(LoadedSectionConfig config);
+    FloorConfigSaveResult Save(SaveFloorConfigDocumentRequestDto request);
 }

@@ -2,6 +2,7 @@ using System.Windows;
 using Microsoft.Extensions.Logging;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Models;
+using MetroToolKits.SectionGenerator.Contracts.Floors;
 using MetroToolKits.SectionGenerator.Core.Sections;
 
 namespace MetroToolKits.SectionGenerator.Plugin.UI;
@@ -12,6 +13,8 @@ namespace MetroToolKits.SectionGenerator.Plugin.UI;
 public partial class FloorConfigWindow : Window
 {
     public LoadedSectionConfig CurrentDocument => Panel.CurrentDocument;
+
+    public SaveFloorConfigDocumentRequestDto? SaveRequest { get; private set; }
 
     public FloorConfigWindow(
         LoadedSectionConfig document,
@@ -31,14 +34,15 @@ public partial class FloorConfigWindow : Window
             sectionOutputConfigMapper,
             logger);
 
-        Panel.SaveCompleted += Panel_SaveCompleted;
+        Panel.SaveRequested += Panel_SaveCompleted;
         Panel.CancelRequested += Panel_CancelRequested;
         Panel.PickAlignmentRequested += Panel_PickAlignmentRequested;
         Panel.PickScopeRequested += Panel_PickScopeRequested;
     }
 
-    private void Panel_SaveCompleted(object? sender, EventArgs e)
+    private void Panel_SaveCompleted(object? sender, FloorConfigSaveRequestedEventArgs e)
     {
+        SaveRequest = e.Request;
         DialogResult = true;
         Close();
     }

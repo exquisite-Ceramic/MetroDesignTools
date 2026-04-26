@@ -39,16 +39,16 @@ public sealed class FloorConfigSaveRequestMapper : IFloorConfigSaveRequestMapper
 
         document.Config ??= new SectionConfig();
 
-        document.Config.AlignmentBaseFloorName = request.AlignmentBaseFloorName ?? string.Empty;
+        document.Config.AlignmentBaseFloorName = request.AlignmentBaseFloorName?.Trim() ?? string.Empty;
         document.Config.GlobalSlopeEnabled = request.GlobalSlopeEnabled;
         document.Config.GlobalSlopeValue = ToDecimal(request.GlobalSlopePercent);
-        document.Config.GlobalSlopeTarget = request.GlobalSlopeTarget ?? string.Empty;
+        document.Config.GlobalSlopeTarget = request.GlobalSlopeTarget?.Trim() ?? string.Empty;
         document.Config.GlobalTopSlopeEnabled = request.GlobalTopSlopeEnabled;
         document.Config.GlobalTopSlopeValue = ToDecimal(request.GlobalTopSlopePercent);
-        document.Config.GlobalTopSlopeTarget = request.GlobalTopSlopeTarget ?? string.Empty;
+        document.Config.GlobalTopSlopeTarget = request.GlobalTopSlopeTarget?.Trim() ?? string.Empty;
         document.Config.GlobalBottomSlopeEnabled = request.GlobalBottomSlopeEnabled;
         document.Config.GlobalBottomSlopeValue = ToDecimal(request.GlobalBottomSlopePercent);
-        document.Config.GlobalBottomSlopeTarget = request.GlobalBottomSlopeTarget ?? string.Empty;
+        document.Config.GlobalBottomSlopeTarget = request.GlobalBottomSlopeTarget?.Trim() ?? string.Empty;
         document.Config.Floors = request.Floors.Select(MapFloorToDomain).ToList();
     }
 
@@ -72,14 +72,14 @@ public sealed class FloorConfigSaveRequestMapper : IFloorConfigSaveRequestMapper
     private static FloorConfig MapFloorToDomain(FloorConfigEditDto floor)
         => new()
         {
-            Name = floor.Name ?? string.Empty,
+            Name = floor.Name?.Trim() ?? string.Empty,
             Height = floor.Height,
             FinishThickness = floor.FinishThickness,
             BottomSlabThickness = floor.BottomSlabThickness,
             TopSlabThickness = floor.TopSlabThickness,
             HasSlope = floor.LegacySlopeEnabled,
             SlopeValue = ToDecimal(floor.LegacySlopePercent),
-            SlopeTarget = floor.LegacySlopeTarget ?? string.Empty,
+            SlopeTarget = floor.LegacySlopeTarget?.Trim() ?? string.Empty,
             AlignmentPoints = floor.AlignmentPoints.Select(MapPointToDomain).ToList(),
             ScopeBounds = MapScopeToDomain(floor.ScopeBounds),
             TopBoundarySlab = MapBoundarySlabToDomain(floor.TopBoundarySlab),
@@ -98,10 +98,10 @@ public sealed class FloorConfigSaveRequestMapper : IFloorConfigSaveRequestMapper
     private static BoundarySlabConfig MapBoundarySlabToDomain(BoundarySlabEditDto config)
         => new()
         {
-            TemplateId = config.TemplateId ?? string.Empty,
+            TemplateId = config.TemplateId?.Trim() ?? string.Empty,
             SlopeEnabled = config.SlopeEnabled,
             SlopeValue = ToDecimal(config.SlopePercent),
-            SlopeTarget = config.SlopeTarget ?? string.Empty
+            SlopeTarget = config.SlopeTarget?.Trim() ?? string.Empty
         };
 
     private static Point3DDto MapPointToDto(Point3D point)

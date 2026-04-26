@@ -66,7 +66,7 @@ public sealed class FloorConfigPaletteController
         if (_panel == null)
         {
             _panel = panel;
-            _panel.SaveCompleted += Panel_SaveCompleted;
+            _panel.SaveRequested += Panel_SaveCompleted;
             _panel.CancelRequested += Panel_CancelRequested;
             _panel.PickAlignmentRequested += Panel_PickAlignmentRequested;
             _panel.PickScopeRequested += Panel_PickScopeRequested;
@@ -98,14 +98,14 @@ public sealed class FloorConfigPaletteController
         RaiseStateChanged();
     }
 
-    private void Panel_SaveCompleted(object? sender, EventArgs e)
+    private void Panel_SaveCompleted(object? sender, FloorConfigSaveRequestedEventArgs e)
     {
         if (!TryEnsureBoundDocument("保存楼层配置"))
         {
             return;
         }
 
-        var saveResult = _floorConfigUseCase.Save(_panel!.CurrentDocument);
+        var saveResult = _floorConfigUseCase.Save(e.Request);
         if (!saveResult.Success)
         {
             MessageBox.Show(
@@ -117,8 +117,8 @@ public sealed class FloorConfigPaletteController
         }
 
         _userLogger.FloorConfigSaved(
-            _panel.CurrentDocument.Config.Floors.Count,
-            _panel.CurrentDocument.Config.Floors.Select(f => f.Name).ToArray());
+            e.Request.FloorConfig.Floors.Count,
+            e.Request.FloorConfig.Floors.Select(f => f.Name).ToArray());
         ReloadBoundDocument();
     }
 

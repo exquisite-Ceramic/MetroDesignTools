@@ -256,17 +256,14 @@ public sealed class DwgFloorConfigRepository : IFloorConfigRepository
             return null;
         }
 
-        var storedDocument = JsonSerializer.Deserialize<StoredSectionConfigDocument>(json.ToString(), ReadOptions);
-        if (storedDocument == null)
+        if (!DwgFloorConfigStorageEnvelope.TryDeserialize(json.ToString(), out var loadedConfig, out _))
         {
             return null;
         }
 
-        return new LoadedSectionConfig
-        {
-            Config = storedDocument.Config ?? CreateDefault().Config,
-            OutputConfig = NormalizeOutputConfig(storedDocument.OutputConfig)
-        };
+        loadedConfig!.Config ??= CreateDefault().Config;
+        loadedConfig.OutputConfig = NormalizeOutputConfig(loadedConfig.OutputConfig);
+        return loadedConfig;
     }
 
     private static void SaveEmbeddedConfig(Transaction tr, Database db, LoadedSectionConfig config)
@@ -285,12 +282,8 @@ public sealed class DwgFloorConfigRepository : IFloorConfigRepository
             tr.AddNewlyCreatedDBObject(configDictionary, true);
         }
 
-        var storedDocument = new StoredSectionConfigDocument
-        {
-            Config = config.Config,
-            OutputConfig = NormalizeOutputConfig(config.OutputConfig)
-        };
-        var json = JsonSerializer.Serialize(storedDocument, WriteOptions);
+        config.OutputConfig = NormalizeOutputConfig(config.OutputConfig);
+        var json = DwgFloorConfigStorageEnvelope.Serialize(config);
         var buffer = new ResultBuffer(SplitToTypedValues(json).ToArray());
 
         if (configDictionary.Contains(ConfigRecordName))
@@ -334,11 +327,5 @@ public sealed class DwgFloorConfigRepository : IFloorConfigRepository
         outputConfig.HatchOptions.SlabHatch ??= HatchStyleOptions.CreateDefault();
         outputConfig.LayerOptions ??= new LayerOptions();
         return outputConfig;
-    }
-
-    private sealed class StoredSectionConfigDocument
-    {
-        public SectionConfig Config { get; set; } = new();
-        public SectionOutputConfig OutputConfig { get; set; } = new();
     }
 }

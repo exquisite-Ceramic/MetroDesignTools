@@ -65,14 +65,14 @@ public sealed class SectionOutputConfigMapper : ISectionOutputConfigMapper
             },
             LayerOptions = new LayerOptions
             {
-                CutLineLayer = layers.CutLineLayer ?? defaultLayers.CutLineLayer,
-                SightLineLayer = layers.SightLineLayer ?? defaultLayers.SightLineLayer,
-                AnnotationLayer = layers.AnnotationLayer ?? defaultLayers.AnnotationLayer,
-                WallHatchLayer = layers.WallHatchLayer ?? defaultLayers.WallHatchLayer,
-                ColumnHatchLayer = layers.ColumnHatchLayer ?? defaultLayers.ColumnHatchLayer,
-                SlabHatchLayer = layers.SlabHatchLayer ?? defaultLayers.SlabHatchLayer,
-                StructuralLayer = layers.StructuralLayer ?? defaultLayers.StructuralLayer,
-                FinishLayer = layers.FinishLayer ?? defaultLayers.FinishLayer
+                CutLineLayer = NormalizeString(layers.CutLineLayer, defaultLayers.CutLineLayer),
+                SightLineLayer = NormalizeString(layers.SightLineLayer, defaultLayers.SightLineLayer),
+                AnnotationLayer = NormalizeString(layers.AnnotationLayer, defaultLayers.AnnotationLayer),
+                WallHatchLayer = NormalizeString(layers.WallHatchLayer, defaultLayers.WallHatchLayer),
+                ColumnHatchLayer = NormalizeString(layers.ColumnHatchLayer, defaultLayers.ColumnHatchLayer),
+                SlabHatchLayer = NormalizeString(layers.SlabHatchLayer, defaultLayers.SlabHatchLayer),
+                StructuralLayer = NormalizeString(layers.StructuralLayer, defaultLayers.StructuralLayer),
+                FinishLayer = NormalizeString(layers.FinishLayer, defaultLayers.FinishLayer)
             }
         };
     }
@@ -104,10 +104,13 @@ public sealed class SectionOutputConfigMapper : ISectionOutputConfigMapper
         var defaultStyle = new HatchStyleDto();
         return new HatchStyleOptions
         {
-            PatternName = resolvedStyle.PatternName ?? defaultStyle.PatternName,
+            PatternName = NormalizeString(resolvedStyle.PatternName, defaultStyle.PatternName),
             Scale = resolvedStyle.Scale,
             Angle = resolvedStyle.Angle,
             UseByLayer = resolvedStyle.UseByLayer
         };
     }
+
+    private static string NormalizeString(string? value, string fallback)
+        => value == null ? fallback : value.Trim();
 }

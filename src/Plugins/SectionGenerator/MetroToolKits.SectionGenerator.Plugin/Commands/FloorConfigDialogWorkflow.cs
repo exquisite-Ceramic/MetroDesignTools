@@ -58,7 +58,13 @@ internal static class FloorConfigDialogWorkflow
 
             if (window.DialogResult == true)
             {
-                var saveResult = floorConfigUseCase.Save(configDocument);
+                if (window.SaveRequest == null)
+                {
+                    MessageBox.Show("楼层配置保存请求丢失，请重新尝试保存。", "保存失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    continue;
+                }
+
+                var saveResult = floorConfigUseCase.Save(window.SaveRequest);
                 if (!saveResult.Success)
                 {
                     var message = saveResult.ErrorMessage ?? "楼层配置保存失败。";
@@ -67,8 +73,8 @@ internal static class FloorConfigDialogWorkflow
                 }
 
                 userLogger.FloorConfigSaved(
-                    configDocument.Config.Floors.Count,
-                    configDocument.Config.Floors.Select(f => f.Name).ToArray());
+                    window.SaveRequest.FloorConfig.Floors.Count,
+                    window.SaveRequest.FloorConfig.Floors.Select(f => f.Name).ToArray());
             }
 
             break;
