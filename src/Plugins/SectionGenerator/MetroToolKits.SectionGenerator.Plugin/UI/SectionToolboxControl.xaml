@@ -5,7 +5,33 @@
              xmlns:local="clr-namespace:MetroToolKits.SectionGenerator.Plugin.UI"
              Width="360">
     <Grid>
-        <TabControl x:Name="WorkbenchTabs">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                Background="#F4F7FB"
+                BorderBrush="#D7E0EC"
+                BorderThickness="1"
+                CornerRadius="4"
+                Padding="8"
+                Margin="10,10,10,0">
+            <DockPanel LastChildFill="True">
+                <Button Content="关闭工具箱"
+                        Width="92"
+                        Height="28"
+                        DockPanel.Dock="Right"
+                        Click="HideToolboxButton_Click"/>
+                <TextBlock VerticalAlignment="Center"
+                           Foreground="Gray"
+                           Text="关闭只会隐藏当前工具箱，不会保存、取消或清空当前工作台状态。"
+                           TextWrapping="Wrap"
+                           Margin="0,0,12,0"/>
+            </DockPanel>
+        </Border>
+
+        <TabControl Grid.Row="1" x:Name="WorkbenchTabs" Margin="10">
             <TabItem Header="总览">
                 <local:WorkbenchOverviewPanel x:Name="WorkbenchOverviewPanelHost"/>
             </TabItem>

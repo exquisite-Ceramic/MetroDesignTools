@@ -15,6 +15,7 @@ namespace MetroToolKits.SectionGenerator.Plugin.UI;
 /// </summary>
 public partial class SectionToolboxControl : UserControl
 {
+    private readonly SectionToolboxPaletteService _paletteService;
     private readonly IGenerateSectionPreflightUseCase _preflightUseCase;
     private readonly IWorkbenchSnapshotAssembler _workbenchSnapshotAssembler;
     private readonly FloorConfigPaletteController _floorConfigPaletteController;
@@ -32,6 +33,7 @@ public partial class SectionToolboxControl : UserControl
         "图层映射会打开原图层映射窗口，墙体模板和楼板模板管理仍使用原独立模板管理窗口。";
 
     public SectionToolboxControl(
+        SectionToolboxPaletteService paletteService,
         IGenerateSectionPreflightUseCase preflightUseCase,
         IWorkbenchSnapshotAssembler workbenchSnapshotAssembler,
         FloorConfigPaletteController floorConfigPaletteController,
@@ -42,6 +44,7 @@ public partial class SectionToolboxControl : UserControl
         ISlabTemplateCatalogMapper slabTemplateCatalogMapper)
     {
         InitializeComponent();
+        _paletteService = paletteService;
         _preflightUseCase = preflightUseCase;
         _workbenchSnapshotAssembler = workbenchSnapshotAssembler;
         _floorConfigPaletteController = floorConfigPaletteController;
@@ -70,6 +73,11 @@ public partial class SectionToolboxControl : UserControl
         ShowTemplateHome();
         UpdateFloorConfigBindingText();
         UpdateLayerMappingBindingText();
+    }
+
+    private void HideToolboxButton_Click(object sender, RoutedEventArgs e)
+    {
+        _paletteService.Hide();
     }
 
     private void ExecuteCommand(string commandName)

@@ -50,6 +50,16 @@ public sealed class SectionToolboxPaletteService
         _paletteSet.Visible = true;
     }
 
+    public void Hide()
+    {
+        if (_paletteSet == null)
+        {
+            return;
+        }
+
+        _paletteSet.Visible = false;
+    }
+
     public IDisposable SuspendForCadPick()
     {
         if (_paletteSet == null)
@@ -86,6 +96,7 @@ public sealed class SectionToolboxPaletteService
         paletteSet.AddVisual(
             "SectionGenerator",
             new SectionToolboxControl(
+                this,
                 _preflightUseCase,
                 _workbenchSnapshotAssembler,
                 _floorConfigPaletteController,
