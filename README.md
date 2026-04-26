@@ -16,6 +16,8 @@ AutoCAD .NET 插件工具集，当前包含 **SectionGenerator**（建筑剖面�
 | [docs/阶段七-验收记录.md](./docs/阶段七-验收记录.md) | 架构复核、阶段七验收与阻塞说明 |
 | [docs/SectionGenerator用户手册.md](./docs/SectionGenerator用户手册.md) | 面向使用人员的安装与操作指南 |
 | [docs/SectionGenerator扩展指南.md](./docs/SectionGenerator扩展指南.md) | 面向开发人员的扩展说明 |
+| [docs/section-generator-ui-regression-checklist.md](./docs/section-generator-ui-regression-checklist.md) | SectionGenerator UI 回归验收清单 |
+| [docs/section-generator-ui-regression-result-stage-19.md](./docs/section-generator-ui-regression-result-stage-19.md) | 第十九阶段 UI 人工验收记录 |
 | [docs/开发日志文档.md](./docs/开发日志文档.md) | 开发日志规范 |
 | [docs/用户日志文档.md](./docs/用户日志文档.md) | 用户日志规范 |
 | [docs/archive/](./docs/archive/) | 历史分析与阶段性文档（归档） |
@@ -55,6 +57,22 @@ NETLOAD
 4. 需要双向定位时执行 `LocateSourceElement` / `FindRelatedSections`
 5. 高频操作建议执行 `ShowToolbox`
 
+### SectionToolbox 工作台
+
+`ShowToolbox` 会打开多 Tab 工作台，当前主要入口包括：
+
+- `总览`：当前图纸状态、推荐动作和快捷入口
+- `楼层配置`：内嵌 `FloorConfigPanel`，支持保存、放弃修改、拾取对齐点和整层范围
+- `图纸准备`：内嵌 `LayerMappingPanel`，可直接进行图层映射编辑，并保留独立图层映射/模板管理入口
+- `剖面生成`：生成条件、缺失项摘要和 `GenSection` 入口
+- `剖面维护`：已有剖面状态摘要和 `CheckSectionUpdates` 入口
+- `模板与输出`：模板管理入口，以及前往楼层配置维护输出设置的入口
+
+说明：
+
+- 工具箱顶部的“关闭工具箱”只会隐藏当前 Palette，不会自动保存或清空当前工作台状态
+- 模板管理器、楼层配置窗口、图层映射独立窗口路径仍然保留，用于兼容既有使用方式
+
 ### 可用命令
 
 | 命令 | 说明 |
@@ -79,6 +97,8 @@ NETLOAD
 - `Microsoft.Extensions.*` 程序集会在构建/发布时从当前项目输出复制到插件目录
 - 发布包默认包含 `SectionGeneratorConfig.json`、`ElementTypes.json` 和 `README-release.md`
 - 运行期可写配置与日志默认落在按包隔离的用户目录 `%LOCALAPPDATA%\MetroToolKits\Packages\<package-scope>\...`，发布包中的 JSON 文件只作为初始化模板保留
+- SectionToolbox 的本地操作链追踪（`OperationTrace`）默认写入 `%LOCALAPPDATA%\MetroToolKits\OperationTrace\operation-trace-YYYYMMDD.jsonl`
+- `OperationTrace` 只记录本地结构化操作事件（如工具箱打开、刷新、Tab 切换、命令入口、关闭工具箱），不上传数据，也不记录 DWG 完整路径、图元坐标、handle 列表等敏感信息
 - 宿主烟测与宿主验收命令仅供自动化脚本内部调用，正常用户命令面不再暴露
 
 ---
