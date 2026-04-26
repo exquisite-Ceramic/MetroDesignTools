@@ -9,6 +9,7 @@ using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Support;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Core.Sections;
+using MetroToolKits.SectionGenerator.Infrastructure.Diagnostics;
 using MetroToolKits.SectionGenerator.Infrastructure.Recognition;
 using MetroToolKits.SectionGenerator.Infrastructure.Repositories;
 using MetroToolKits.SectionGenerator.Infrastructure.Services;
@@ -131,6 +132,7 @@ public class SectionGeneratorPlugin : IPlugin
         services.AddSingleton<ILayerMappingApplyRequestMapper, LayerMappingApplyRequestMapper>();
         services.AddSingleton<IWallTemplateCatalogMapper, WallTemplateCatalogMapper>();
         services.AddSingleton<ISlabTemplateCatalogMapper, SlabTemplateCatalogMapper>();
+        services.AddSingleton<IOperationTraceRecorder, JsonOperationTraceRecorder>();
         services.AddSingleton<IFloorConfigDocumentAssembler, FloorConfigDocumentAssembler>();
         services.AddSingleton<IFloorConfigSaveRequestMapper, FloorConfigSaveRequestMapper>();
         services.AddSingleton<ISectionOutputConfigMapper, SectionOutputConfigMapper>();

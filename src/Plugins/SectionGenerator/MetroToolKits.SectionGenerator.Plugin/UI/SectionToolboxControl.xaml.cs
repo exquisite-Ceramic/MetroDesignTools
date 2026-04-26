@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using MetroToolKits.Foundation.Core.Hosting;
 using MetroToolKits.SectionGenerator.App.Abstractions;
+using MetroToolKits.SectionGenerator.Contracts.OperationTrace;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Contracts.Workbench;
 using MetroToolKits.SectionGenerator.Core.Sections;
@@ -16,6 +17,7 @@ namespace MetroToolKits.SectionGenerator.Plugin.UI;
 public partial class SectionToolboxControl : UserControl
 {
     private readonly SectionToolboxPaletteService _paletteService;
+    private readonly IOperationTraceRecorder _operationTraceRecorder;
     private readonly IGenerateSectionPreflightUseCase _preflightUseCase;
     private readonly IWorkbenchSnapshotAssembler _workbenchSnapshotAssembler;
     private readonly FloorConfigPaletteController _floorConfigPaletteController;
@@ -31,9 +33,12 @@ public partial class SectionToolboxControl : UserControl
     private const string GoToFloorConfigTabAction = "GoToFloorConfigTab";
     private const string PreparationEntryHint =
         "图层映射会打开原图层映射窗口，墙体模板和楼板模板管理仍使用原独立模板管理窗口。";
+    private string _lastSelectedTabHeader = string.Empty;
+    private bool _toolboxInitialized;
 
     public SectionToolboxControl(
         SectionToolboxPaletteService paletteService,
+        IOperationTraceRecorder operationTraceRecorder,
         IGenerateSectionPreflightUseCase preflightUseCase,
         IWorkbenchSnapshotAssembler workbenchSnapshotAssembler,
         FloorConfigPaletteController floorConfigPaletteController,
@@ -45,6 +50,7 @@ public partial class SectionToolboxControl : UserControl
     {
         InitializeComponent();
         _paletteService = paletteService;
+        _operationTraceRecorder = operationTraceRecorder;
         _preflightUseCase = preflightUseCase;
         _workbenchSnapshotAssembler = workbenchSnapshotAssembler;
         _floorConfigPaletteController = floorConfigPaletteController;
@@ -61,11 +67,22 @@ public partial class SectionToolboxControl : UserControl
         WorkbenchGenerationPanelHost.CommandRequested += WorkbenchPanel_CommandRequested;
         WorkbenchMaintenancePanelHost.CommandRequested += WorkbenchPanel_CommandRequested;
         WorkbenchTemplatesOutputPanelHost.CommandRequested += WorkbenchPanel_CommandRequested;
+        WorkbenchTabs.SelectionChanged += WorkbenchTabs_SelectionChanged;
         Loaded += SectionToolboxControl_Loaded;
     }
 
     private void SectionToolboxControl_Loaded(object sender, RoutedEventArgs e)
     {
+        if (!_toolboxInitialized)
+        {
+            _toolboxInitialized = true;
+            _lastSelectedTabHeader = GetSelectedTabHeader();
+            Trace("Initialized", "Control", "Success", new Dictionary<string, string>
+            {
+                ["SelectedTab"] = _lastSelectedTabHeader
+            });
+        }
+
         RefreshStatus();
         _floorConfigPaletteController.Attach(FloorConfigPanelHost);
         _layerMappingPaletteController.Attach(LayerMappingPanelHost);
@@ -95,6 +112,10 @@ public partial class SectionToolboxControl : UserControl
     private void RefreshStatus()
     {
         WorkbenchOverviewPanelHost.SetStatusText(ReadyMessage);
+        Trace("RefreshStatus", "Workbench", "Started", new Dictionary<string, string>
+        {
+            ["SelectedTab"] = GetSelectedTabHeader()
+        });
 
         try
         {
@@ -106,9 +127,16 @@ public partial class SectionToolboxControl : UserControl
             UpdateGenerationTab(snapshot);
             UpdateMaintenanceTab(snapshot);
             UpdateTemplatesTab(snapshot);
+            Trace("RefreshStatus", "Workbench", "Success", new Dictionary<string, string>
+            {
+                ["SelectedTab"] = GetSelectedTabHeader(),
+                ["IssueCount"] = snapshot.Issues.Count.ToString(),
+                ["FloorCount"] = snapshot.FloorConfig.FloorCount.ToString()
+            });
         }
         catch (Exception ex)
         {
+            Trace("RefreshStatus", "Workbench", "Failure", errorCode: ex.GetType().Name, message: ex.Message);
             ApplyRefreshFailure(ex);
         }
     }
@@ -235,6 +263,11 @@ public partial class SectionToolboxControl : UserControl
 
     private void WorkbenchPanel_CommandRequested(object? sender, WorkbenchCommandRequestedEventArgs e)
     {
+        Trace("CommandRequested", e.CommandName, "Dispatched", new Dictionary<string, string>
+        {
+            ["SelectedTab"] = GetSelectedTabHeader()
+        });
+
         switch (e.CommandName)
         {
             case OpenWallTemplateManagerAction:
@@ -395,5 +428,46 @@ public partial class SectionToolboxControl : UserControl
     private void SlabTemplatePanelHost_CancelRequested(object? sender, EventArgs e)
     {
         ShowTemplateHome();
+    }
+
+    private void WorkbenchTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!ReferenceEquals(e.Source, WorkbenchTabs))
+        {
+            return;
+        }
+
+        var currentTab = GetSelectedTabHeader();
+        if (string.IsNullOrWhiteSpace(currentTab) ||
+            string.Equals(currentTab, _lastSelectedTabHeader, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _lastSelectedTabHeader = currentTab;
+        Trace("TabChanged", currentTab, "Success");
+    }
+
+    private string GetSelectedTabHeader()
+        => (WorkbenchTabs.SelectedItem as TabItem)?.Header?.ToString() ?? string.Empty;
+
+    private void Trace(
+        string action,
+        string target,
+        string result,
+        IReadOnlyDictionary<string, string>? properties = null,
+        string errorCode = "",
+        string message = "")
+    {
+        _operationTraceRecorder.Record(new OperationTraceEventDto
+        {
+            Area = "SectionToolbox",
+            Action = action,
+            Target = target,
+            Result = result,
+            ErrorCode = errorCode,
+            Message = message,
+            Properties = properties ?? new Dictionary<string, string>()
+        });
     }
 }

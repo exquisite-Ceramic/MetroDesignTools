@@ -1,8 +1,10 @@
 using System.Drawing;
+using System.IO;
 using Autodesk.AutoCAD.Windows;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Core.Sections;
+using Application = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace MetroToolKits.SectionGenerator.Plugin.UI;
 
@@ -19,9 +21,11 @@ public sealed class SectionToolboxPaletteService
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
     private readonly IWallTemplateCatalogMapper _wallTemplateCatalogMapper;
     private readonly ISlabTemplateCatalogMapper _slabTemplateCatalogMapper;
+    private readonly IOperationTraceRecorder _operationTraceRecorder;
     private PaletteSet? _paletteSet;
     private int _cadPickSuspendCount;
     private bool _restoreVisibleAfterCadPick;
+    private string _toolboxSessionId = string.Empty;
 
     public SectionToolboxPaletteService(
         IGenerateSectionPreflightUseCase preflightUseCase,
@@ -31,7 +35,8 @@ public sealed class SectionToolboxPaletteService
         IWallAssemblyTemplateCatalog wallTemplateCatalog,
         ISlabAssemblyTemplateCatalog slabTemplateCatalog,
         IWallTemplateCatalogMapper wallTemplateCatalogMapper,
-        ISlabTemplateCatalogMapper slabTemplateCatalogMapper)
+        ISlabTemplateCatalogMapper slabTemplateCatalogMapper,
+        IOperationTraceRecorder operationTraceRecorder)
     {
         _preflightUseCase = preflightUseCase;
         _workbenchSnapshotAssembler = workbenchSnapshotAssembler;
@@ -41,23 +46,55 @@ public sealed class SectionToolboxPaletteService
         _slabTemplateCatalog = slabTemplateCatalog;
         _wallTemplateCatalogMapper = wallTemplateCatalogMapper;
         _slabTemplateCatalogMapper = slabTemplateCatalogMapper;
+        _operationTraceRecorder = operationTraceRecorder;
         _floorConfigPaletteController.ConfigureCadPickSuspension(SuspendForCadPick);
     }
 
     public void Show()
     {
         _paletteSet ??= CreatePaletteSet();
+        var wasVisible = _paletteSet.Visible;
+        if (!wasVisible)
+        {
+            _toolboxSessionId = _operationTraceRecorder.StartSession(GetCurrentDrawingName());
+            _operationTraceRecorder.Record(new Contracts.OperationTrace.OperationTraceEventDto
+            {
+                Area = "SectionToolbox",
+                Action = "Opened",
+                Target = "Palette",
+                Result = "Success",
+                Properties = new Dictionary<string, string>
+                {
+                    ["DrawingName"] = GetCurrentDrawingName()
+                }
+            });
+        }
+
         _paletteSet.Visible = true;
     }
 
     public void Hide()
     {
-        if (_paletteSet == null)
+        if (_paletteSet == null || !_paletteSet.Visible)
         {
             return;
         }
 
+        _operationTraceRecorder.Record(new Contracts.OperationTrace.OperationTraceEventDto
+        {
+            Area = "SectionToolbox",
+            Action = "Hidden",
+            Target = "Palette",
+            Result = "Success"
+        });
         _paletteSet.Visible = false;
+        if (!string.IsNullOrWhiteSpace(_toolboxSessionId))
+        {
+            _operationTraceRecorder.EndSession(_toolboxSessionId);
+            _toolboxSessionId = string.Empty;
+        }
+
+        _operationTraceRecorder.Flush();
     }
 
     public IDisposable SuspendForCadPick()
@@ -97,6 +134,7 @@ public sealed class SectionToolboxPaletteService
             "SectionGenerator",
             new SectionToolboxControl(
                 this,
+                _operationTraceRecorder,
                 _preflightUseCase,
                 _workbenchSnapshotAssembler,
                 _floorConfigPaletteController,
@@ -127,6 +165,23 @@ public sealed class SectionToolboxPaletteService
         }
 
         _restoreVisibleAfterCadPick = false;
+    }
+
+    private static string GetCurrentDrawingName()
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument;
+        if (doc == null)
+        {
+            return "未打开图纸";
+        }
+
+        var name = doc.Name ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "未命名图纸";
+        }
+
+        return Path.GetFileName(name);
     }
 
     private sealed class CadPickScope : IDisposable
