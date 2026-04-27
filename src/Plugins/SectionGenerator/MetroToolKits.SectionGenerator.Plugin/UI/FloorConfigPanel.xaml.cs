@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Models;
+using MetroToolKits.SectionGenerator.App.ViewModels;
 using MetroToolKits.SectionGenerator.Contracts.Common;
 using MetroToolKits.SectionGenerator.Contracts.Floors;
 using MetroToolKits.SectionGenerator.Contracts.Output;
@@ -14,15 +15,15 @@ namespace MetroToolKits.SectionGenerator.Plugin.UI;
 
 public partial class FloorConfigPanel : UserControl
 {
-    private readonly ObservableCollection<FloorConfig> _floors = new();
     private readonly ObservableCollection<FloorSummaryDto> _floorSummaries = new();
+    private readonly FloorConfigViewModel _viewModel = new();
     private ILogger _logger = Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
     private LoadedSectionConfig _document = new();
     private ISlabAssemblyTemplateCatalog? _slabTemplateCatalog;
     private IFloorConfigDocumentAssembler? _floorConfigDocumentAssembler;
     private IFloorConfigSaveRequestMapper? _saveRequestMapper;
     private ISectionOutputConfigMapper? _sectionOutputConfigMapper;
-    private FloorConfig? _currentFloor;
+    private FloorEditViewModel? _currentFloor;
     private IReadOnlyList<TemplateOption> _slabTemplates = Array.Empty<TemplateOption>();
     private bool _isRefreshingTemplateSelectors;
     private bool _isRefreshingFloorSummaryList;
@@ -42,7 +43,7 @@ public partial class FloorConfigPanel : UserControl
     {
         InitializeComponent();
         FloorListBox.ItemsSource = _floorSummaries;
-        BaseFloorComboBox.ItemsSource = _floors;
+        BaseFloorComboBox.ItemsSource = _viewModel.Floors;
         GlobalSlopeCheck.Checked += GlobalSlopeCheck_Changed;
         GlobalSlopeCheck.Unchecked += GlobalSlopeCheck_Changed;
     }
@@ -92,8 +93,8 @@ public partial class FloorConfigPanel : UserControl
             throw new InvalidOperationException("FloorConfigPanel 尚未初始化。");
         }
 
-        var currentTopTemplateId = _currentFloor?.TopBoundarySlab.TemplateId ?? string.Empty;
-        var currentBottomTemplateId = _currentFloor?.BottomBoundarySlab.TemplateId ?? string.Empty;
+        var currentTopTemplateId = _currentFloor?.TopBoundaryTemplateId ?? string.Empty;
+        var currentBottomTemplateId = _currentFloor?.BottomBoundaryTemplateId ?? string.Empty;
 
         RefreshTemplateOptions();
 
@@ -126,28 +127,22 @@ public partial class FloorConfigPanel : UserControl
 
     private void LoadConfig(string? selectedFloorName = null)
     {
-        _floors.Clear();
-        foreach (var floor in _document.Config.Floors)
+        ArgumentNullException.ThrowIfNull(_sectionOutputConfigMapper);
+        _viewModel.Load(_document, _sectionOutputConfigMapper, selectedFloorName);
+
+        GlobalSlopeCheck.IsChecked = _viewModel.GlobalSlopeEnabled;
+        GlobalSlopeValueBox.Text = _viewModel.GlobalSlopePercent.ToString("F2");
+        GlobalSlopeTargetBox.SelectedIndex = _viewModel.GlobalSlopeTarget == "FinishLayer" ? 1 : 0;
+        BaseFloorComboBox.SelectedItem = _viewModel.Floors.FirstOrDefault(floor =>
+            string.Equals(floor.Name, _viewModel.AlignmentBaseFloorName, StringComparison.OrdinalIgnoreCase));
+        LoadOutputConfig(_viewModel.OutputConfig);
+
+        if (BaseFloorComboBox.SelectedItem == null && _viewModel.Floors.Count == 1)
         {
-            _floors.Add(floor);
+            BaseFloorComboBox.SelectedItem = _viewModel.Floors[0];
         }
 
-        GlobalSlopeCheck.IsChecked = _document.Config.GlobalSlopeEnabled;
-        GlobalSlopeValueBox.Text = (_document.Config.GlobalSlopeValue * 100).ToString("F2");
-        GlobalSlopeTargetBox.SelectedIndex = _document.Config.GlobalSlopeTarget == "FinishLayer" ? 1 : 0;
-        BaseFloorComboBox.SelectedItem = _floors.FirstOrDefault(floor =>
-            string.Equals(floor.Name, _document.Config.AlignmentBaseFloorName, StringComparison.OrdinalIgnoreCase));
-        LoadOutputConfig(_document.OutputConfig);
-
-        if (BaseFloorComboBox.SelectedItem == null && _floors.Count == 1)
-        {
-            BaseFloorComboBox.SelectedItem = _floors[0];
-        }
-
-        _currentFloor = !string.IsNullOrWhiteSpace(selectedFloorName)
-            ? _floors.FirstOrDefault(floor =>
-                string.Equals(floor.Name, selectedFloorName, StringComparison.OrdinalIgnoreCase))
-            : null;
+        _currentFloor = _viewModel.SelectedFloor;
 
         if (_currentFloor != null)
         {
@@ -161,7 +156,7 @@ public partial class FloorConfigPanel : UserControl
 
         UpdateSlopeControlAvailability();
         RefreshFloorSummaryList(_currentFloor?.Name);
-        _logger.LogDebug("楼层配置面板加载，楼层数: {Count}", _floors.Count);
+        _logger.LogDebug("楼层配置面板加载，楼层数: {Count}", _viewModel.Floors.Count);
     }
 
     private void RefreshFloorSummaryList(string? selectedFloorName = null)
@@ -172,18 +167,22 @@ public partial class FloorConfigPanel : UserControl
         {
             Config = new SectionConfig
             {
-                GlobalSlopeEnabled = _document.Config.GlobalSlopeEnabled,
-                GlobalSlopeValue = _document.Config.GlobalSlopeValue,
-                GlobalSlopeTarget = _document.Config.GlobalSlopeTarget,
-                GlobalTopSlopeEnabled = _document.Config.GlobalTopSlopeEnabled,
-                GlobalTopSlopeValue = _document.Config.GlobalTopSlopeValue,
-                GlobalTopSlopeTarget = _document.Config.GlobalTopSlopeTarget,
-                GlobalBottomSlopeEnabled = _document.Config.GlobalBottomSlopeEnabled,
-                GlobalBottomSlopeValue = _document.Config.GlobalBottomSlopeValue,
-                GlobalBottomSlopeTarget = _document.Config.GlobalBottomSlopeTarget,
-                AlignmentBaseFloorName = (BaseFloorComboBox.SelectedItem as FloorConfig)?.Name
-                    ?? _document.Config.AlignmentBaseFloorName,
-                Floors = _floors.ToList()
+                GlobalSlopeEnabled = _viewModel.GlobalSlopeEnabled,
+                GlobalSlopeValue = _viewModel.GlobalSlopePercent / 100.0,
+                GlobalSlopeTarget = _viewModel.GlobalSlopeTarget,
+                GlobalTopSlopeEnabled = _viewModel.GlobalTopSlopeEnabled,
+                GlobalTopSlopeValue = _viewModel.GlobalTopSlopePercent / 100.0,
+                GlobalTopSlopeTarget = _viewModel.GlobalTopSlopeTarget,
+                GlobalBottomSlopeEnabled = _viewModel.GlobalBottomSlopeEnabled,
+                GlobalBottomSlopeValue = _viewModel.GlobalBottomSlopePercent / 100.0,
+                GlobalBottomSlopeTarget = _viewModel.GlobalBottomSlopeTarget,
+                AlignmentBaseFloorName = (BaseFloorComboBox.SelectedItem as FloorEditViewModel)?.Name
+                    ?? _viewModel.AlignmentBaseFloorName,
+                Floors = _viewModel.Floors.Select(floor =>
+                {
+                    floor.ApplyToDomain();
+                    return floor.DomainFloor;
+                }).ToList()
             },
             OutputConfig = _document.OutputConfig,
             RuntimeDiagnostics = _document.RuntimeDiagnostics,
@@ -320,13 +319,13 @@ public partial class FloorConfigPanel : UserControl
         return FormatThicknessValue(selector(template));
     }
 
-    private void ApplyBoundaryTemplateSelection(FloorConfig floor, string topTemplateId, string bottomTemplateId)
+    private void ApplyBoundaryTemplateSelection(FloorEditViewModel floor, string topTemplateId, string bottomTemplateId)
     {
         var normalizedTop = NormalizeTemplateId(topTemplateId, _slabTemplates);
         var normalizedBottom = NormalizeTemplateId(bottomTemplateId, _slabTemplates);
 
-        floor.TopBoundarySlab.TemplateId = normalizedTop;
-        floor.BottomBoundarySlab.TemplateId = normalizedBottom;
+        floor.TopBoundaryTemplateId = normalizedTop;
+        floor.BottomBoundaryTemplateId = normalizedBottom;
 
         _isRefreshingTemplateSelectors = true;
         try
@@ -340,29 +339,28 @@ public partial class FloorConfigPanel : UserControl
         }
     }
 
-    private void RefreshBoundaryTemplateDisplays(FloorConfig floor)
+    private void RefreshBoundaryTemplateDisplays(FloorEditViewModel floor)
     {
-        var topTemplate = ResolveTemplate(floor.TopBoundarySlab.TemplateId);
-        var bottomTemplate = ResolveTemplate(floor.BottomBoundarySlab.TemplateId);
+        var topTemplate = ResolveTemplate(floor.TopBoundaryTemplateId);
+        var bottomTemplate = ResolveTemplate(floor.BottomBoundaryTemplateId);
 
         BottomSlabBox.Text = BuildTemplateDisplayValue(
-            floor.BottomBoundarySlab.TemplateId,
+            floor.BottomBoundaryTemplateId,
             bottomTemplate,
             template => template.CoreRule.Thickness);
         TopSlabBox.Text = BuildTemplateDisplayValue(
-            floor.TopBoundarySlab.TemplateId,
+            floor.TopBoundaryTemplateId,
             topTemplate,
             template => template.CoreRule.Thickness);
         FinishBox.Text = BuildTemplateDisplayValue(
-            floor.TopBoundarySlab.TemplateId,
+            floor.TopBoundaryTemplateId,
             topTemplate,
             template => template.TopLayers.Sum(layer => layer.Thickness));
     }
 
-    private void LoadOutputConfig(SectionOutputConfig? outputConfig)
+    private void LoadOutputConfig(SectionOutputConfigViewModel outputConfig)
     {
-        ArgumentNullException.ThrowIfNull(_sectionOutputConfigMapper);
-        var dto = _sectionOutputConfigMapper.ToDto(outputConfig);
+        var dto = outputConfig.ToDto();
 
         GenerateAnnotationsCheck.IsChecked = dto.AnnotationOptions?.GenerateAnnotations == true;
         EnableHatchCheck.IsChecked = dto.HatchOptions?.Enabled == true;
@@ -397,15 +395,13 @@ public partial class FloorConfigPanel : UserControl
 
     private bool TrySaveOutputConfig(bool strictNumericParsing, out string errorMessage)
     {
-        ArgumentNullException.ThrowIfNull(_sectionOutputConfigMapper);
-
-        var existingDto = _sectionOutputConfigMapper.ToDto(_document.OutputConfig);
+        var existingDto = _viewModel.OutputConfig.ToDto();
         if (!TryBuildOutputConfigDto(existingDto, strictNumericParsing, out var dto, out errorMessage))
         {
             return false;
         }
 
-        _sectionOutputConfigMapper.ApplyToDocument(dto, _document);
+        _viewModel.OutputConfig.Load(dto);
         return true;
     }
 
@@ -547,8 +543,7 @@ public partial class FloorConfigPanel : UserControl
         if (FloorListBox.SelectedItem is FloorSummaryDto summary)
         {
             SaveCurrentEdits();
-            var floor = _floors.FirstOrDefault(item =>
-                string.Equals(item.Name, summary.FloorName, StringComparison.OrdinalIgnoreCase));
+            var floor = _viewModel.SelectFloor(summary.FloorName);
             if (floor != null)
             {
                 _currentFloor = floor;
@@ -565,29 +560,9 @@ public partial class FloorConfigPanel : UserControl
 
     private void AddFloor_Click(object sender, RoutedEventArgs e)
     {
-        var newFloor = new FloorConfig
-        {
-            Name = $"F{_floors.Count + 1}",
-            Height = 3000,
-            BottomSlabThickness = 800,
-            TopSlabThickness = 600,
-            FinishThickness = 120,
-            TopBoundarySlab = new BoundarySlabConfig
-            {
-                SlopeEnabled = false,
-                SlopeValue = 0,
-                SlopeTarget = "StructuralSlab"
-            },
-            BottomBoundarySlab = new BoundarySlabConfig
-            {
-                SlopeEnabled = false,
-                SlopeValue = 0,
-                SlopeTarget = "StructuralSlab"
-            }
-        };
-
-        _floors.Add(newFloor);
-        if (_floors.Count == 1)
+        SaveCurrentEdits();
+        var newFloor = _viewModel.AddFloor();
+        if (_viewModel.Floors.Count == 1)
         {
             BaseFloorComboBox.SelectedItem = newFloor;
         }
@@ -606,15 +581,16 @@ public partial class FloorConfigPanel : UserControl
             return;
         }
 
+        SaveCurrentEdits();
         var name = _currentFloor.Name;
-        _floors.Remove(_currentFloor);
-        if (BaseFloorComboBox.SelectedItem is FloorConfig selectedBase &&
+        _viewModel.DeleteSelectedFloor();
+        if (BaseFloorComboBox.SelectedItem is FloorEditViewModel selectedBase &&
             string.Equals(selectedBase.Name, name, StringComparison.OrdinalIgnoreCase))
         {
-            BaseFloorComboBox.SelectedItem = _floors.FirstOrDefault();
+            BaseFloorComboBox.SelectedItem = _viewModel.Floors.FirstOrDefault();
         }
 
-        _currentFloor = _floors.FirstOrDefault();
+        _currentFloor = _viewModel.SelectedFloor;
         RefreshFloorSummaryList(_currentFloor?.Name);
         if (_currentFloor != null)
         {
@@ -636,39 +612,43 @@ public partial class FloorConfigPanel : UserControl
             return;
         }
 
-        _floors.Move(index, index - 1);
+        SaveCurrentEdits();
+        _viewModel.SelectFloor(_currentFloor);
+        _viewModel.MoveSelectedFloorUp();
         RefreshFloorSummaryList(_currentFloor?.Name);
     }
 
     private void MoveDown_Click(object sender, RoutedEventArgs e)
     {
         var index = FloorListBox.SelectedIndex;
-        if (index < 0 || index >= _floors.Count - 1)
+        if (index < 0 || index >= _viewModel.Floors.Count - 1)
         {
             return;
         }
 
-        _floors.Move(index, index + 1);
+        SaveCurrentEdits();
+        _viewModel.SelectFloor(_currentFloor);
+        _viewModel.MoveSelectedFloorDown();
         RefreshFloorSummaryList(_currentFloor?.Name);
     }
 
-    private void BindFloorToUI(FloorConfig floor)
+    private void BindFloorToUI(FloorEditViewModel floor)
     {
         NameBox.Text = floor.Name;
         HeightBox.Text = floor.Height.ToString("F0");
-        SlopeCheck.IsChecked = floor.HasSlope;
-        SlopeValueBox.Text = (floor.SlopeValue * 100).ToString("F2");
-        TopSlopeCheck.IsChecked = floor.TopBoundarySlab.SlopeEnabled;
-        TopSlopeValueBox.Text = (floor.TopBoundarySlab.SlopeValue * 100).ToString("F2");
-        BottomSlopeCheck.IsChecked = floor.BottomBoundarySlab.SlopeEnabled;
-        BottomSlopeValueBox.Text = (floor.BottomBoundarySlab.SlopeValue * 100).ToString("F2");
+        SlopeCheck.IsChecked = floor.LegacySlopeEnabled;
+        SlopeValueBox.Text = floor.LegacySlopePercent.ToString("F2");
+        TopSlopeCheck.IsChecked = floor.TopBoundarySlopeEnabled;
+        TopSlopeValueBox.Text = floor.TopBoundarySlopePercent.ToString("F2");
+        BottomSlopeCheck.IsChecked = floor.BottomBoundarySlopeEnabled;
+        BottomSlopeValueBox.Text = floor.BottomBoundarySlopePercent.ToString("F2");
         RefreshTemplateOptions();
-        ApplyBoundaryTemplateSelection(floor, floor.TopBoundarySlab.TemplateId, floor.BottomBoundarySlab.TemplateId);
+        ApplyBoundaryTemplateSelection(floor, floor.TopBoundaryTemplateId, floor.BottomBoundaryTemplateId);
         RefreshBoundaryTemplateDisplays(floor);
         UpdateSlopeControlAvailability();
 
         var pointCount = floor.AlignmentPoints.Count;
-        AlignmentLabel.Content = BaseFloorComboBox.SelectedItem is FloorConfig baseFloor &&
+        AlignmentLabel.Content = BaseFloorComboBox.SelectedItem is FloorEditViewModel baseFloor &&
                                  string.Equals(baseFloor.Name, floor.Name, StringComparison.OrdinalIgnoreCase)
             ? "基准点:"
             : "本层对齐点:";
@@ -710,14 +690,14 @@ public partial class FloorConfigPanel : UserControl
             return false;
         }
 
-        _currentFloor.HasSlope = SlopeCheck.IsChecked == true;
-        if (!_currentFloor.HasSlope || !SlopeValueBox.IsEnabled)
+        _currentFloor.LegacySlopeEnabled = SlopeCheck.IsChecked == true;
+        if (!_currentFloor.LegacySlopeEnabled || !SlopeValueBox.IsEnabled)
         {
             // Disabled slope editors keep the last committed numeric value.
         }
         else if (double.TryParse(SlopeValueBox.Text, out var legacySlope))
         {
-            _currentFloor.SlopeValue = legacySlope / 100.0;
+            _currentFloor.LegacySlopePercent = legacySlope;
         }
         else if (strictNumericParsing)
         {
@@ -725,21 +705,21 @@ public partial class FloorConfigPanel : UserControl
             return false;
         }
 
-        _currentFloor.TopBoundarySlab.SlopeEnabled = TopSlopeCheck.IsChecked == true;
-        _currentFloor.BottomBoundarySlab.SlopeEnabled = BottomSlopeCheck.IsChecked == true;
-        _currentFloor.TopBoundarySlab.TemplateId = ReadBoundaryTemplateId(
+        _currentFloor.TopBoundarySlopeEnabled = TopSlopeCheck.IsChecked == true;
+        _currentFloor.BottomBoundarySlopeEnabled = BottomSlopeCheck.IsChecked == true;
+        _currentFloor.TopBoundaryTemplateId = ReadBoundaryTemplateId(
             TopBoundaryTemplateBox,
-            _currentFloor.TopBoundarySlab.TemplateId);
-        _currentFloor.BottomBoundarySlab.TemplateId = ReadBoundaryTemplateId(
+            _currentFloor.TopBoundaryTemplateId);
+        _currentFloor.BottomBoundaryTemplateId = ReadBoundaryTemplateId(
             BottomBoundaryTemplateBox,
-            _currentFloor.BottomBoundarySlab.TemplateId);
-        if (!_currentFloor.TopBoundarySlab.SlopeEnabled || !TopSlopeValueBox.IsEnabled)
+            _currentFloor.BottomBoundaryTemplateId);
+        if (!_currentFloor.TopBoundarySlopeEnabled || !TopSlopeValueBox.IsEnabled)
         {
             // Disabled slope editors keep the last committed numeric value.
         }
         else if (double.TryParse(TopSlopeValueBox.Text, out var topSlope))
         {
-            _currentFloor.TopBoundarySlab.SlopeValue = topSlope / 100.0;
+            _currentFloor.TopBoundarySlopePercent = topSlope;
         }
         else if (strictNumericParsing)
         {
@@ -747,13 +727,13 @@ public partial class FloorConfigPanel : UserControl
             return false;
         }
 
-        if (!_currentFloor.BottomBoundarySlab.SlopeEnabled || !BottomSlopeValueBox.IsEnabled)
+        if (!_currentFloor.BottomBoundarySlopeEnabled || !BottomSlopeValueBox.IsEnabled)
         {
             // Disabled slope editors keep the last committed numeric value.
         }
         else if (double.TryParse(BottomSlopeValueBox.Text, out var bottomSlope))
         {
-            _currentFloor.BottomBoundarySlab.SlopeValue = bottomSlope / 100.0;
+            _currentFloor.BottomBoundarySlopePercent = bottomSlope;
         }
         else if (strictNumericParsing)
         {
@@ -781,7 +761,7 @@ public partial class FloorConfigPanel : UserControl
     {
         var legacySlopeOverriddenByGlobal = GlobalSlopeCheck.IsChecked == true;
         var topSlopeOverriddenByGlobal = GlobalSlopeCheck.IsChecked == true;
-        var bottomSlopeOverriddenByGlobal = _document.Config.GlobalBottomSlopeEnabled;
+        var bottomSlopeOverriddenByGlobal = _viewModel.GlobalBottomSlopeEnabled;
 
         ApplySlopeEditorState(
             SlopeCheck,
@@ -831,9 +811,9 @@ public partial class FloorConfigPanel : UserControl
             return;
         }
 
-        _currentFloor.TopBoundarySlab.TemplateId = ReadBoundaryTemplateId(
+        _currentFloor.TopBoundaryTemplateId = ReadBoundaryTemplateId(
             TopBoundaryTemplateBox,
-            _currentFloor.TopBoundarySlab.TemplateId);
+            _currentFloor.TopBoundaryTemplateId);
         RefreshBoundaryTemplateDisplays(_currentFloor);
     }
 
@@ -844,9 +824,9 @@ public partial class FloorConfigPanel : UserControl
             return;
         }
 
-        _currentFloor.BottomBoundarySlab.TemplateId = ReadBoundaryTemplateId(
+        _currentFloor.BottomBoundaryTemplateId = ReadBoundaryTemplateId(
             BottomBoundaryTemplateBox,
-            _currentFloor.BottomBoundarySlab.TemplateId);
+            _currentFloor.BottomBoundaryTemplateId);
         RefreshBoundaryTemplateDisplays(_currentFloor);
     }
 
@@ -868,8 +848,8 @@ public partial class FloorConfigPanel : UserControl
             return;
         }
 
-        var currentTopTemplateId = _currentFloor.TopBoundarySlab.TemplateId;
-        var currentBottomTemplateId = _currentFloor.BottomBoundarySlab.TemplateId;
+        var currentTopTemplateId = _currentFloor.TopBoundaryTemplateId;
+        var currentBottomTemplateId = _currentFloor.BottomBoundaryTemplateId;
         var manager = new SlabAssemblyTemplateManager(_slabTemplateCatalog);
         var owner = Window.GetWindow(this);
         if (owner != null)
@@ -914,7 +894,7 @@ public partial class FloorConfigPanel : UserControl
 
     private bool TryCommitGlobalConfig(bool strictNumericParsing, out string errorMessage)
     {
-        var globalSlopePercent = _document.Config.GlobalSlopeValue * 100.0;
+        var globalSlopePercent = _viewModel.GlobalSlopePercent;
         if (!GlobalSlopeCheck.IsChecked.HasValue || GlobalSlopeCheck.IsChecked == false || !GlobalSlopeValueBox.IsEnabled)
         {
             // Disabled global slope editor keeps the last committed numeric value.
@@ -931,16 +911,16 @@ public partial class FloorConfigPanel : UserControl
 
         var globalSlopeEnabled = GlobalSlopeCheck.IsChecked == true;
         var globalSlopeTarget = (GlobalSlopeTargetBox.SelectedItem as ComboBoxItem)?.Tag?.ToString()
-            ?? _document.Config.GlobalSlopeTarget
+            ?? _viewModel.GlobalSlopeTarget
             ?? "StructuralSlab";
 
-        _document.Config.AlignmentBaseFloorName = (BaseFloorComboBox.SelectedItem as FloorConfig)?.Name?.Trim() ?? string.Empty;
-        _document.Config.GlobalSlopeEnabled = globalSlopeEnabled;
-        _document.Config.GlobalSlopeValue = globalSlopePercent / 100.0;
-        _document.Config.GlobalSlopeTarget = globalSlopeTarget;
-        _document.Config.GlobalTopSlopeEnabled = globalSlopeEnabled;
-        _document.Config.GlobalTopSlopeValue = globalSlopePercent / 100.0;
-        _document.Config.GlobalTopSlopeTarget = globalSlopeTarget;
+        _viewModel.AlignmentBaseFloorName = (BaseFloorComboBox.SelectedItem as FloorEditViewModel)?.Name?.Trim() ?? string.Empty;
+        _viewModel.GlobalSlopeEnabled = globalSlopeEnabled;
+        _viewModel.GlobalSlopePercent = globalSlopePercent;
+        _viewModel.GlobalSlopeTarget = globalSlopeTarget;
+        _viewModel.GlobalTopSlopeEnabled = globalSlopeEnabled;
+        _viewModel.GlobalTopSlopePercent = globalSlopePercent;
+        _viewModel.GlobalTopSlopeTarget = globalSlopeTarget;
         errorMessage = string.Empty;
         return true;
     }
@@ -962,7 +942,9 @@ public partial class FloorConfigPanel : UserControl
             return false;
         }
 
-        _document.Config.Floors = _floors.ToList();
+        ArgumentNullException.ThrowIfNull(_sectionOutputConfigMapper);
+        _viewModel.CommitToDocument(_sectionOutputConfigMapper);
+        _document = _viewModel.Document;
         errorMessage = string.Empty;
         return true;
     }
@@ -980,11 +962,8 @@ public partial class FloorConfigPanel : UserControl
             return false;
         }
 
-        request = new SaveFloorConfigDocumentRequestDto
-        {
-            FloorConfig = _saveRequestMapper.ToRequest(_document),
-            OutputConfig = _sectionOutputConfigMapper.ToDto(_document.OutputConfig)
-        };
+        request = _viewModel.BuildSaveRequest(_saveRequestMapper, _sectionOutputConfigMapper);
+        _document = _viewModel.Document;
         return true;
     }
 
@@ -1001,7 +980,7 @@ public partial class FloorConfigPanel : UserControl
             return;
         }
 
-        PickAlignmentRequested?.Invoke(this, new FloorConfigSelectionRequestedEventArgs(_currentFloor));
+        PickAlignmentRequested?.Invoke(this, new FloorConfigSelectionRequestedEventArgs(_currentFloor.DomainFloor));
     }
 
     private void ClearAlignment_Click(object sender, RoutedEventArgs e)
@@ -1012,6 +991,7 @@ public partial class FloorConfigPanel : UserControl
         }
 
         _currentFloor.AlignmentPoints.Clear();
+        _currentFloor.ApplyToDomain();
         AlignmentStatus.Text = "未设置";
         AlignmentStatus.Foreground = System.Windows.Media.Brushes.Gray;
         RefreshFloorSummaryList(_currentFloor.Name);
@@ -1031,7 +1011,7 @@ public partial class FloorConfigPanel : UserControl
             return;
         }
 
-        PickScopeRequested?.Invoke(this, new FloorConfigSelectionRequestedEventArgs(_currentFloor));
+        PickScopeRequested?.Invoke(this, new FloorConfigSelectionRequestedEventArgs(_currentFloor.DomainFloor));
     }
 
     private void ClearScope_Click(object sender, RoutedEventArgs e)
@@ -1042,6 +1022,7 @@ public partial class FloorConfigPanel : UserControl
         }
 
         _currentFloor.ScopeBounds = null;
+        _currentFloor.ApplyToDomain();
         ScopeStatus.Text = "未设置";
         ScopeStatus.Foreground = System.Windows.Media.Brushes.Gray;
         RefreshFloorSummaryList(_currentFloor.Name);
@@ -1056,7 +1037,7 @@ public partial class FloorConfigPanel : UserControl
             return;
         }
 
-        _logger.LogInformation("楼层配置编辑完成，待命令层保存，楼层数: {Count}", _document.Config.Floors.Count);
+        _logger.LogInformation("楼层配置编辑完成，待命令层保存，楼层数: {Count}", _viewModel.Floors.Count);
         SaveRequested?.Invoke(this, new FloorConfigSaveRequestedEventArgs(saveRequest));
     }
 
