@@ -58,11 +58,11 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
         _logger.LogInformation("执行变更检测命令");
         var diagnostics = new List<OperationDiagnostic>();
 
-        var handles = _sectionBlockQueryService.FindAllSectionBlockHandles();
+        var handles = _sectionBlockQueryService.FindAllSectionBlockHandles() ?? Array.Empty<string>();
         _logger.LogDebug("扫描剖面块，共 {Count} 个", handles.Count);
 
         var results = new List<SectionCheckResult>();
-        var sourceDocument  = _configRepo.Load();
+        var sourceDocument  = NormalizeLoadedConfig(_configRepo.Load());
         diagnostics.AddRange(sourceDocument.RuntimeDiagnostics);
 
         if (sourceDocument.RuntimeState.Source == SectionConfigStorageSource.Missing && handles.Count > 0)
@@ -98,6 +98,20 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
                 Diagnostics = diagnostics,
                 Items = results
             };
+        }
+
+        var generationDiagnostics = SectionGenerationConfigValidator.ValidateForGeneration(
+            sourceDocument.Config,
+            requireBaseScope: false);
+        diagnostics.AddRange(generationDiagnostics);
+        var blockingGenerationDiagnostic = generationDiagnostics.FirstOrDefault(diagnostic =>
+            diagnostic.Level == DiagnosticLevel.Error);
+        if (blockingGenerationDiagnostic != null)
+        {
+            return BuildFailedResult(
+                MapGenerationValidationFailure(blockingGenerationDiagnostic),
+                diagnostics,
+                sw);
         }
 
         foreach (var handle in handles)
@@ -200,7 +214,7 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
                     hasUncheckableGeneratedFloor = true;
                     continue;
                 }
-                var elements = _elementRecognizer.RecognizeElements(
+                var elements = RecognizeElements(
                     context.SectionLine.Value,
                     snapshot.ViewDepth,
                     context.EffectiveScope).Elements;
@@ -209,10 +223,13 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
                 {
                     var baseElevation = ComputeBaseElevation(config, floor.Name, currentSourceLine.Length);
                     var verticalProfile = _verticalProfileBuilder.Build(floor, currentSourceLine.Length, baseElevation);
+                    var currentGeometryHash = _hasher.ComputeHash(elements, floor, verticalProfile);
                     var currentHash = SectionOutputConfigHasher.Combine(
-                        _hasher.ComputeHash(elements, floor, verticalProfile),
+                        currentGeometryHash,
                         outputConfig);
-                    var isOutdated = currentHash != floorSnap.GeometryHash;
+                    var legacyElementHash = _hasher.ComputeHash(elements);
+                    var isOutdated = currentHash != floorSnap.GeometryHash &&
+                                     legacyElementHash != floorSnap.GeometryHash;
                     var requestedTopTemplateId = string.IsNullOrWhiteSpace(floor.TopBoundarySlab.TemplateId)
                         ? null
                         : floor.TopBoundarySlab.TemplateId;
@@ -371,6 +388,26 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
     private static string BuildMissingEmbeddedConfigMessage(string drawingName)
         => $"当前图纸 {drawingName} 缺少内嵌楼层配置，无法确认剖面是否最新";
 
+    private ElementRecognitionResult RecognizeElements(
+        Line3D sectionLine,
+        double viewDepth,
+        ScopeBounds2D? scopeBounds)
+        => (scopeBounds.HasValue
+            ? _elementRecognizer.RecognizeElements(sectionLine, viewDepth, scopeBounds)
+            : _elementRecognizer.RecognizeElements(sectionLine, viewDepth))
+           ?? new ElementRecognitionResult();
+
+    private static LoadedSectionConfig NormalizeLoadedConfig(LoadedSectionConfig? sourceDocument)
+    {
+        sourceDocument ??= new LoadedSectionConfig();
+        sourceDocument.Config ??= new SectionConfig();
+        sourceDocument.Config.Floors ??= new List<FloorConfig>();
+        sourceDocument.OutputConfig ??= new SectionOutputConfig();
+        sourceDocument.RuntimeDiagnostics ??= new List<OperationDiagnostic>();
+        sourceDocument.RuntimeState ??= new SectionConfigRuntimeState();
+        return sourceDocument;
+    }
+
     private static OperationDiagnostic BuildMissingEmbeddedConfigDiagnostic(string drawingName)
     {
         var metadata = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
@@ -462,6 +499,16 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
             _ => SectionGenerationFailures.FloorScopeInvalid(issue.Message, isBaseFloorScopeIssue)
         };
     }
+
+    private static OperationFailure MapGenerationValidationFailure(OperationDiagnostic diagnostic)
+        => diagnostic.Code switch
+        {
+            SectionGenerationErrorCodes.AlignmentBaseFloorMissing =>
+                SectionGenerationFailures.AlignmentBaseFloorMissing(diagnostic.Message),
+            SectionGenerationErrorCodes.FloorScopeMissing or SectionGenerationErrorCodes.FloorScopeInvalid =>
+                SectionGenerationFailures.FloorScopeInvalid(diagnostic.Message, isBaseFloor: true),
+            _ => SectionGenerationFailures.AlignmentBaseFloorInvalid(diagnostic.Message)
+        };
 
     private static OperationDiagnostic MapAlignmentDiagnostic(FloorExecutionContext context)
     {

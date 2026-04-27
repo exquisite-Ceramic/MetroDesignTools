@@ -78,6 +78,23 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
                     sourceDocument.RuntimeState.DrawingDisplayName);
             }
 
+            if (request.FloorConfig == null)
+            {
+                var sourceValidationDiagnostics = SectionGenerationConfigValidator.ValidateForGeneration(
+                    sourceDocument.Config,
+                    requireBaseScope: false);
+                var sourceBlockingDiagnostic = sourceValidationDiagnostics.FirstOrDefault(diagnostic =>
+                    diagnostic.Level == DiagnosticLevel.Error);
+                if (sourceBlockingDiagnostic != null)
+                {
+                    diagnostics.AddRange(sourceValidationDiagnostics);
+                    return BuildFailedResult(
+                        MapGenerationValidationFailure(sourceBlockingDiagnostic),
+                        diagnostics,
+                        sw);
+                }
+            }
+
             if (!SectionExecutionConfigBuilder.TryBuild(
                     sourceDocument,
                     request.IncludedFloorNames,
@@ -95,6 +112,20 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
             var config = configDocument.Config;
             var outputConfig = configDocument.OutputConfig;
             var floors = config.Floors;
+
+            var generationDiagnostics = SectionGenerationConfigValidator.ValidateForGeneration(
+                config,
+                requireBaseScope: false);
+            diagnostics.AddRange(generationDiagnostics);
+            var blockingGenerationDiagnostic = generationDiagnostics.FirstOrDefault(diagnostic =>
+                diagnostic.Level == DiagnosticLevel.Error);
+            if (blockingGenerationDiagnostic != null)
+            {
+                return BuildFailedResult(
+                    MapGenerationValidationFailure(blockingGenerationDiagnostic),
+                    diagnostics,
+                    sw);
+            }
 
             if (floors.Count == 0)
             {
@@ -124,6 +155,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
                         }
                     }
                 };
+                config.Floors = floors;
             }
 
             var sectionLine   = new Line3D(request.CutLineStart, request.CutLineEnd);
@@ -163,6 +195,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
             // 逐层识别构件，同时输出进度
             var floorElements = new Dictionary<string, IReadOnlyList<BuildingElement>>();
             var participatingFloors = new List<FloorConfig>();
+            var skippedFloorCount = 0;
             currentStage = PipelineStage.ElementRecognition;
             var totalRecognizedCount = 0;
             for (int i = 0; i < floors.Count; i++)
@@ -183,6 +216,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
 
                 if (!context.CanParticipate || !context.SectionLine.HasValue)
                 {
+                    skippedFloorCount++;
                     _logger.LogWarning("楼层 {FloorName} 因对齐配置问题未参与剖面生成", floor.Name);
                     _userLogger.FloorSkipped(
                         floor.Name,
@@ -198,7 +232,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
                 else
                     _userLogger.SectionGenerating(floor.Name);
 
-                var recognition = _elementRecognizer.RecognizeElements(
+                var recognition = RecognizeElements(
                     context.SectionLine.Value,
                     request.ViewDepth,
                     context.EffectiveScope);
@@ -317,7 +351,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
                 string.Join(", ", snapshot.FloorSnapshots.Select(f => $"{f.FloorName}:{f.GeometryHash}")));
 
             sw.Stop();
-            var status = diagnostics.Any(d => d.Level == DiagnosticLevel.Warning || d.Level == DiagnosticLevel.Error)
+            var status = skippedFloorCount > 0
                 ? OperationStatus.PartialSuccess
                 : OperationStatus.Success;
 
@@ -505,9 +539,28 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
     private static OperationFailure MapExecutionConfigFailure(string message)
     {
         return message.Contains("基准层", StringComparison.OrdinalIgnoreCase)
-            ? SectionGenerationFailures.AlignmentBaseFloorInvalid(message)
+            ? SectionGenerationFailures.AlignmentBaseFloorMissing(message)
             : SectionGenerationFailures.TargetFloorInvalid(message);
     }
+
+    private static OperationFailure MapGenerationValidationFailure(OperationDiagnostic diagnostic)
+        => diagnostic.Code switch
+        {
+            SectionGenerationErrorCodes.AlignmentBaseFloorMissing =>
+                SectionGenerationFailures.AlignmentBaseFloorMissing(diagnostic.Message),
+            SectionGenerationErrorCodes.FloorScopeMissing or SectionGenerationErrorCodes.FloorScopeInvalid =>
+                SectionGenerationFailures.FloorScopeInvalid(diagnostic.Message, isBaseFloor: true),
+            _ => SectionGenerationFailures.AlignmentBaseFloorInvalid(diagnostic.Message)
+        };
+
+    private ElementRecognitionResult RecognizeElements(
+        Line3D sectionLine,
+        double viewDepth,
+        ScopeBounds2D? scopeBounds)
+        => (scopeBounds.HasValue
+            ? _elementRecognizer.RecognizeElements(sectionLine, viewDepth, scopeBounds)
+            : _elementRecognizer.RecognizeElements(sectionLine, viewDepth))
+           ?? new ElementRecognitionResult();
 
     private static OperationDiagnostic MapAlignmentDiagnostic(FloorExecutionContext context)
     {

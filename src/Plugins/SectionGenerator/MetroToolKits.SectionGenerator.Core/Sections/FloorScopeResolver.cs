@@ -74,6 +74,7 @@ public sealed class FloorScopeResolver
 
         var targetFloorList = targetedFloors.ToList();
         var isSingleFloorMode = targetFloorList.Count <= 1;
+        var hasAnyPersistentScope = targetFloorList.Any(floor => floor.ScopeBounds.HasValue);
 
         FloorConfig? localScopeSourceFloor = null;
         if (localScopeBounds.HasValue)
@@ -128,7 +129,7 @@ public sealed class FloorScopeResolver
 
             var isBaseFloor = alignment.IsBaseFloor;
             var persistentScope = floor.ScopeBounds;
-            if (isSingleFloorMode && !persistentScope.HasValue)
+            if ((isSingleFloorMode || !hasAnyPersistentScope) && !persistentScope.HasValue)
             {
                 results[floor.Name] = new FloorExecutionContext
                 {

@@ -66,6 +66,7 @@ public class SectionGeneratorPlugin : IPlugin
 
         // 备份服务
         services.AddSingleton<ElementConversionBackupService>();
+        services.AddSingleton<ILayerNameProvider, CadLayerNameProvider>();
         services.AddSingleton<IElementConversionService, CadElementConversionService>();
         services.AddSingleton<IGenerationReadinessInspector, GenerationReadinessInspector>();
 

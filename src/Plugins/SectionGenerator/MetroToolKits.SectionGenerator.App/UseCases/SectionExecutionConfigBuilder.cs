@@ -14,6 +14,10 @@ internal static class SectionExecutionConfigBuilder
         out string errorMessage)
     {
         ArgumentNullException.ThrowIfNull(sourceDocument);
+        sourceDocument.Config ??= new SectionConfig();
+        sourceDocument.OutputConfig ??= new SectionOutputConfig();
+        sourceDocument.RuntimeDiagnostics ??= new List<Foundation.Core.Diagnostics.OperationDiagnostic>();
+        sourceDocument.RuntimeState ??= new SectionConfigRuntimeState();
         var sourceConfig = sourceDocument.Config;
 
         var floors = sourceConfig.Floors ?? new List<FloorConfig>();

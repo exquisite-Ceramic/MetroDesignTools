@@ -1,4 +1,3 @@
-using MetroToolKits.Foundation.Cad.Layering.Services;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.Contracts.LayerMapping;
 using MetroToolKits.SectionGenerator.Contracts.Templates;
@@ -8,18 +7,18 @@ namespace MetroToolKits.SectionGenerator.App.Support;
 
 public sealed class LayerMappingWorkspaceAssembler : ILayerMappingWorkspaceAssembler
 {
-    private readonly ILayerService _layerService;
+    private readonly ILayerNameProvider _layerNameProvider;
     private readonly IElementTypeCatalog _elementTypeCatalog;
     private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog;
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog;
 
     public LayerMappingWorkspaceAssembler(
-        ILayerService layerService,
+        ILayerNameProvider layerNameProvider,
         IElementTypeCatalog elementTypeCatalog,
         IWallAssemblyTemplateCatalog wallTemplateCatalog,
         ISlabAssemblyTemplateCatalog slabTemplateCatalog)
     {
-        _layerService = layerService;
+        _layerNameProvider = layerNameProvider;
         _elementTypeCatalog = elementTypeCatalog;
         _wallTemplateCatalog = wallTemplateCatalog;
         _slabTemplateCatalog = slabTemplateCatalog;
@@ -27,7 +26,7 @@ public sealed class LayerMappingWorkspaceAssembler : ILayerMappingWorkspaceAssem
 
     public LayerMappingWorkspaceDto Assemble()
     {
-        var layers = _layerService
+        var layers = _layerNameProvider
             .GetAllLayerNames()
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)

@@ -422,7 +422,11 @@ public class CheckSectionUpdatesUseCaseTests
         snapshotRepo ??= Substitute.For<ISectionSnapshotRepository>();
         recognizer ??= Substitute.For<IElementRecognizer>();
         lineResolver ??= Substitute.For<ISectionLineResolver>();
-        blockQueryService ??= Substitute.For<ISectionBlockQueryService>();
+        if (blockQueryService == null)
+        {
+            blockQueryService = Substitute.For<ISectionBlockQueryService>();
+            blockQueryService.FindAllSectionBlockHandles().Returns(new[] { "H1" });
+        }
         slabTemplateCatalog ??= new InMemorySlabAssemblyTemplateCatalog();
         verticalProfileBuilder ??= new FloorVerticalProfileBuilder(
             slabTemplateCatalog,

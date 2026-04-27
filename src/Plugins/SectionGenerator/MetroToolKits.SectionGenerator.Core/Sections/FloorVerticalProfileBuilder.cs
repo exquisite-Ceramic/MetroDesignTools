@@ -68,26 +68,30 @@ public sealed class FloorVerticalProfileBuilder
             createLegacyTemplate: () => CreateLegacyTopTemplate(floor),
             logResolution: true);
 
-        var bottomSlopeDelta = bottomDefinition.Config.SlopeEnabled
-            ? sectionLength * bottomDefinition.Config.SlopeValue
-            : 0d;
-        var topSlopeDelta = topDefinition.Config.SlopeEnabled
-            ? sectionLength * topDefinition.Config.SlopeValue
-            : 0d;
+        var bottomSlope = ResolveBoundarySlope(floor, bottomDefinition.Config, useLegacySlope: false);
+        var topSlope = ResolveBoundarySlope(floor, topDefinition.Config, useLegacySlope: true);
+        var bottomStructuralSlopeDelta = bottomSlope.TargetsFinishLayer
+            ? 0d
+            : sectionLength * bottomSlope.Value;
+        var bottomFinishSlopeDelta = sectionLength * bottomSlope.Value;
+        var topStructuralSlopeDelta = topSlope.TargetsFinishLayer
+            ? 0d
+            : sectionLength * topSlope.Value;
+        var topFinishSlopeDelta = sectionLength * topSlope.Value;
 
         var bottomTopStart = baseElevation;
-        var bottomTopEnd = baseElevation + bottomSlopeDelta;
+        var bottomTopEnd = baseElevation + bottomStructuralSlopeDelta;
         var bottomBottomStart = bottomTopStart + bottomDefinition.BottommostOffsetFromTop;
-        var bottomBottomEnd = bottomTopEnd + bottomDefinition.BottommostOffsetFromTop;
+        var bottomBottomEnd = bottomTopStart + bottomFinishSlopeDelta + bottomDefinition.BottommostOffsetFromTop;
         var bottomStructuralTopStart = bottomTopStart + bottomDefinition.CoreTopOffsetFromTop;
         var bottomStructuralTopEnd = bottomTopEnd + bottomDefinition.CoreTopOffsetFromTop;
         var bottomStructuralBottomStart = bottomTopStart + bottomDefinition.CoreBottomOffsetFromTop;
         var bottomStructuralBottomEnd = bottomTopEnd + bottomDefinition.CoreBottomOffsetFromTop;
 
         var topBottomStart = baseElevation + floor.Height;
-        var topBottomEnd = topBottomStart + topSlopeDelta;
+        var topBottomEnd = topBottomStart + topStructuralSlopeDelta;
         var topTopStart = topBottomStart + topDefinition.TopmostOffsetFromBottom;
-        var topTopEnd = topBottomEnd + topDefinition.TopmostOffsetFromBottom;
+        var topTopEnd = topBottomStart + topFinishSlopeDelta + topDefinition.TopmostOffsetFromBottom;
         var topStructuralBottomStart = topBottomStart + topDefinition.CoreBottomOffsetFromBottom;
         var topStructuralBottomEnd = topBottomEnd + topDefinition.CoreBottomOffsetFromBottom;
         var topStructuralTopStart = topBottomStart + topDefinition.CoreTopOffsetFromBottom;
@@ -107,6 +111,31 @@ public sealed class FloorVerticalProfileBuilder
         };
     }
 
+    private static BoundarySlope ResolveBoundarySlope(
+        FloorConfig floor,
+        BoundarySlabConfig boundaryConfig,
+        bool useLegacySlope)
+    {
+        if (boundaryConfig.SlopeEnabled)
+        {
+            return new BoundarySlope(
+                boundaryConfig.SlopeValue,
+                IsFinishLayerSlopeTarget(boundaryConfig.SlopeTarget));
+        }
+
+        if (useLegacySlope && floor.HasSlope)
+        {
+            return new BoundarySlope(
+                floor.SlopeValue,
+                IsFinishLayerSlopeTarget(floor.SlopeTarget));
+        }
+
+        return new BoundarySlope(0d, false);
+    }
+
+    private static bool IsFinishLayerSlopeTarget(string? target)
+        => string.Equals(target, "FinishLayer", StringComparison.OrdinalIgnoreCase);
+
     public IReadOnlyList<Line3D> BuildBoundaryLines(
         FloorConfig floor,
         FloorVerticalProfile profile,
@@ -121,29 +150,40 @@ public sealed class FloorVerticalProfileBuilder
         IReadOnlyList<(double StartX, double EndX)> wallIntervals)
     {
         var segments = new List<SectionLineSegment>();
+        var bottomDefinition = ResolveBoundaryDefinition(
+            floor,
+            "底边界板",
+            floor.BottomBoundarySlab,
+            () => CreateLegacyBottomTemplate(floor));
+        var topDefinition = ResolveBoundaryDefinition(
+            floor,
+            "顶边界板",
+            floor.TopBoundarySlab,
+            () => CreateLegacyTopTemplate(floor));
+        var bottomFinishSlopeDelta = ResolveBoundarySlope(floor, bottomDefinition.Config, useLegacySlope: false).TargetsFinishLayer
+            ? profile.BottomBoundaryBottom.EndY - (profile.BottomBoundaryTop.EndY + bottomDefinition.BottommostOffsetFromTop)
+            : 0d;
+        var topFinishSlopeDelta = ResolveBoundarySlope(floor, topDefinition.Config, useLegacySlope: true).TargetsFinishLayer
+            ? profile.TopBoundaryTop.EndY - (profile.TopBoundaryBottom.EndY + topDefinition.TopmostOffsetFromBottom)
+            : 0d;
+
         segments.AddRange(BuildBoundaryLinesFor(
-            ResolveBoundaryDefinition(
-                floor,
-                "底边界板",
-                floor.BottomBoundarySlab,
-                () => CreateLegacyBottomTemplate(floor)),
+            bottomDefinition,
             anchorAtTop: true,
             anchorStartY: profile.BottomBoundaryTop.StartY,
             anchorEndY: profile.BottomBoundaryTop.EndY,
             profile.SectionLength,
-            wallIntervals));
+            wallIntervals,
+            bottomFinishSlopeDelta));
 
         segments.AddRange(BuildBoundaryLinesFor(
-            ResolveBoundaryDefinition(
-                floor,
-                "顶边界板",
-                floor.TopBoundarySlab,
-                () => CreateLegacyTopTemplate(floor)),
+            topDefinition,
             anchorAtTop: false,
             anchorStartY: profile.TopBoundaryBottom.StartY,
             anchorEndY: profile.TopBoundaryBottom.EndY,
             profile.SectionLength,
-            wallIntervals));
+            wallIntervals,
+            topFinishSlopeDelta));
 
         segments.Add(new SectionLineSegment
         {
@@ -220,7 +260,8 @@ public sealed class FloorVerticalProfileBuilder
         double anchorStartY,
         double anchorEndY,
         double sectionLength,
-        IReadOnlyList<(double StartX, double EndX)> wallIntervals)
+        IReadOnlyList<(double StartX, double EndX)> wallIntervals,
+        double finishSlopeDelta = 0d)
     {
         var lines = new List<SectionLineSegment>();
         var visibleCore = definition.Sections.FirstOrDefault(layer => layer.IsCore && layer.VisibleInSection);
@@ -254,7 +295,7 @@ public sealed class FloorVerticalProfileBuilder
                 definition,
                 anchorAtTop,
                 anchorStartY,
-                anchorEndY,
+                anchorEndY + finishSlopeDelta,
                 sectionLength,
                 wallIntervals,
                 topFinish.GetUpperSurfaceOffset()));
@@ -270,7 +311,7 @@ public sealed class FloorVerticalProfileBuilder
                 definition,
                 anchorAtTop,
                 anchorStartY,
-                anchorEndY,
+                anchorEndY + finishSlopeDelta,
                 sectionLength,
                 wallIntervals,
                 bottomFinish.GetLowerSurfaceOffset()));
@@ -569,6 +610,8 @@ public sealed class FloorVerticalProfileBuilder
         double CoreBottomOffsetFromTop,
         double CoreTopOffsetFromBottom,
         double CoreBottomOffsetFromBottom);
+
+    private readonly record struct BoundarySlope(double Value, bool TargetsFinishLayer);
 
     private sealed record BoundaryLayerDefinition(
         string Name,

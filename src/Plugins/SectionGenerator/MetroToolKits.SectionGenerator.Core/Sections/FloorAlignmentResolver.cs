@@ -93,7 +93,7 @@ public sealed class FloorAlignmentResolver
                 Floors = results,
                 FatalIssue = new FloorAlignmentIssue
                 {
-                    Kind = FloorAlignmentIssueKind.AlignmentBaseFloorInvalid,
+                    Kind = FloorAlignmentIssueKind.AlignmentBaseFloorMissing,
                     Message = $"未找到名为 {config.AlignmentBaseFloorName} 的基准层。"
                 }
             };

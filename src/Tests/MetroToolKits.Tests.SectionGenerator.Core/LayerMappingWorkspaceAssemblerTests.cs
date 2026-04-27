@@ -1,6 +1,5 @@
 using FluentAssertions;
 using MetroToolKits.Foundation.Building.Types;
-using MetroToolKits.Foundation.Cad.Layering.Services;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Support;
 using MetroToolKits.SectionGenerator.Core.Sections;
@@ -10,7 +9,7 @@ namespace MetroToolKits.Tests.SectionGenerator.Core;
 
 public class LayerMappingWorkspaceAssemblerTests
 {
-    private readonly ILayerService _layerService = Substitute.For<ILayerService>();
+    private readonly ILayerNameProvider _layerNameProvider = Substitute.For<ILayerNameProvider>();
     private readonly IElementTypeCatalog _elementTypeCatalog = Substitute.For<IElementTypeCatalog>();
     private readonly IWallAssemblyTemplateCatalog _wallTemplateCatalog = Substitute.For<IWallAssemblyTemplateCatalog>();
     private readonly ISlabAssemblyTemplateCatalog _slabTemplateCatalog = Substitute.For<ISlabAssemblyTemplateCatalog>();
@@ -19,7 +18,7 @@ public class LayerMappingWorkspaceAssemblerTests
     public void Assemble_MapsLayerListInSortedOrder()
     {
         var assembler = CreateAssembler();
-        _layerService.GetAllLayerNames().Returns(["MK_Z", "mk_a", "MK_B"]);
+        _layerNameProvider.GetAllLayerNames().Returns(["MK_Z", "mk_a", "MK_B"]);
         _elementTypeCatalog.GetAllTypes().Returns(Array.Empty<ElementTypeDefinition>());
         _wallTemplateCatalog.GetAllTemplates().Returns(Array.Empty<WallAssemblyTemplate>());
         _slabTemplateCatalog.GetAllTemplates().Returns(Array.Empty<SlabAssemblyTemplate>());
@@ -33,7 +32,7 @@ public class LayerMappingWorkspaceAssemblerTests
     public void Assemble_MapsEnabledElementTypes()
     {
         var assembler = CreateAssembler();
-        _layerService.GetAllLayerNames().Returns(Array.Empty<string>());
+        _layerNameProvider.GetAllLayerNames().Returns(Array.Empty<string>());
         _elementTypeCatalog.GetAllTypes().Returns(
         [
             new ElementTypeDefinition
@@ -71,7 +70,7 @@ public class LayerMappingWorkspaceAssemblerTests
     public void Assemble_MapsWallTemplateOptions()
     {
         var assembler = CreateAssembler();
-        _layerService.GetAllLayerNames().Returns(Array.Empty<string>());
+        _layerNameProvider.GetAllLayerNames().Returns(Array.Empty<string>());
         _elementTypeCatalog.GetAllTypes().Returns(Array.Empty<ElementTypeDefinition>());
         _wallTemplateCatalog.GetAllTemplates().Returns(
         [
@@ -90,7 +89,7 @@ public class LayerMappingWorkspaceAssemblerTests
     public void Assemble_MapsSlabTemplateOptions()
     {
         var assembler = CreateAssembler();
-        _layerService.GetAllLayerNames().Returns(Array.Empty<string>());
+        _layerNameProvider.GetAllLayerNames().Returns(Array.Empty<string>());
         _elementTypeCatalog.GetAllTypes().Returns(Array.Empty<ElementTypeDefinition>());
         _wallTemplateCatalog.GetAllTemplates().Returns(Array.Empty<WallAssemblyTemplate>());
         _slabTemplateCatalog.GetAllTemplates().Returns(
@@ -109,7 +108,7 @@ public class LayerMappingWorkspaceAssemblerTests
     public void Assemble_WhenTemplateCatalogsEmpty_DoesNotThrow()
     {
         var assembler = CreateAssembler();
-        _layerService.GetAllLayerNames().Returns(["L1"]);
+        _layerNameProvider.GetAllLayerNames().Returns(["L1"]);
         _elementTypeCatalog.GetAllTypes().Returns(Array.Empty<ElementTypeDefinition>());
         _wallTemplateCatalog.GetAllTemplates().Returns(Array.Empty<WallAssemblyTemplate>());
         _slabTemplateCatalog.GetAllTemplates().Returns(Array.Empty<SlabAssemblyTemplate>());
@@ -126,7 +125,7 @@ public class LayerMappingWorkspaceAssemblerTests
     public void Assemble_BuildsExpectedSummaryText()
     {
         var assembler = CreateAssembler();
-        _layerService.GetAllLayerNames().Returns(["A", "B"]);
+        _layerNameProvider.GetAllLayerNames().Returns(["A", "B"]);
         _elementTypeCatalog.GetAllTypes().Returns(
         [
             new ElementTypeDefinition { TypeId = "Wall", TypeName = "墙", IsEnabled = true },
@@ -149,7 +148,7 @@ public class LayerMappingWorkspaceAssemblerTests
 
     private LayerMappingWorkspaceAssembler CreateAssembler()
         => new(
-            _layerService,
+            _layerNameProvider,
             _elementTypeCatalog,
             _wallTemplateCatalog,
             _slabTemplateCatalog);

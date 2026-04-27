@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Models;
 using MetroToolKits.SectionGenerator.App.Support;
@@ -27,10 +28,10 @@ public sealed class GenerateSectionPreflightUseCase : IGenerateSectionPreflightU
 
     public GenerateSectionPreflightResult Execute()
     {
-        var configDocument = _floorConfigRepository.Load();
+        var configDocument = NormalizeLoadedConfig(_floorConfigRepository.Load());
         var missingRequirements = SectionGenerationConfigValidator.ValidateForGeneration(configDocument.Config);
         var existingSections = BuildExistingSectionSummary();
-        var readiness = _generationReadinessInspector.Inspect();
+        var readiness = _generationReadinessInspector.Inspect() ?? new GenerationReadinessSummary();
 
         _logger.LogDebug(
             "生成预检完成，楼层数: {FloorCount}，缺失项: {MissingCount}，现有剖面数: {SectionCount}，可识别构件数: {ElementCount}",
@@ -46,6 +47,17 @@ public sealed class GenerateSectionPreflightUseCase : IGenerateSectionPreflightU
             ExistingSections = existingSections,
             Readiness = readiness
         };
+    }
+
+    private static LoadedSectionConfig NormalizeLoadedConfig(LoadedSectionConfig? configDocument)
+    {
+        configDocument ??= new LoadedSectionConfig();
+        configDocument.Config ??= new SectionConfig();
+        configDocument.Config.Floors ??= new List<FloorConfig>();
+        configDocument.OutputConfig ??= new SectionOutputConfig();
+        configDocument.RuntimeDiagnostics ??= new List<OperationDiagnostic>();
+        configDocument.RuntimeState ??= new SectionConfigRuntimeState();
+        return configDocument;
     }
 
     private ExistingSectionStatusSummary BuildExistingSectionSummary()
