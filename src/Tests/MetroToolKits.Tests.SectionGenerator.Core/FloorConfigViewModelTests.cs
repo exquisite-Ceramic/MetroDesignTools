@@ -40,6 +40,17 @@ public class FloorConfigViewModelTests
     }
 
     [Fact]
+    public void DeleteSelectedFloor_WhenRemovingLastFloor_FallsBackToPreviousFloor()
+    {
+        var viewModel = CreateViewModel(CreateDocument(CreateFloor("F1"), CreateFloor("F2"), CreateFloor("F3")), "F3");
+
+        viewModel.DeleteSelectedFloor();
+
+        viewModel.Floors.Select(floor => floor.Name).Should().Equal("F1", "F2");
+        viewModel.SelectedFloor!.Name.Should().Be("F2");
+    }
+
+    [Fact]
     public void MoveSelectedFloor_ReordersFloors()
     {
         var viewModel = CreateViewModel(CreateDocument(CreateFloor("F1"), CreateFloor("F2"), CreateFloor("F3")), "F2");
@@ -49,6 +60,21 @@ public class FloorConfigViewModelTests
 
         viewModel.MoveSelectedFloorDown().Should().BeTrue();
         viewModel.Floors.Select(floor => floor.Name).Should().Equal("F1", "F2", "F3");
+    }
+
+    [Fact]
+    public void MoveSelectedFloor_KeepsSelectedFloor()
+    {
+        var viewModel = CreateViewModel(CreateDocument(CreateFloor("F1"), CreateFloor("F2"), CreateFloor("F3")), "F2");
+        var selectedFloor = viewModel.SelectedFloor;
+
+        viewModel.MoveSelectedFloorUp().Should().BeTrue();
+        viewModel.SelectedFloor.Should().BeSameAs(selectedFloor);
+        viewModel.SelectedFloor!.Name.Should().Be("F2");
+
+        viewModel.MoveSelectedFloorDown().Should().BeTrue();
+        viewModel.SelectedFloor.Should().BeSameAs(selectedFloor);
+        viewModel.SelectedFloor!.Name.Should().Be("F2");
     }
 
     [Fact]
@@ -67,6 +93,38 @@ public class FloorConfigViewModelTests
         request.FloorConfig.Floors[0].Height.Should().Be(4200);
         request.FloorConfig.Floors[0].TopBoundarySlab.SlopeEnabled.Should().BeTrue();
         request.FloorConfig.Floors[0].TopBoundarySlab.SlopePercent.Should().Be(2.5);
+    }
+
+    [Fact]
+    public void BuildSaveRequest_PreservesTemplateIdsAlignmentPointsAndScopeBounds()
+    {
+        var document = CreateDocument(CreateFloor("F1"), CreateFloor("F2"));
+        document.Config.Floors[0].TopBoundarySlab.TemplateId = "TOP-CUSTOM";
+        document.Config.Floors[0].BottomBoundarySlab.TemplateId = "BOTTOM-CUSTOM";
+        document.Config.Floors[0].AlignmentPoints =
+        [
+            new Point3D(10, 20, 30),
+            new Point3D(40, 50, 60),
+            new Point3D(70, 80, 90)
+        ];
+        document.Config.Floors[0].ScopeBounds = new ScopeBounds2D
+        {
+            MinX = 1,
+            MinY = 2,
+            MaxX = 300,
+            MaxY = 400
+        };
+        var viewModel = CreateViewModel(document, "F1");
+
+        var request = viewModel.BuildSaveRequest(_floorMapper, _outputMapper);
+
+        request.FloorConfig.Floors[0].TopBoundarySlab.TemplateId.Should().Be("TOP-CUSTOM");
+        request.FloorConfig.Floors[0].BottomBoundarySlab.TemplateId.Should().Be("BOTTOM-CUSTOM");
+        request.FloorConfig.Floors[0].AlignmentPoints.Select(point => (point.X, point.Y, point.Z))
+            .Should().Equal((10d, 20d, 30d), (40d, 50d, 60d), (70d, 80d, 90d));
+        request.FloorConfig.Floors[0].ScopeBounds.Should().NotBeNull();
+        request.FloorConfig.Floors[0].ScopeBounds!.MaxX.Should().Be(300);
+        request.FloorConfig.Floors[0].ScopeBounds!.MaxY.Should().Be(400);
     }
 
     [Fact]
@@ -101,6 +159,33 @@ public class FloorConfigViewModelTests
         request.FloorConfig.Floors.Should().HaveCount(2);
         request.FloorConfig.Floors[0].AlignmentPoints.Should().HaveCount(3);
         request.FloorConfig.Floors[0].ScopeBounds!.MaxY.Should().Be(200);
+    }
+
+    [Fact]
+    public void ClearSelectedFloorState_ExportsEmptyAlignmentAndScope()
+    {
+        var document = CreateDocument(CreateFloor("F1"));
+        document.Config.Floors[0].AlignmentPoints =
+        [
+            new Point3D(1, 2, 3),
+            new Point3D(4, 5, 6),
+            new Point3D(7, 8, 9)
+        ];
+        document.Config.Floors[0].ScopeBounds = new ScopeBounds2D
+        {
+            MinX = 0,
+            MinY = 0,
+            MaxX = 10,
+            MaxY = 20
+        };
+        var viewModel = CreateViewModel(document, "F1");
+
+        viewModel.ClearSelectedFloorAlignment();
+        viewModel.ClearSelectedFloorScope();
+        var request = viewModel.BuildSaveRequest(_floorMapper, _outputMapper);
+
+        request.FloorConfig.Floors[0].AlignmentPoints.Should().BeEmpty();
+        request.FloorConfig.Floors[0].ScopeBounds.Should().BeNull();
     }
 
     [Fact]

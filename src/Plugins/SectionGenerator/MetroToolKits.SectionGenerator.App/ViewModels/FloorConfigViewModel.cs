@@ -12,6 +12,8 @@ public sealed class FloorConfigViewModel
 
     public FloorEditViewModel? SelectedFloor { get; private set; }
 
+    public bool HasSingleFloor => Floors.Count == 1;
+
     public SectionOutputConfigViewModel OutputConfig { get; } = new();
 
     public LoadedSectionConfig Document { get; private set; } = new();
@@ -153,6 +155,73 @@ public sealed class FloorConfigViewModel
     public void SelectFloor(FloorEditViewModel? floor)
     {
         SelectedFloor = floor;
+    }
+
+    public void ApplyGlobalSettings(
+        string? alignmentBaseFloorName,
+        bool globalSlopeEnabled,
+        double globalSlopePercent,
+        string? globalSlopeTarget)
+    {
+        AlignmentBaseFloorName = alignmentBaseFloorName?.Trim() ?? string.Empty;
+        GlobalSlopeEnabled = globalSlopeEnabled;
+        GlobalSlopePercent = globalSlopePercent;
+        GlobalSlopeTarget = globalSlopeTarget?.Trim() ?? string.Empty;
+        GlobalTopSlopeEnabled = globalSlopeEnabled;
+        GlobalTopSlopePercent = globalSlopePercent;
+        GlobalTopSlopeTarget = GlobalSlopeTarget;
+    }
+
+    public void ClearSelectedFloorAlignment()
+    {
+        if (SelectedFloor == null)
+        {
+            return;
+        }
+
+        SelectedFloor.AlignmentPoints.Clear();
+        SelectedFloor.ApplyToDomain();
+    }
+
+    public void ClearSelectedFloorScope()
+    {
+        if (SelectedFloor == null)
+        {
+            return;
+        }
+
+        SelectedFloor.ScopeBounds = null;
+        SelectedFloor.ApplyToDomain();
+    }
+
+    public LoadedSectionConfig BuildDisplayDocument()
+    {
+        var floors = Floors.Select(floor =>
+        {
+            floor.ApplyToDomain();
+            return floor.DomainFloor;
+        }).ToList();
+
+        return new LoadedSectionConfig
+        {
+            Config = new SectionConfig
+            {
+                GlobalSlopeEnabled = GlobalSlopeEnabled,
+                GlobalSlopeValue = ToDecimal(GlobalSlopePercent),
+                GlobalSlopeTarget = GlobalSlopeTarget,
+                GlobalTopSlopeEnabled = GlobalTopSlopeEnabled,
+                GlobalTopSlopeValue = ToDecimal(GlobalTopSlopePercent),
+                GlobalTopSlopeTarget = GlobalTopSlopeTarget,
+                GlobalBottomSlopeEnabled = GlobalBottomSlopeEnabled,
+                GlobalBottomSlopeValue = ToDecimal(GlobalBottomSlopePercent),
+                GlobalBottomSlopeTarget = GlobalBottomSlopeTarget,
+                AlignmentBaseFloorName = AlignmentBaseFloorName,
+                Floors = floors
+            },
+            OutputConfig = Document.OutputConfig,
+            RuntimeDiagnostics = Document.RuntimeDiagnostics,
+            RuntimeState = Document.RuntimeState
+        };
     }
 
     public void CommitToDocument(ISectionOutputConfigMapper outputConfigMapper)
