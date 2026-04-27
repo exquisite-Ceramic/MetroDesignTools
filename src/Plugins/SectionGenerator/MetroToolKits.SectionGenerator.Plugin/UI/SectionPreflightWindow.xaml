@@ -1,0 +1,104 @@
+<Window x:Class="MetroToolKits.SectionGenerator.Plugin.UI.SectionPreflightWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="生成前检查"
+        Width="980"
+        Height="720"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Padding="10" CornerRadius="6" BorderBrush="#D0D0D0" BorderThickness="1" Background="#F8F8F8">
+            <StackPanel>
+                <TextBlock x:Name="SummaryTextBlock" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                <TextBlock x:Name="CountsTextBlock" Margin="0,6,0,0" Foreground="Gray" TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="0,10,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,8,6" FontWeight="SemiBold" Text="图纸"/>
+            <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,0,20,6" x:Name="DrawingTextBlock" TextWrapping="Wrap"/>
+            <TextBlock Grid.Row="0" Grid.Column="2" Margin="0,0,8,6" FontWeight="SemiBold" Text="配置来源"/>
+            <TextBlock Grid.Row="0" Grid.Column="3" Margin="0,0,0,6" x:Name="SourceTextBlock" TextWrapping="Wrap"/>
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,0,8,6" FontWeight="SemiBold" Text="图纸状态"/>
+            <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,0,20,6" x:Name="DrawingStatusTextBlock" TextWrapping="Wrap"/>
+            <TextBlock Grid.Row="1" Grid.Column="2" Margin="0,0,8,6" FontWeight="SemiBold" Text="楼层数量"/>
+            <TextBlock Grid.Row="1" Grid.Column="3" Margin="0,0,0,6" x:Name="FloorCountTextBlock" TextWrapping="Wrap"/>
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,0,8,0" FontWeight="SemiBold" Text="基准层"/>
+            <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,0,20,0" x:Name="BaseFloorTextBlock" TextWrapping="Wrap"/>
+            <TextBlock Grid.Row="2" Grid.Column="2" Margin="0,0,8,0" FontWeight="SemiBold" Text="是否可生成"/>
+            <TextBlock Grid.Row="2" Grid.Column="3" Margin="0,0,0,0" x:Name="CanGenerateTextBlock" TextWrapping="Wrap"/>
+        </Grid>
+
+        <TextBlock Grid.Row="2" Margin="0,12,0,8" FontWeight="SemiBold" Text="检查项与楼层参与状态"/>
+
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1.15*"/>
+                <ColumnDefinition Width="1*"/>
+            </Grid.ColumnDefinitions>
+
+            <DataGrid Grid.Column="0"
+                      x:Name="ChecksGrid"
+                      Margin="0,0,8,0"
+                      AutoGenerateColumns="False"
+                      HeadersVisibility="Column"
+                      IsReadOnly="True"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      SelectionMode="Single">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="级别" Width="90" Binding="{Binding SeverityText}"/>
+                    <DataGridTextColumn Header="检查项" Width="180" Binding="{Binding Title}"/>
+                    <DataGridTextColumn Header="说明" Width="*" Binding="{Binding Summary}"/>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <DataGrid Grid.Column="1"
+                      x:Name="FloorsGrid"
+                      Margin="8,0,0,0"
+                      AutoGenerateColumns="False"
+                      HeadersVisibility="Column"
+                      IsReadOnly="True"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      SelectionMode="Single">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="楼层" Width="90" Binding="{Binding FloorName}"/>
+                    <DataGridTextColumn Header="角色" Width="90" Binding="{Binding RoleText}"/>
+                    <DataGridTextColumn Header="参与" Width="70" Binding="{Binding ParticipationText}"/>
+                    <DataGridTextColumn Header="对齐" Width="160" Binding="{Binding AlignmentStatusText}"/>
+                    <DataGridTextColumn Header="范围" Width="180" Binding="{Binding ScopeStatusText}"/>
+                    <DataGridTextColumn Header="模板" Width="180" Binding="{Binding BoundaryTemplateStatusText}"/>
+                    <DataGridTextColumn Header="跳过原因" Width="*" Binding="{Binding SkipReasonText}"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Grid>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Width="110" Height="30" Margin="0,0,8,0" Content="重新检查" Click="Refresh_Click"/>
+            <Button Width="90" Height="30" Content="关闭" Click="Close_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

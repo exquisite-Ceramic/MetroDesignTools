@@ -129,6 +129,7 @@ public class SectionGeneratorPlugin : IPlugin
                 sp.GetRequiredService<ILogger<CheckSectionUpdatesUseCase>>()));
         services.AddSingleton<IGenerateSectionPreflightUseCase, GenerateSectionPreflightUseCase>();
         services.AddSingleton<IWorkbenchSnapshotAssembler, WorkbenchSnapshotAssembler>();
+        services.AddSingleton<ISectionPreflightReportAssembler, SectionPreflightReportAssembler>();
         services.AddSingleton<ILayerMappingWorkspaceAssembler, LayerMappingWorkspaceAssembler>();
         services.AddSingleton<ILayerMappingApplyRequestMapper, LayerMappingApplyRequestMapper>();
         services.AddSingleton<IWallTemplateCatalogMapper, WallTemplateCatalogMapper>();
@@ -161,6 +162,7 @@ public class SectionGeneratorPlugin : IPlugin
         services.AddTransient<SectionGeneratorSelfTestCommand>();
         services.AddTransient<SectionGeneratorHostAcceptanceCommand>();
         services.AddTransient<OpenLayerMappingCommand>();
+        services.AddTransient<SectionPreflightCommand>();
     }
 
     public void RegisterCommands(ICommandRegistry registry)
