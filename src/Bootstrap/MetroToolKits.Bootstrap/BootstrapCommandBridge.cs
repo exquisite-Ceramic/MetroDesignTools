@@ -55,6 +55,14 @@ public sealed class BootstrapCommandBridge
     public void LayerMapping()
         => Execute(SectionGeneratorCommandNames.LayerMapping);
 
+    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.SectionPreflight)]
+    public void SectionPreflight()
+        => Execute(SectionGeneratorCommandNames.SectionPreflight);
+
+    [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.CheckBeforeGenerate)]
+    public void CheckBeforeGenerate()
+        => Execute(SectionGeneratorCommandNames.CheckBeforeGenerate);
+
 #if HOST_AUTOMATION
     [Autodesk.AutoCAD.Runtime.CommandMethod(SectionGeneratorCommandNames.SectionSelfTestInternal)]
     public void SectionSelfTest()

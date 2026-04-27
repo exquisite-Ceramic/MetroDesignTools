@@ -71,7 +71,7 @@ public sealed class UserLogger : IUserLogger
 
     public void SectionLineInvalid()
     {
-        WriteToCommandLine("[错误] 剖切线未穿过任何构件，请调整剖切线位置");
+        WriteToCommandLine("[错误] 剖切线未穿过任何构件，请调整剖切线位置。建议运行 SectionPreflight 查看完整问题清单。");
         WriteToFile("ERROR", "Section line does not intersect any element");
     }
 

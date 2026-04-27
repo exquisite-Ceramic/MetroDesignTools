@@ -294,10 +294,14 @@ public sealed class GenSectionCommand
         {
             var hasIntersectionWarning = result.Diagnostics.Any(d =>
                 d.Code == SectionGenerationErrorCodes.NoIntersectingElements);
+            var failure = result.Failure!;
+            var userMessage = failure.UserMessage.Contains("SectionPreflight", StringComparison.OrdinalIgnoreCase)
+                ? failure.UserMessage
+                : $"{failure.UserMessage} 建议先运行 SectionPreflight 查看完整问题清单。";
 
             _feedbackPresenter.PresentFailure(
                 "GenSection",
-                result.Failure!,
+                failure with { UserMessage = userMessage },
                 result.Diagnostics,
                 useSectionLineInvalid: hasIntersectionWarning);
             return false;

@@ -7,6 +7,12 @@ public sealed class SectionPreflightViewModel
 {
     public ObservableCollection<SectionPreflightCheckItemViewModel> Checks { get; } = new();
 
+    public ObservableCollection<SectionPreflightCheckItemViewModel> BlockingChecks { get; } = new();
+
+    public ObservableCollection<SectionPreflightCheckItemViewModel> WarningChecks { get; } = new();
+
+    public ObservableCollection<SectionPreflightCheckItemViewModel> InfoChecks { get; } = new();
+
     public ObservableCollection<SectionPreflightFloorStatusViewModel> Floors { get; } = new();
 
     public string DrawingDisplayName { get; private set; } = string.Empty;
@@ -45,9 +51,27 @@ public sealed class SectionPreflightViewModel
         InfoCount = report.InfoCount;
 
         Checks.Clear();
+        BlockingChecks.Clear();
+        WarningChecks.Clear();
+        InfoChecks.Clear();
         foreach (var check in report.Checks)
         {
-            Checks.Add(new SectionPreflightCheckItemViewModel(check));
+            var item = new SectionPreflightCheckItemViewModel(check);
+            Checks.Add(item);
+            switch (item.Severity)
+            {
+                case SectionPreflightSeverityDto.Blocking:
+                    BlockingChecks.Add(item);
+                    break;
+
+                case SectionPreflightSeverityDto.Warning:
+                    WarningChecks.Add(item);
+                    break;
+
+                case SectionPreflightSeverityDto.Info:
+                    InfoChecks.Add(item);
+                    break;
+            }
         }
 
         Floors.Clear();
@@ -65,6 +89,10 @@ public sealed class SectionPreflightCheckItemViewModel
         ArgumentNullException.ThrowIfNull(dto);
         Title = dto.Title;
         Summary = dto.Summary;
+        SuggestedActionText = dto.SuggestedActionText;
+        RelatedObjectName = dto.RelatedObjectName;
+        SuggestedCommandTag = dto.SuggestedCommandTag;
+        ActionTarget = dto.ActionTarget;
         FloorName = dto.FloorName ?? string.Empty;
         Severity = dto.Severity;
         SeverityText = dto.Severity.ToString();
@@ -73,6 +101,14 @@ public sealed class SectionPreflightCheckItemViewModel
     public string Title { get; }
 
     public string Summary { get; }
+
+    public string SuggestedActionText { get; }
+
+    public string RelatedObjectName { get; }
+
+    public string SuggestedCommandTag { get; }
+
+    public SectionPreflightActionTargetDto ActionTarget { get; }
 
     public string FloorName { get; }
 

@@ -36,13 +36,29 @@ public partial class SectionPreflightWindow : Window
             : _viewModel.AlignmentBaseFloorName;
         CanGenerateTextBlock.Text = _viewModel.CanGenerate ? "可以生成" : "当前不可生成";
 
-        ChecksGrid.ItemsSource = _viewModel.Checks;
+        BlockingChecksGrid.ItemsSource = _viewModel.BlockingChecks;
+        WarningChecksGrid.ItemsSource = _viewModel.WarningChecks;
+        InfoChecksGrid.ItemsSource = _viewModel.InfoChecks;
         FloorsGrid.ItemsSource = _viewModel.Floors;
     }
 
     private void Refresh_Click(object sender, RoutedEventArgs e)
     {
         Tag = SectionPreflightWindowAction.Refresh;
+        DialogResult = true;
+        Close();
+    }
+
+    private void OpenFloorConfig_Click(object sender, RoutedEventArgs e)
+    {
+        Tag = SectionPreflightWindowAction.OpenFloorConfig;
+        DialogResult = true;
+        Close();
+    }
+
+    private void OpenLayerMapping_Click(object sender, RoutedEventArgs e)
+    {
+        Tag = SectionPreflightWindowAction.OpenLayerMapping;
         DialogResult = true;
         Close();
     }
@@ -58,5 +74,7 @@ public partial class SectionPreflightWindow : Window
 public enum SectionPreflightWindowAction
 {
     Close = 0,
-    Refresh = 1
+    Refresh = 1,
+    OpenFloorConfig = 2,
+    OpenLayerMapping = 3
 }

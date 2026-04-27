@@ -14,15 +14,21 @@ public sealed class SectionPreflightCommand
 {
     private readonly IGenerateSectionPreflightUseCase _preflightUseCase;
     private readonly ISectionPreflightReportAssembler _reportAssembler;
+    private readonly FloorConfigCommand _floorConfigCommand;
+    private readonly OpenLayerMappingCommand _openLayerMappingCommand;
     private readonly ILogger<SectionPreflightCommand> _logger;
 
     public SectionPreflightCommand(
         IGenerateSectionPreflightUseCase preflightUseCase,
         ISectionPreflightReportAssembler reportAssembler,
+        FloorConfigCommand floorConfigCommand,
+        OpenLayerMappingCommand openLayerMappingCommand,
         ILogger<SectionPreflightCommand> logger)
     {
         _preflightUseCase = preflightUseCase;
         _reportAssembler = reportAssembler;
+        _floorConfigCommand = floorConfigCommand;
+        _openLayerMappingCommand = openLayerMappingCommand;
         _logger = logger;
     }
 
@@ -51,10 +57,29 @@ public sealed class SectionPreflightCommand
                 report.WarningCount);
 
             Application.ShowModalWindow(window);
-            if (window.Tag is not SectionPreflightWindowAction.Refresh)
+            if (window.Tag is not SectionPreflightWindowAction action)
             {
                 break;
             }
+
+            switch (action)
+            {
+                case SectionPreflightWindowAction.Refresh:
+                    continue;
+
+                case SectionPreflightWindowAction.OpenFloorConfig:
+                    _floorConfigCommand.Execute();
+                    continue;
+
+                case SectionPreflightWindowAction.OpenLayerMapping:
+                    _openLayerMappingCommand.Execute();
+                    continue;
+
+                default:
+                    break;
+            }
+
+            break;
         }
     }
 }

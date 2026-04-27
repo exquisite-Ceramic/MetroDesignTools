@@ -28,7 +28,16 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
         var config = document.Config;
         var runtimeState = document.RuntimeState;
         var blockingRequirements = result.MissingRequirements
-            .Select(diagnostic => CreateCheckItem("generation", "生成必配项", SectionPreflightSeverityDto.Blocking, diagnostic.Message))
+            .Select(diagnostic => CreateCheckItem(
+                "generation",
+                "生成必配项",
+                SectionPreflightSeverityDto.Blocking,
+                diagnostic.Message,
+                diagnostic.Suggestion ?? "请先补齐楼层配置中的必配项。",
+                ResolveRelatedObjectName(diagnostic, "楼层配置"),
+                SectionPreflightActionTargetDto.FloorConfig,
+                "FloorConfig",
+                ResolveFloorName(diagnostic)))
             .ToList();
         var floorSaveDiagnostics = FloorConfigSaveValidator.Validate(config, _slabTemplateCatalog);
         var outputDiagnostics = SectionOutputConfigSaveValidator.Validate(document.OutputConfig);
@@ -39,6 +48,7 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
             BuildDrawingStateCheck(runtimeState),
             BuildConfigSourceCheck(runtimeState),
             BuildFloorCountCheck(config),
+            BuildReadinessCheck(result.Readiness),
             BuildBaseFloorExistsCheck(config),
             BuildBaseAlignmentCheck(config),
             BuildBaseScopeCheck(config),
@@ -105,7 +115,17 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
         var summary = runtimeState.IsCurrentDrawingSaved
             ? $"当前图纸：{runtimeState.DrawingDisplayName}。"
             : $"当前图纸未保存，配置仅驻留在当前会话内：{runtimeState.DrawingDisplayName}。";
-        return CreateCheckItem("drawing", "当前图纸状态", severity, summary);
+        return CreateCheckItem(
+            "drawing",
+            "当前图纸状态",
+            severity,
+            summary,
+            runtimeState.IsCurrentDrawingSaved
+                ? "当前无需处理。"
+                : "如需持久保存配置，请先保存图纸，再回到楼层配置窗口执行保存。",
+            "当前图纸",
+            runtimeState.IsCurrentDrawingSaved ? SectionPreflightActionTargetDto.None : SectionPreflightActionTargetDto.FloorConfig,
+            runtimeState.IsCurrentDrawingSaved ? string.Empty : "FloorConfig");
     }
 
     private static SectionPreflightCheckItemDto BuildConfigSourceCheck(SectionConfigRuntimeState runtimeState)
@@ -121,7 +141,15 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
             "config-source",
             "配置来源",
             severity,
-            BuildConfigSourceText(runtimeState));
+            BuildConfigSourceText(runtimeState),
+            runtimeState.Source == SectionConfigStorageSource.EmbeddedDwg
+                ? "当前无需处理。"
+                : "如需把当前配置写入 DWG，请打开楼层配置窗口后显式保存。",
+            "楼层配置",
+            runtimeState.Source == SectionConfigStorageSource.EmbeddedDwg
+                ? SectionPreflightActionTargetDto.None
+                : SectionPreflightActionTargetDto.FloorConfig,
+            runtimeState.Source == SectionConfigStorageSource.EmbeddedDwg ? string.Empty : "FloorConfig");
     }
 
     private static SectionPreflightCheckItemDto BuildFloorCountCheck(SectionConfig config)
@@ -129,7 +157,26 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
             "floor-count",
             "楼层数量",
             config.Floors.Count > 0 ? SectionPreflightSeverityDto.Info : SectionPreflightSeverityDto.Warning,
-            $"当前共配置 {config.Floors.Count} 个楼层。");
+            $"当前共配置 {config.Floors.Count} 个楼层。",
+            config.Floors.Count > 0 ? "当前无需处理。" : "请先打开楼层配置，至少配置一个楼层。",
+            "楼层配置",
+            config.Floors.Count > 0 ? SectionPreflightActionTargetDto.None : SectionPreflightActionTargetDto.FloorConfig,
+            config.Floors.Count > 0 ? string.Empty : "FloorConfig");
+
+    private static SectionPreflightCheckItemDto BuildReadinessCheck(GenerationReadinessSummary readiness)
+        => CreateCheckItem(
+            "readiness",
+            "图层映射 / 构件识别状态",
+            readiness.HasRecognizableElements ? SectionPreflightSeverityDto.Info : SectionPreflightSeverityDto.Warning,
+            readiness.HasRecognizableElements
+                ? $"当前已识别 {readiness.TotalRecognizableElementCount} 个墙/柱/板构件。"
+                : "当前图纸中尚未发现可识别的墙/柱/板，后续生成可能无法得到有效剖面。",
+            readiness.HasRecognizableElements
+                ? "当前无需处理。"
+                : "请检查图层映射或区域转换，使墙/柱/板进入可识别状态。",
+            "图层映射",
+            readiness.HasRecognizableElements ? SectionPreflightActionTargetDto.None : SectionPreflightActionTargetDto.LayerMapping,
+            readiness.HasRecognizableElements ? string.Empty : "LayerMapping");
 
     private static SectionPreflightCheckItemDto BuildBaseFloorExistsCheck(SectionConfig config)
     {
@@ -139,7 +186,11 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
                 "base-floor",
                 "基准层是否存在",
                 SectionPreflightSeverityDto.Info,
-                "当前为单楼层模式，不强制要求基准层。");
+                "当前为单楼层模式，不强制要求基准层。",
+                "当前无需处理。",
+                "楼层配置",
+                SectionPreflightActionTargetDto.None,
+                string.Empty);
         }
 
         if (string.IsNullOrWhiteSpace(config.AlignmentBaseFloorName))
@@ -148,7 +199,11 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
                 "base-floor",
                 "基准层是否存在",
                 SectionPreflightSeverityDto.Blocking,
-                "多楼层模式下尚未选择基准层。");
+                "多楼层模式下尚未选择基准层。",
+                "请打开楼层配置并指定一个基准层。",
+                "楼层配置",
+                SectionPreflightActionTargetDto.FloorConfig,
+                "FloorConfig");
         }
 
         var exists = config.Floors.Any(floor =>
@@ -159,7 +214,12 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
             exists ? SectionPreflightSeverityDto.Passed : SectionPreflightSeverityDto.Blocking,
             exists
                 ? $"基准层已设置为 {config.AlignmentBaseFloorName}。"
-                : $"未找到名为 {config.AlignmentBaseFloorName} 的基准层。");
+                : $"未找到名为 {config.AlignmentBaseFloorName} 的基准层。",
+            exists ? "当前无需处理。" : "请打开楼层配置，重新选择有效的基准层。",
+            string.IsNullOrWhiteSpace(config.AlignmentBaseFloorName) ? "楼层配置" : config.AlignmentBaseFloorName,
+            exists ? SectionPreflightActionTargetDto.None : SectionPreflightActionTargetDto.FloorConfig,
+            exists ? string.Empty : "FloorConfig",
+            exists ? config.AlignmentBaseFloorName : null);
     }
 
     private static SectionPreflightCheckItemDto BuildBaseAlignmentCheck(SectionConfig config)
@@ -170,7 +230,11 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
                 "base-alignment",
                 "基准层对齐点是否有效",
                 SectionPreflightSeverityDto.Info,
-                "当前为单楼层模式，不强制要求基准层三点对齐。");
+                "当前为单楼层模式，不强制要求基准层三点对齐。",
+                "当前无需处理。",
+                "楼层配置",
+                SectionPreflightActionTargetDto.None,
+                string.Empty);
         }
 
         var baseFloor = FindBaseFloor(config);
@@ -180,7 +244,11 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
                 "base-alignment",
                 "基准层对齐点是否有效",
                 SectionPreflightSeverityDto.Blocking,
-                "基准层不存在，无法检查对齐点。");
+                "基准层不存在，无法检查对齐点。",
+                "请先在楼层配置中修正基准层设置。",
+                "楼层配置",
+                SectionPreflightActionTargetDto.FloorConfig,
+                "FloorConfig");
         }
 
         return FloorSectionLineTransformer.TryValidateAlignmentPoints(baseFloor.AlignmentPoints, out var error)
@@ -188,12 +256,22 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
                 "base-alignment",
                 "基准层对齐点是否有效",
                 SectionPreflightSeverityDto.Passed,
-                $"基准层 {baseFloor.Name} 已设置有效对齐点。")
+                $"基准层 {baseFloor.Name} 已设置有效对齐点。",
+                "当前无需处理。",
+                baseFloor.Name,
+                SectionPreflightActionTargetDto.None,
+                string.Empty,
+                baseFloor.Name)
             : CreateCheckItem(
                 "base-alignment",
                 "基准层对齐点是否有效",
                 SectionPreflightSeverityDto.Blocking,
-                $"基准层 {baseFloor.Name} 的对齐点无效: {error}");
+                $"基准层 {baseFloor.Name} 的对齐点无效: {error}",
+                "请打开楼层配置，重新拾取基准层的三点对齐。",
+                baseFloor.Name,
+                SectionPreflightActionTargetDto.FloorConfig,
+                "FloorConfig",
+                baseFloor.Name);
     }
 
     private static SectionPreflightCheckItemDto BuildBaseScopeCheck(SectionConfig config)
@@ -204,7 +282,11 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
                 "base-scope",
                 "基准层范围是否有效",
                 SectionPreflightSeverityDto.Info,
-                "当前为单楼层模式，不强制要求基准层整层范围。");
+                "当前为单楼层模式，不强制要求基准层整层范围。",
+                "当前无需处理。",
+                "楼层配置",
+                SectionPreflightActionTargetDto.None,
+                string.Empty);
         }
 
         var baseFloor = FindBaseFloor(config);
@@ -214,7 +296,11 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
                 "base-scope",
                 "基准层范围是否有效",
                 SectionPreflightSeverityDto.Blocking,
-                "基准层不存在，无法检查整层范围。");
+                "基准层不存在，无法检查整层范围。",
+                "请先在楼层配置中修正基准层设置。",
+                "楼层配置",
+                SectionPreflightActionTargetDto.FloorConfig,
+                "FloorConfig");
         }
 
         if (!baseFloor.ScopeBounds.HasValue)
@@ -223,7 +309,12 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
                 "base-scope",
                 "基准层范围是否有效",
                 SectionPreflightSeverityDto.Blocking,
-                $"基准层 {baseFloor.Name} 缺少整层范围框。");
+                $"基准层 {baseFloor.Name} 缺少整层范围框。",
+                "请打开楼层配置，重新拾取基准层整层范围。",
+                baseFloor.Name,
+                SectionPreflightActionTargetDto.FloorConfig,
+                "FloorConfig",
+                baseFloor.Name);
         }
 
         return baseFloor.ScopeBounds.Value.IsValid()
@@ -231,12 +322,22 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
                 "base-scope",
                 "基准层范围是否有效",
                 SectionPreflightSeverityDto.Passed,
-                $"基准层 {baseFloor.Name} 已设置有效整层范围。")
+                $"基准层 {baseFloor.Name} 已设置有效整层范围。",
+                "当前无需处理。",
+                baseFloor.Name,
+                SectionPreflightActionTargetDto.None,
+                string.Empty,
+                baseFloor.Name)
             : CreateCheckItem(
                 "base-scope",
                 "基准层范围是否有效",
                 SectionPreflightSeverityDto.Blocking,
-                $"基准层 {baseFloor.Name} 的整层范围框无效。");
+                $"基准层 {baseFloor.Name} 的整层范围框无效。",
+                "请打开楼层配置，重新拾取基准层整层范围。",
+                baseFloor.Name,
+                SectionPreflightActionTargetDto.FloorConfig,
+                "FloorConfig",
+                baseFloor.Name);
     }
 
     private static SectionPreflightCheckItemDto BuildSkippedFloorCheck(FloorScopeResolution scopeResolution)
@@ -251,7 +352,11 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
                 "skipped-floors",
                 "非基准层是否会被跳过",
                 SectionPreflightSeverityDto.Passed,
-                "当前没有非基准层会因对齐点或范围问题被跳过。");
+                "当前没有非基准层会因对齐点或范围问题被跳过。",
+                "当前无需处理。",
+                "楼层配置",
+                SectionPreflightActionTargetDto.None,
+                string.Empty);
         }
 
         var details = skippedFloors
@@ -260,7 +365,11 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
             "skipped-floors",
             "非基准层是否会被跳过",
             SectionPreflightSeverityDto.Warning,
-            $"以下楼层生成时会被跳过：{string.Join("；", details)}。");
+            $"以下楼层生成时会被跳过：{string.Join("；", details)}。",
+            "请打开楼层配置，补齐这些楼层的对齐点或范围框。",
+            string.Join("、", skippedFloors.Select(context => context.FloorName)),
+            SectionPreflightActionTargetDto.FloorConfig,
+            "FloorConfig");
     }
 
     private static SectionPreflightCheckItemDto BuildTemplateCheck(IReadOnlyList<OperationDiagnostic> floorDiagnostics)
@@ -277,14 +386,23 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
                 "templates",
                 "边界板模板是否缺失",
                 SectionPreflightSeverityDto.Passed,
-                "当前所有已配置边界板模板都可以解析。");
+                "当前所有已配置边界板模板都可以解析。",
+                "当前无需处理。",
+                "楼层配置",
+                SectionPreflightActionTargetDto.None,
+                string.Empty);
         }
 
         return CreateCheckItem(
             "templates",
             "边界板模板是否缺失",
             SectionPreflightSeverityDto.Blocking,
-            string.Join("；", templateDiagnostics.Select(diagnostic => diagnostic.Message)));
+            string.Join("；", templateDiagnostics.Select(diagnostic => diagnostic.Message)),
+            "请打开楼层配置，改用存在的边界板模板或清空错误模板标识。",
+            ResolveRelatedObjectName(templateDiagnostics.First(), "楼层配置"),
+            SectionPreflightActionTargetDto.FloorConfig,
+            "FloorConfig",
+            ResolveFloorName(templateDiagnostics.First()));
     }
 
     private static SectionPreflightCheckItemDto BuildOutputConfigCheck(IReadOnlyList<OperationDiagnostic> outputDiagnostics)
@@ -295,14 +413,22 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
                 "output-config",
                 "输出配置是否有明显错误",
                 SectionPreflightSeverityDto.Passed,
-                "输出图层和填充配置看起来有效。");
+                "输出图层和填充配置看起来有效。",
+                "当前无需处理。",
+                "输出配置",
+                SectionPreflightActionTargetDto.None,
+                string.Empty);
         }
 
         return CreateCheckItem(
             "output-config",
             "输出配置是否有明显错误",
             SectionPreflightSeverityDto.Blocking,
-            string.Join("；", outputDiagnostics.Select(diagnostic => diagnostic.Message)));
+            string.Join("；", outputDiagnostics.Select(diagnostic => diagnostic.Message)),
+            "请打开楼层配置中的输出设置，修正图层名和填充参数。",
+            "输出配置",
+            SectionPreflightActionTargetDto.FloorConfig,
+            "FloorConfig");
     }
 
     private static IEnumerable<SectionPreflightCheckItemDto> BuildGeneralConfigChecks(
@@ -316,7 +442,12 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
                 diagnostic.Code,
                 "配置字段合法性",
                 SectionPreflightSeverityDto.Blocking,
-                diagnostic.Message));
+                diagnostic.Message,
+                diagnostic.Suggestion ?? "请修正配置中的无效字段。",
+                ResolveRelatedObjectName(diagnostic, "楼层配置"),
+                SectionPreflightActionTargetDto.FloorConfig,
+                "FloorConfig",
+                ResolveFloorName(diagnostic)));
     }
 
     private static SectionPreflightFloorStatusDto BuildFloorStatusDto(FloorConfig floor, FloorResolutionContext resolution)
@@ -407,13 +538,17 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
     private static string BuildSummaryText(bool canGenerate, int blockingCount, int warningCount, int infoCount)
         => canGenerate
             ? $"当前预检通过，可生成。Warning {warningCount}，Info {infoCount}。"
-            : $"当前预检未通过。Blocking {blockingCount}，Warning {warningCount}，Info {infoCount}。";
+            : $"当前预检未通过，需先处理 {blockingCount} 个 Blocking 项。Warning {warningCount}，Info {infoCount}。";
 
     private static SectionPreflightCheckItemDto CreateCheckItem(
         string key,
         string title,
         SectionPreflightSeverityDto severity,
         string summary,
+        string suggestedActionText,
+        string relatedObjectName,
+        SectionPreflightActionTargetDto actionTarget,
+        string suggestedCommandTag,
         string? floorName = null)
         => new()
         {
@@ -421,8 +556,26 @@ public sealed class SectionPreflightReportAssembler : ISectionPreflightReportAss
             Title = title,
             Severity = severity,
             Summary = summary,
+            SuggestedActionText = suggestedActionText,
+            RelatedObjectName = relatedObjectName,
+            SuggestedCommandTag = suggestedCommandTag,
+            ActionTarget = actionTarget,
             FloorName = floorName
         };
+
+    private static string? ResolveFloorName(OperationDiagnostic diagnostic)
+    {
+        if (diagnostic.Metadata.TryGetValue("FloorName", out var floorName) &&
+            !string.IsNullOrWhiteSpace(floorName))
+        {
+            return floorName;
+        }
+
+        return null;
+    }
+
+    private static string ResolveRelatedObjectName(OperationDiagnostic diagnostic, string fallback)
+        => ResolveFloorName(diagnostic) ?? fallback;
 
     private sealed record FloorResolutionContext(
         FloorAlignmentResolution AlignmentResolution,

@@ -41,6 +41,14 @@ public sealed class SectionPreflightCheckItemDto
 
     public string Summary { get; init; } = string.Empty;
 
+    public string SuggestedActionText { get; init; } = string.Empty;
+
+    public string RelatedObjectName { get; init; } = string.Empty;
+
+    public string SuggestedCommandTag { get; init; } = string.Empty;
+
+    public SectionPreflightActionTargetDto ActionTarget { get; init; }
+
     public string? FloorName { get; init; }
 }
 
@@ -67,4 +75,11 @@ public enum SectionPreflightSeverityDto
     Info = 1,
     Warning = 2,
     Blocking = 3
+}
+
+public enum SectionPreflightActionTargetDto
+{
+    None = 0,
+    FloorConfig = 1,
+    LayerMapping = 2
 }

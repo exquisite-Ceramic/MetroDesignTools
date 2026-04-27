@@ -47,6 +47,11 @@
                             Height="30"
                             Margin="0,0,0,6"
                             Click="CommandButton_Click"/>
+                    <Button Content="生成前检查"
+                            Tag="{x:Static hosting:SectionGeneratorCommandNames.SectionPreflight}"
+                            Height="30"
+                            Margin="0,0,0,6"
+                            Click="CommandButton_Click"/>
                     <Button Content="查看或更新剖面"
                             Tag="{x:Static hosting:SectionGeneratorCommandNames.CheckSectionUpdates}"
                             Height="30"

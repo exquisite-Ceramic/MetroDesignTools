@@ -27,9 +27,12 @@ public class SectionPreflightReportAssemblerTests
         });
 
         report.CanGenerate.Should().BeFalse();
+        report.SummaryText.Should().Contain("当前预检未通过");
         report.Checks.Should().Contain(check =>
             check.Title == "基准层是否存在" &&
-            check.Severity == SectionPreflightSeverityDto.Blocking);
+            check.Severity == SectionPreflightSeverityDto.Blocking &&
+            check.ActionTarget == SectionPreflightActionTargetDto.FloorConfig &&
+            check.SuggestedCommandTag == "FloorConfig");
     }
 
     [Fact]
@@ -97,7 +100,8 @@ public class SectionPreflightReportAssemblerTests
 
         report.Checks.Should().Contain(check =>
             check.Title == "非基准层是否会被跳过" &&
-            check.Severity == SectionPreflightSeverityDto.Warning);
+            check.Severity == SectionPreflightSeverityDto.Warning &&
+            check.ActionTarget == SectionPreflightActionTargetDto.FloorConfig);
         report.Floors.Should().Contain(floor =>
             floor.FloorName == "F2" &&
             floor.WillBeSkipped &&
@@ -120,9 +124,31 @@ public class SectionPreflightReportAssemblerTests
         });
 
         report.CanGenerate.Should().BeTrue();
+        report.SummaryText.Should().Contain("当前预检通过");
         report.Checks.Should().Contain(check =>
             check.Title == "基准层是否存在" &&
             check.Severity == SectionPreflightSeverityDto.Info);
+    }
+
+    [Fact]
+    public void Assemble_NoRecognizableElements_ReturnsLayerMappingWarning()
+    {
+        var report = RunReport(
+            new LoadedSectionConfig
+            {
+                Config = new SectionConfig
+                {
+                    Floors = [Floor("F1")]
+                },
+                OutputConfig = ValidOutput()
+            },
+            new GenerationReadinessSummary());
+
+        report.Checks.Should().Contain(check =>
+            check.Title == "图层映射 / 构件识别状态" &&
+            check.Severity == SectionPreflightSeverityDto.Warning &&
+            check.ActionTarget == SectionPreflightActionTargetDto.LayerMapping &&
+            check.SuggestedCommandTag == "LayerMapping");
     }
 
     [Fact]
@@ -186,7 +212,9 @@ public class SectionPreflightReportAssemblerTests
             check.Severity == SectionPreflightSeverityDto.Blocking);
     }
 
-    private static SectionPreflightReportDto RunReport(LoadedSectionConfig document)
+    private static SectionPreflightReportDto RunReport(
+        LoadedSectionConfig document,
+        GenerationReadinessSummary? readiness = null)
     {
         var repository = Substitute.For<IFloorConfigRepository>();
         repository.Load().Returns(document);
@@ -198,7 +226,13 @@ public class SectionPreflightReportAssemblerTests
         });
 
         var readinessInspector = Substitute.For<IGenerationReadinessInspector>();
-        readinessInspector.Inspect().Returns(new GenerationReadinessSummary());
+        readinessInspector.Inspect().Returns(readiness ?? new GenerationReadinessSummary
+        {
+            TotalRecognizableElementCount = 3,
+            RecognizableWallCount = 1,
+            RecognizableColumnCount = 1,
+            RecognizableSlabCount = 1
+        });
 
         var useCase = new GenerateSectionPreflightUseCase(
             repository,
