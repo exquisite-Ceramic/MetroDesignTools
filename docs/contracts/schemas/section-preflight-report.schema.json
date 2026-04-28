@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "section-preflight-report.schema.json",
+  "title": "SectionPreflightReport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "CanGenerate",
+    "Summary",
+    "Checks",
+    "BlockingChecks",
+    "WarningChecks",
+    "InfoChecks",
+    "Floors"
+  ],
+  "properties": {
+    "CanGenerate": {
+      "type": "boolean"
+    },
+    "Summary": {
+      "type": "string"
+    },
+    "Checks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PreflightCheck"
+      }
+    },
+    "BlockingChecks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PreflightCheck"
+      }
+    },
+    "WarningChecks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PreflightCheck"
+      }
+    },
+    "InfoChecks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PreflightCheck"
+      }
+    },
+    "Floors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/FloorStatus"
+      }
+    }
+  },
+  "$defs": {
+    "Severity": {
+      "type": "string",
+      "enum": [
+        "Passed",
+        "Info",
+        "Warning",
+        "Blocking"
+      ]
+    },
+    "ActionTarget": {
+      "type": "string",
+      "enum": [
+        "None",
+        "FloorConfig",
+        "LayerMapping"
+      ]
+    },
+    "SuggestedCommandTag": {
+      "type": "string",
+      "enum": [
+        "FloorConfig",
+        "LayerMapping",
+        ""
+      ]
+    },
+    "PreflightCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "Severity",
+        "Summary",
+        "SuggestedActionText",
+        "RelatedObjectName",
+        "SuggestedCommandTag",
+        "ActionTarget",
+        "FloorName"
+      ],
+      "properties": {
+        "Severity": {
+          "$ref": "#/$defs/Severity"
+        },
+        "Summary": {
+          "type": "string"
+        },
+        "SuggestedActionText": {
+          "type": "string"
+        },
+        "RelatedObjectName": {
+          "type": "string"
+        },
+        "SuggestedCommandTag": {
+          "$ref": "#/$defs/SuggestedCommandTag"
+        },
+        "ActionTarget": {
+          "$ref": "#/$defs/ActionTarget"
+        },
+        "FloorName": {
+          "type": "string"
+        }
+      }
+    },
+    "FloorStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "FloorName",
+        "IsBaseFloor",
+        "CanGenerate",
+        "WillBeSkipped",
+        "Summary"
+      ],
+      "properties": {
+        "FloorName": {
+          "type": "string"
+        },
+        "IsBaseFloor": {
+          "type": "boolean"
+        },
+        "CanGenerate": {
+          "type": "boolean"
+        },
+        "WillBeSkipped": {
+          "type": "boolean"
+        },
+        "Summary": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

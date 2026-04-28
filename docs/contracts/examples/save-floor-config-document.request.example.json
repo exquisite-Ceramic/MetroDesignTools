@@ -1,0 +1,110 @@
+{
+  "$schema": "../schemas/save-floor-config-document.schema.json",
+  "FloorConfig": {
+    "AlignmentBaseFloorName": "F1",
+    "GlobalSlopeEnabled": true,
+    "GlobalSlopePercent": 2.0,
+    "GlobalSlopeTarget": "StructuralSlab",
+    "GlobalTopSlopeEnabled": true,
+    "GlobalTopSlopePercent": 1.5,
+    "GlobalTopSlopeTarget": "Finish",
+    "GlobalBottomSlopeEnabled": false,
+    "GlobalBottomSlopePercent": 0.0,
+    "GlobalBottomSlopeTarget": "StructuralSlab",
+    "Floors": [
+      {
+        "Name": "F1",
+        "Height": 5200.0,
+        "FinishThickness": 120.0,
+        "BottomSlabThickness": 800.0,
+        "TopSlabThickness": 600.0,
+        "LegacySlopeEnabled": true,
+        "LegacySlopePercent": 2.0,
+        "LegacySlopeTarget": "StructuralSlab",
+        "AlignmentPoints": [
+          { "X": 0.0, "Y": 0.0, "Z": 0.0 },
+          { "X": 10000.0, "Y": 0.0, "Z": 0.0 },
+          { "X": 5000.0, "Y": 8000.0, "Z": 0.0 }
+        ],
+        "ScopeBounds": {
+          "MinX": 0.0,
+          "MinY": -5000.0,
+          "MaxX": 15000.0,
+          "MaxY": 5000.0
+        },
+        "TopBoundarySlab": {
+          "TemplateId": "slab-top-standard",
+          "SlopeEnabled": true,
+          "SlopePercent": 1.0,
+          "SlopeTarget": "Finish"
+        },
+        "BottomBoundarySlab": {
+          "TemplateId": "slab-bottom-standard",
+          "SlopeEnabled": false,
+          "SlopePercent": 0.0,
+          "SlopeTarget": "StructuralSlab"
+        }
+      },
+      {
+        "Name": "F2",
+        "Height": 4200.0,
+        "FinishThickness": 100.0,
+        "BottomSlabThickness": 600.0,
+        "TopSlabThickness": 500.0,
+        "LegacySlopeEnabled": false,
+        "LegacySlopePercent": 0.0,
+        "LegacySlopeTarget": "StructuralSlab",
+        "AlignmentPoints": [],
+        "ScopeBounds": null,
+        "TopBoundarySlab": {
+          "TemplateId": "",
+          "SlopeEnabled": false,
+          "SlopePercent": 0.0,
+          "SlopeTarget": "StructuralSlab"
+        },
+        "BottomBoundarySlab": {
+          "TemplateId": "",
+          "SlopeEnabled": false,
+          "SlopePercent": 0.0,
+          "SlopeTarget": "StructuralSlab"
+        }
+      }
+    ]
+  },
+  "OutputConfig": {
+    "AnnotationOptions": {
+      "GenerateAnnotations": true
+    },
+    "HatchOptions": {
+      "Enabled": true,
+      "WallHatch": {
+        "PatternName": "ANSI31",
+        "Scale": 100.0,
+        "Angle": 0.0,
+        "UseByLayer": true
+      },
+      "ColumnHatch": {
+        "PatternName": "SOLID",
+        "Scale": 50.0,
+        "Angle": 45.0,
+        "UseByLayer": false
+      },
+      "SlabHatch": {
+        "PatternName": "ANSI31",
+        "Scale": 100.0,
+        "Angle": 0.0,
+        "UseByLayer": true
+      }
+    },
+    "LayerOptions": {
+      "CutLineLayer": "MK_CutLine",
+      "SightLineLayer": "MK_SightLine",
+      "AnnotationLayer": "MK_Annotation",
+      "WallHatchLayer": "MK_WallHatch",
+      "ColumnHatchLayer": "MK_ColumnHatch",
+      "SlabHatchLayer": "MK_SlabHatch",
+      "StructuralLayer": "MK_StructuralOutput",
+      "FinishLayer": "MK_FinishOutput"
+    }
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "section-output-config.schema.json",
+  "title": "SectionOutputConfig",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "AnnotationOptions",
+    "HatchOptions",
+    "LayerOptions"
+  ],
+  "properties": {
+    "AnnotationOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "GenerateAnnotations"
+      ],
+      "properties": {
+        "GenerateAnnotations": {
+          "type": "boolean"
+        }
+      }
+    },
+    "HatchOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "Enabled",
+        "WallHatch",
+        "ColumnHatch",
+        "SlabHatch"
+      ],
+      "properties": {
+        "Enabled": {
+          "type": "boolean"
+        },
+        "WallHatch": {
+          "$ref": "#/$defs/HatchStyle"
+        },
+        "ColumnHatch": {
+          "$ref": "#/$defs/HatchStyle"
+        },
+        "SlabHatch": {
+          "$ref": "#/$defs/HatchStyle"
+        }
+      }
+    },
+    "LayerOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "CutLineLayer",
+        "SightLineLayer",
+        "AnnotationLayer",
+        "WallHatchLayer",
+        "ColumnHatchLayer",
+        "SlabHatchLayer",
+        "StructuralLayer",
+        "FinishLayer"
+      ],
+      "properties": {
+        "CutLineLayer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "SightLineLayer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "AnnotationLayer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "WallHatchLayer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ColumnHatchLayer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "SlabHatchLayer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "StructuralLayer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "FinishLayer": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "$defs": {
+    "HatchStyle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "PatternName",
+        "Scale",
+        "Angle",
+        "UseByLayer"
+      ],
+      "properties": {
+        "PatternName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "Scale": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "Angle": {
+          "type": "number"
+        },
+        "UseByLayer": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

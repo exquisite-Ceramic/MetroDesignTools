@@ -1,0 +1,37 @@
+{
+  "$schema": "../schemas/section-output-config.schema.json",
+  "AnnotationOptions": {
+    "GenerateAnnotations": true
+  },
+  "HatchOptions": {
+    "Enabled": true,
+    "WallHatch": {
+      "PatternName": "ANSI31",
+      "Scale": 100.0,
+      "Angle": 0.0,
+      "UseByLayer": true
+    },
+    "ColumnHatch": {
+      "PatternName": "SOLID",
+      "Scale": 50.0,
+      "Angle": 45.0,
+      "UseByLayer": false
+    },
+    "SlabHatch": {
+      "PatternName": "ANSI31",
+      "Scale": 100.0,
+      "Angle": 0.0,
+      "UseByLayer": true
+    }
+  },
+  "LayerOptions": {
+    "CutLineLayer": "MK_剖切线",
+    "SightLineLayer": "MK_看线",
+    "AnnotationLayer": "MK_标注",
+    "WallHatchLayer": "MK_墙填充",
+    "ColumnHatchLayer": "MK_柱填充",
+    "SlabHatchLayer": "MK_楼板填充",
+    "StructuralLayer": "MK_结构输出",
+    "FinishLayer": "MK_装修输出"
+  }
+}

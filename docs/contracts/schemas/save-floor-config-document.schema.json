@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "save-floor-config-document.schema.json",
+  "title": "SaveFloorConfigDocumentRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "FloorConfig",
+    "OutputConfig"
+  ],
+  "properties": {
+    "FloorConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "AlignmentBaseFloorName",
+        "GlobalSlopeEnabled",
+        "GlobalSlopePercent",
+        "GlobalSlopeTarget",
+        "GlobalTopSlopeEnabled",
+        "GlobalTopSlopePercent",
+        "GlobalTopSlopeTarget",
+        "GlobalBottomSlopeEnabled",
+        "GlobalBottomSlopePercent",
+        "GlobalBottomSlopeTarget",
+        "Floors"
+      ],
+      "properties": {
+        "AlignmentBaseFloorName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "GlobalSlopeEnabled": {
+          "type": "boolean"
+        },
+        "GlobalSlopePercent": {
+          "type": "number"
+        },
+        "GlobalSlopeTarget": {
+          "$ref": "#/$defs/SlopeTarget"
+        },
+        "GlobalTopSlopeEnabled": {
+          "type": "boolean"
+        },
+        "GlobalTopSlopePercent": {
+          "type": "number"
+        },
+        "GlobalTopSlopeTarget": {
+          "$ref": "#/$defs/SlopeTarget"
+        },
+        "GlobalBottomSlopeEnabled": {
+          "type": "boolean"
+        },
+        "GlobalBottomSlopePercent": {
+          "type": "number"
+        },
+        "GlobalBottomSlopeTarget": {
+          "$ref": "#/$defs/SlopeTarget"
+        },
+        "Floors": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/FloorConfigItem"
+          }
+        }
+      }
+    },
+    "OutputConfig": {
+      "$ref": "./section-output-config.schema.json"
+    }
+  },
+  "$defs": {
+    "SlopeTarget": {
+      "type": "string",
+      "enum": [
+        "StructuralSlab",
+        "Finish"
+      ]
+    },
+    "Point3D": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "X",
+        "Y",
+        "Z"
+      ],
+      "properties": {
+        "X": {
+          "type": "number"
+        },
+        "Y": {
+          "type": "number"
+        },
+        "Z": {
+          "type": "number"
+        }
+      }
+    },
+    "ScopeBounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "MinX",
+        "MinY",
+        "MaxX",
+        "MaxY"
+      ],
+      "properties": {
+        "MinX": {
+          "type": "number"
+        },
+        "MinY": {
+          "type": "number"
+        },
+        "MaxX": {
+          "type": "number"
+        },
+        "MaxY": {
+          "type": "number"
+        }
+      }
+    },
+    "BoundarySlabEdit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "TemplateId",
+        "SlopeEnabled",
+        "SlopePercent",
+        "SlopeTarget"
+      ],
+      "properties": {
+        "TemplateId": {
+          "type": "string"
+        },
+        "SlopeEnabled": {
+          "type": "boolean"
+        },
+        "SlopePercent": {
+          "type": "number"
+        },
+        "SlopeTarget": {
+          "$ref": "#/$defs/SlopeTarget"
+        }
+      }
+    },
+    "FloorConfigItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "Name",
+        "Height",
+        "FinishThickness",
+        "BottomSlabThickness",
+        "TopSlabThickness",
+        "LegacySlopeEnabled",
+        "LegacySlopePercent",
+        "LegacySlopeTarget",
+        "AlignmentPoints",
+        "ScopeBounds",
+        "TopBoundarySlab",
+        "BottomBoundarySlab"
+      ],
+      "properties": {
+        "Name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "Height": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "FinishThickness": {
+          "type": "number",
+          "minimum": 0
+        },
+        "BottomSlabThickness": {
+          "type": "number",
+          "minimum": 0
+        },
+        "TopSlabThickness": {
+          "type": "number",
+          "minimum": 0
+        },
+        "LegacySlopeEnabled": {
+          "type": "boolean"
+        },
+        "LegacySlopePercent": {
+          "type": "number"
+        },
+        "LegacySlopeTarget": {
+          "$ref": "#/$defs/SlopeTarget"
+        },
+        "AlignmentPoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Point3D"
+          }
+        },
+        "ScopeBounds": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScopeBounds"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "TopBoundarySlab": {
+          "$ref": "#/$defs/BoundarySlabEdit"
+        },
+        "BottomBoundarySlab": {
+          "$ref": "#/$defs/BoundarySlabEdit"
+        }
+      }
+    }
+  }
+}

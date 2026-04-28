@@ -1,0 +1,110 @@
+{
+  "$schema": "../schemas/section-preflight-report.schema.json",
+  "CanGenerate": false,
+  "Summary": "The drawing has 1 blocking issue and 2 warning issues. Fix blocking issues before generating the section.",
+  "Checks": [
+    {
+      "Severity": "Blocking",
+      "Summary": "Base floor F1 has an invalid scope bounds and blocks multi-floor section generation.",
+      "SuggestedActionText": "Open FloorConfig and pick scope bounds for base floor F1.",
+      "RelatedObjectName": "F1",
+      "SuggestedCommandTag": "FloorConfig",
+      "ActionTarget": "FloorConfig",
+      "FloorName": "F1"
+    },
+    {
+      "Severity": "Warning",
+      "Summary": "Floor F2 is missing three alignment points and will be skipped during generation.",
+      "SuggestedActionText": "Open FloorConfig and pick three alignment points for floor F2.",
+      "RelatedObjectName": "F2",
+      "SuggestedCommandTag": "FloorConfig",
+      "ActionTarget": "FloorConfig",
+      "FloorName": "F2"
+    },
+    {
+      "Severity": "Warning",
+      "Summary": "Floor F2 is missing scope bounds and will be skipped during generation.",
+      "SuggestedActionText": "Open FloorConfig and pick scope bounds for floor F2.",
+      "RelatedObjectName": "F2",
+      "SuggestedCommandTag": "FloorConfig",
+      "ActionTarget": "FloorConfig",
+      "FloorName": "F2"
+    },
+    {
+      "Severity": "Info",
+      "Summary": "Output configuration has hatches and annotations enabled.",
+      "SuggestedActionText": "",
+      "RelatedObjectName": "OutputConfig",
+      "SuggestedCommandTag": "",
+      "ActionTarget": "None",
+      "FloorName": ""
+    },
+    {
+      "Severity": "Passed",
+      "Summary": "Layer mapping is available.",
+      "SuggestedActionText": "",
+      "RelatedObjectName": "LayerMapping",
+      "SuggestedCommandTag": "LayerMapping",
+      "ActionTarget": "LayerMapping",
+      "FloorName": ""
+    }
+  ],
+  "BlockingChecks": [
+    {
+      "Severity": "Blocking",
+      "Summary": "Base floor F1 has an invalid scope bounds and blocks multi-floor section generation.",
+      "SuggestedActionText": "Open FloorConfig and pick scope bounds for base floor F1.",
+      "RelatedObjectName": "F1",
+      "SuggestedCommandTag": "FloorConfig",
+      "ActionTarget": "FloorConfig",
+      "FloorName": "F1"
+    }
+  ],
+  "WarningChecks": [
+    {
+      "Severity": "Warning",
+      "Summary": "Floor F2 is missing three alignment points and will be skipped during generation.",
+      "SuggestedActionText": "Open FloorConfig and pick three alignment points for floor F2.",
+      "RelatedObjectName": "F2",
+      "SuggestedCommandTag": "FloorConfig",
+      "ActionTarget": "FloorConfig",
+      "FloorName": "F2"
+    },
+    {
+      "Severity": "Warning",
+      "Summary": "Floor F2 is missing scope bounds and will be skipped during generation.",
+      "SuggestedActionText": "Open FloorConfig and pick scope bounds for floor F2.",
+      "RelatedObjectName": "F2",
+      "SuggestedCommandTag": "FloorConfig",
+      "ActionTarget": "FloorConfig",
+      "FloorName": "F2"
+    }
+  ],
+  "InfoChecks": [
+    {
+      "Severity": "Info",
+      "Summary": "Output configuration has hatches and annotations enabled.",
+      "SuggestedActionText": "",
+      "RelatedObjectName": "OutputConfig",
+      "SuggestedCommandTag": "",
+      "ActionTarget": "None",
+      "FloorName": ""
+    }
+  ],
+  "Floors": [
+    {
+      "FloorName": "F1",
+      "IsBaseFloor": true,
+      "CanGenerate": false,
+      "WillBeSkipped": false,
+      "Summary": "Base floor scope bounds are invalid and block generation."
+    },
+    {
+      "FloorName": "F2",
+      "IsBaseFloor": false,
+      "CanGenerate": false,
+      "WillBeSkipped": true,
+      "Summary": "Missing alignment points and scope bounds. This floor will be skipped."
+    }
+  ]
+}
