@@ -134,6 +134,7 @@ P4 手工宿主验收建议至少覆盖以下命令：
 ## Host Validation Plan Index
 
 - `P4.2e - GenSection Host Validation Plan`
+- `P4.2e - GenSection Manual Host Validation Record`
 - `P4.2f - CheckSectionUpdates Host Validation Plan`
 - `P4.2g - UpdateSection Host Validation Plan`
 - `accoreconsole.exe Follow-up Plan`
@@ -432,6 +433,71 @@ FloorConfig 的最低要求：
 - 准备一个最小测试 DWG，至少包含可回读的 `FloorConfig`、一条可识别剖切线，以及一个可识别或可转换的简单构件。
 - 在真实 `acad.exe` 中按本节步骤执行 `GenSection`，补充手动验收记录，并明确区分 controlled failure、partial success 与 full success。
 - 后续可评估是否通过宿主自动化专用 Bootstrap 与 `.scr` 脚本，把 `GenSection` 最小 smoke 场景接入 `accoreconsole.exe`。
+
+## P4.2e - GenSection Manual Host Validation Record
+
+本节用于后续真实 AutoCAD 手工宿主验收时填写记录；当前不代表已执行验收。
+
+### Execution Context
+
+- Date: `TBD`
+- Validator: `TBD`
+- Git commit: `TBD`
+- Build command: `TBD`
+- Publish command: `TBD`
+- AutoCAD host: `TBD`
+- Loaded DLL: `publish/SectionGenerator/MetroToolKits.Bootstrap.dll`
+- Test DWG: `TBD`
+- Log files checked: `TBD`
+- Notes: `TBD`
+- Current status: `Pending manual host validation`
+
+说明：
+
+- 应通过 `NETLOAD` 加载 `publish/SectionGenerator/MetroToolKits.Bootstrap.dll`。
+- 不应直接加载 `publish/SectionGenerator/MetroToolKits.SectionGenerator.Plugin.dll`。
+
+### Controlled Failure Record
+
+| Scenario | Test DWG | Expected Result | Actual Result | Log Check | Status | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| Missing Section Line | `TBD` | 不崩溃，给出业务 warning 或 diagnostics | `TBD` | `TBD` | `Pending manual host validation` | `TBD` |
+| Missing Scope | `TBD` | 不崩溃，给出业务 warning 或 diagnostics | `TBD` | `TBD` | `Pending manual host validation` | `TBD` |
+| Missing Reference Floor | `TBD` | 不崩溃，给出业务 warning 或 diagnostics | `TBD` | `TBD` | `Pending manual host validation` | `TBD` |
+| Missing Elements | `TBD` | 不崩溃，给出业务 warning 或 diagnostics | `TBD` | `TBD` | `Pending manual host validation` | `TBD` |
+
+### Minimal Success / Partial Success Record
+
+| Scenario | Test DWG | Expected Result | Actual Result | Generated Output | Log Check | Status | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Minimal DWG with FloorConfig + section line + simple recognizable element | `TBD` | 命令可执行完成，或至少以可诊断结果结束且宿主不崩溃 | `TBD` | `TBD` | `TBD` | `Pending manual host validation` | `TBD` |
+| Minimal DWG with FloorConfig + section line but no convertible element | `TBD` | 给出业务 warning 或 diagnostics，宿主不崩溃 | `TBD` | `TBD` | `TBD` | `Pending manual host validation` | `TBD` |
+| Minimal DWG with FloorConfig + section line + element conversion warning | `TBD` | 产生可诊断 warning 或部分输出，宿主不崩溃 | `TBD` | `TBD` | `TBD` | `Pending manual host validation` | `TBD` |
+
+### Manual Validation Checklist
+
+- [ ] Run `.\build.ps1 publish`
+- [ ] Start `acad.exe`
+- [ ] Load `publish/SectionGenerator/MetroToolKits.Bootstrap.dll` with `NETLOAD`
+- [ ] Do not directly load plugin DLL
+- [ ] Open controlled failure DWG
+- [ ] Execute `GenSection`
+- [ ] Record command line output
+- [ ] Record UI diagnostics or warning
+- [ ] Check `publish/SectionGenerator/logs/MetroToolKits.log`
+- [ ] Check `publish/SectionGenerator/logs/MetroToolKits_User.log`
+- [ ] Confirm AutoCAD host did not crash
+- [ ] Confirm no fatal error
+- [ ] Confirm no unhandled exception dialog
+- [ ] Record final status
+
+### Result Classification
+
+- `Passed`: 只有真实手动验收完成，且满足通过标准时才能使用。
+- `Controlled Failure`: 命令按业务失败或 warning 结束，宿主不崩溃。
+- `Partial Success`: 命令执行到部分流程，产生 warning 或部分输出，宿主不崩溃。
+- `Failed`: 出现宿主崩溃、fatal error、未处理异常，或业务结果不可诊断。
+- `Pending manual host validation`: 尚未实际执行手工宿主验收。
 
 ## P4.2f - CheckSectionUpdates Host Validation Plan
 
