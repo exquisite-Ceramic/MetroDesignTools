@@ -136,6 +136,7 @@ P4 手工宿主验收建议至少覆盖以下命令：
 - `P4.2e - GenSection Host Validation Plan`
 - `P4.2e - GenSection Manual Host Validation Record`
 - `P4.2f - CheckSectionUpdates Host Validation Plan`
+- `P4.2f - CheckSectionUpdates Manual Host Validation Record`
 - `P4.2g - UpdateSection Host Validation Plan`
 - `accoreconsole.exe Follow-up Plan`
 
@@ -810,6 +811,77 @@ metadata、snapshot 或 XData 的最低要求：
 - 准备有已生成剖面但无变化 DWG。
 - 准备有已生成剖面且源构件发生变化 DWG。
 - 准备 metadata 缺失或损坏 DWG。
+
+## P4.2f - CheckSectionUpdates Manual Host Validation Record
+
+本节用于后续真实 AutoCAD 手工宿主验收时填写记录；当前不代表已执行验收。
+
+### Execution Context
+
+- Date: `TBD`
+- Validator: `TBD`
+- Git commit: `TBD`
+- Build command: `TBD`
+- Publish command: `TBD`
+- AutoCAD host: `TBD`
+- Loaded DLL: `publish/SectionGenerator/MetroToolKits.Bootstrap.dll`
+- Test DWG: `TBD`
+- Log files checked: `TBD`
+- Notes: `TBD`
+- Current status: `Pending manual host validation`
+
+说明：
+
+- 应通过 `NETLOAD` 加载 `publish/SectionGenerator/MetroToolKits.Bootstrap.dll`。
+- 不应直接加载 `publish/SectionGenerator/MetroToolKits.SectionGenerator.Plugin.dll`。
+
+### Controlled Failure Record
+
+| Scenario | Test DWG | Expected Result | Actual Result | Log Check | Status | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| No Generated Sections In Current DWG | `TBD` | 不崩溃，给出业务 warning 或 diagnostics | `TBD` | `TBD` | `Pending manual host validation` | `TBD` |
+| No FloorConfig In Current DWG | `TBD` | 不崩溃，给出业务 warning 或 diagnostics | `TBD` | `TBD` | `Pending manual host validation` | `TBD` |
+| Missing Section Metadata Snapshot Or XData | `TBD` | 不崩溃，给出业务 warning 或 diagnostics | `TBD` | `TBD` | `Pending manual host validation` | `TBD` |
+| Source Elements Deleted Or Unrecognizable | `TBD` | 不崩溃，给出业务 warning 或 diagnostics | `TBD` | `TBD` | `Pending manual host validation` | `TBD` |
+| Section Exists But Missing Source Association | `TBD` | 不崩溃，给出业务 warning 或 diagnostics | `TBD` | `TBD` | `Pending manual host validation` | `TBD` |
+| Unsaved Drawing Or Invalid Path State | `TBD` | 不崩溃，给出业务 warning 或 diagnostics | `TBD` | `TBD` | `Pending manual host validation` | `TBD` |
+
+### Minimal Success / Partial Success Record
+
+| Scenario | Test DWG | Expected Result | Actual Result | Update Check Result | Log Check | Status | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Minimal DWG with FloorConfig + generated section + metadata | `TBD` | 命令可执行完成，且能给出可诊断的检查结果，宿主不崩溃 | `TBD` | `TBD` | `TBD` | `Pending manual host validation` | `TBD` |
+| Minimal DWG with generated section but no source changes | `TBD` | 明确提示无更新或无差异，宿主不崩溃 | `TBD` | `TBD` | `TBD` | `Pending manual host validation` | `TBD` |
+| Minimal DWG with generated section and modified source element | `TBD` | 明确提示存在变化、过期或需要更新，宿主不崩溃 | `TBD` | `TBD` | `TBD` | `Pending manual host validation` | `TBD` |
+| Minimal DWG with generated section but insufficient metadata | `TBD` | 给出业务 warning 或 diagnostics，宿主不崩溃 | `TBD` | `TBD` | `TBD` | `Pending manual host validation` | `TBD` |
+
+### Manual Validation Checklist
+
+- [ ] Run `.\build.ps1 publish`
+- [ ] Start `acad.exe`
+- [ ] Load `publish/SectionGenerator/MetroToolKits.Bootstrap.dll` with `NETLOAD`
+- [ ] Do not directly load plugin DLL
+- [ ] Open controlled failure DWG
+- [ ] Execute `CheckSectionUpdates`
+- [ ] Record command line output
+- [ ] Record UI diagnostics or warning
+- [ ] Check `publish/SectionGenerator/logs/MetroToolKits.log`
+- [ ] Check `publish/SectionGenerator/logs/MetroToolKits_User.log`
+- [ ] Confirm AutoCAD host did not crash
+- [ ] Confirm no fatal error
+- [ ] Confirm no unhandled exception dialog
+- [ ] Record whether result is no changes, changes detected, warning, or failure
+- [ ] Record final status
+
+### Result Classification
+
+- `Passed`: 只有真实手动验收完成，且满足通过标准时才能使用。
+- `Controlled Failure`: 命令按业务失败或 warning 结束，宿主不崩溃。
+- `No Changes`: 命令完成检查，并明确提示没有更新或没有差异。
+- `Changes Detected`: 命令完成检查，并明确提示存在变化、过期或需要更新。
+- `Partial Success`: 命令执行到部分流程，产生 warning 或部分结果，宿主不崩溃。
+- `Failed`: 出现宿主崩溃、fatal error、未处理异常，或业务结果不可诊断。
+- `Pending manual host validation`: 尚未实际执行手工宿主验收。
 
 ## P4.2g - UpdateSection Host Validation Plan
 
