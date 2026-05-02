@@ -125,6 +125,38 @@ public class GenerateSectionUseCaseTests
     }
 
     [Fact]
+    public void Execute_WithLegacyRecognizer_KeepsExistingCutElementPipeline()
+    {
+        var recognizer = Substitute.For<IElementRecognizer>();
+        recognizer.RecognizeElements(Arg.Any<Line3D>(), Arg.Any<double>())
+            .Returns(RecognitionResult(MakeWallAtX(0)));
+
+        MultiFloorSectionData? capturedData = null;
+        var drawingService = Substitute.For<IDrawingService>();
+        drawingService.DrawMultiFloorSectionBlock(
+                Arg.Do<MultiFloorSectionData>(data => capturedData = data),
+                Arg.Any<Point3D>(),
+                Arg.Any<IReadOnlyList<FloorConfig>>(),
+                Arg.Any<SectionOutputConfig>(),
+                Arg.Any<double>())
+            .Returns(new DrawSectionBlockResult
+            {
+                BlockName = "MK_剖面_F1",
+                BlockHandle = "ABCD"
+            });
+
+        var result = BuildUseCase(recognizer: recognizer, drawingService: drawingService)
+            .Execute(CreateRequest());
+
+        result.Success.Should().BeTrue();
+        recognizer.Received(1).RecognizeElements(Arg.Any<Line3D>(), 3000);
+        capturedData.Should().NotBeNull();
+        capturedData!.Floors.Should().ContainSingle();
+        capturedData.Floors[0].Elements.Should().ContainSingle();
+        capturedData.Floors[0].AllSightLines.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Execute_BaseFloorMissing_ReturnsFailed()
     {
         var configRepo = Substitute.For<IFloorConfigRepository>();
