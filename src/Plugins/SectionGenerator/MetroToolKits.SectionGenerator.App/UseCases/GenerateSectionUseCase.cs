@@ -24,6 +24,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
     private readonly IDrawingService _drawingService;
     private readonly ISectionSnapshotRepository _snapshotRepo;
     private readonly FloorGeometryHasher _hasher;
+    private readonly SightLineGeometryHasher _sightLineHasher = new();
     private readonly FloorAlignmentResolver _alignmentResolver;
     private readonly FloorScopeResolver _scopeResolver;
     private readonly ILogger<GenerateSectionUseCase> _logger;
@@ -445,6 +446,16 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
                     .Where(h => !string.IsNullOrWhiteSpace(h))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
+            var sightLineElements = floorGeometry == null
+                ? new List<ElementSectionData>()
+                : floorGeometry.Elements
+                    .Where(HasSightLineGeometry)
+                    .ToList();
+            var sightLineSourceHandles = sightLineElements
+                .SelectMany(e => e.SourceHandles.Count > 0 ? e.SourceHandles : new[] { e.SourceHandle })
+                .Where(h => !string.IsNullOrWhiteSpace(h))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
             return new FloorSnapshot
             {
@@ -453,7 +464,11 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
                     _hasher.ComputeHash(elements, f, floorGeometry?.VerticalProfile),
                     outputConfig),
                 ElementCount = elements.Count,
-                SourceElementHandles = sourceHandles
+                SourceElementHandles = sourceHandles,
+                SightLineGeometryHash = _sightLineHasher.ComputeHash(floorGeometry?.Elements ?? Array.Empty<ElementSectionData>()),
+                SightLineElementCount = sightLineElements.Count,
+                SightLineSourceElementHandles = sightLineSourceHandles,
+                SightLineHashVersion = SightLineGeometryHasher.CurrentHashVersion
             };
         }).ToList();
 
@@ -488,6 +503,9 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
         => element.CutLineSegments.Count > 0 ||
            element.CutLines.Count > 0 ||
            element.HatchRegions.Count > 0;
+
+    private static bool HasSightLineGeometry(ElementSectionData element)
+        => element.SightLines.Count > 0;
 
     private static SectionSightLineCandidate MapSightLineCandidate(ViewDepthCandidate candidate)
         => new()

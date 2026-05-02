@@ -146,7 +146,16 @@ public class GenerateSectionUseCaseTests
                 BlockHandle = "ABCD"
             });
 
-        var result = BuildUseCase(recognizer: recognizer, drawingService: drawingService)
+        SectionSnapshot? savedSnapshot = null;
+        var snapshotRepo = Substitute.For<ISectionSnapshotRepository>();
+        snapshotRepo
+            .When(repo => repo.Save("ABCD", Arg.Any<SectionSnapshot>()))
+            .Do(call => savedSnapshot = call.ArgAt<SectionSnapshot>(1));
+
+        var result = BuildUseCase(
+                recognizer: recognizer,
+                drawingService: drawingService,
+                snapshotRepo: snapshotRepo)
             .Execute(CreateRequest());
 
         result.Success.Should().BeTrue();
@@ -155,6 +164,14 @@ public class GenerateSectionUseCaseTests
         capturedData!.Floors.Should().ContainSingle();
         capturedData.Floors[0].Elements.Should().ContainSingle();
         capturedData.Floors[0].AllSightLines.Should().BeEmpty();
+        savedSnapshot.Should().NotBeNull();
+        savedSnapshot!.FloorSnapshots.Should().ContainSingle();
+        var floorSnapshot = savedSnapshot.FloorSnapshots[0];
+        floorSnapshot.SightLineGeometryHash.Should().Be(new SightLineGeometryHasher().ComputeHash(Array.Empty<ElementSectionData>()));
+        floorSnapshot.SightLineElementCount.Should().Be(0);
+        floorSnapshot.SightLineSourceElementHandles.Should().NotBeNull();
+        floorSnapshot.SightLineSourceElementHandles.Should().BeEmpty();
+        floorSnapshot.SightLineHashVersion.Should().Be(SightLineGeometryHasher.CurrentHashVersion);
     }
 
     [Fact]
@@ -240,6 +257,10 @@ public class GenerateSectionUseCaseTests
         floorSnapshot.ElementCount.Should().Be(1);
         floorSnapshot.SourceElementHandles.Should().ContainSingle().Which.Should().Be("CUT");
         floorSnapshot.SourceElementHandles.Should().NotContain("CANDIDATE");
+        floorSnapshot.SightLineGeometryHash.Should().Be(new SightLineGeometryHasher().ComputeHash(capturedData.Floors[0].Elements));
+        floorSnapshot.SightLineElementCount.Should().Be(1);
+        floorSnapshot.SightLineSourceElementHandles.Should().ContainSingle().Which.Should().Be("CANDIDATE");
+        floorSnapshot.SightLineHashVersion.Should().Be(SightLineGeometryHasher.CurrentHashVersion);
 
         var expectedHash = SectionOutputConfigHasher.Combine(
             new FloorGeometryHasher().ComputeHash(
@@ -248,6 +269,60 @@ public class GenerateSectionUseCaseTests
                 capturedData.Floors[0].VerticalProfile),
             outputConfig);
         floorSnapshot.GeometryHash.Should().Be(expectedHash);
+    }
+
+    [Fact]
+    public void Execute_WithV2RecognizerWithoutCandidates_WritesEmptySightLineSnapshotHash()
+    {
+        var cutWall = MakeWallAtX(0, "CUT");
+        var recognizer = new FakeSectionElementRecognizerV2(new SectionRecognitionSet
+        {
+            CutElements = new[] { cutWall },
+            ViewDepthCandidates = Array.Empty<ViewDepthCandidate>()
+        });
+
+        MultiFloorSectionData? capturedData = null;
+        var drawingService = Substitute.For<IDrawingService>();
+        drawingService.DrawMultiFloorSectionBlock(
+                Arg.Do<MultiFloorSectionData>(data => capturedData = data),
+                Arg.Any<Point3D>(),
+                Arg.Any<IReadOnlyList<FloorConfig>>(),
+                Arg.Any<SectionOutputConfig>(),
+                Arg.Any<double>())
+            .Returns(new DrawSectionBlockResult
+            {
+                BlockName = "MK_剖面_F1",
+                BlockHandle = "ABCD"
+            });
+
+        SectionSnapshot? savedSnapshot = null;
+        var snapshotRepo = Substitute.For<ISectionSnapshotRepository>();
+        snapshotRepo
+            .When(repo => repo.Save("ABCD", Arg.Any<SectionSnapshot>()))
+            .Do(call => savedSnapshot = call.ArgAt<SectionSnapshot>(1));
+
+        var result = BuildUseCase(
+                recognizer: recognizer,
+                drawingService: drawingService,
+                snapshotRepo: snapshotRepo)
+            .Execute(CreateRequest());
+
+        result.Status.Should().Be(OperationStatus.Success);
+        recognizer.V2CallCount.Should().Be(1);
+        recognizer.LegacyCallCount.Should().Be(0);
+        capturedData.Should().NotBeNull();
+        capturedData!.Floors[0].AllSightLines.Should().BeEmpty();
+
+        savedSnapshot.Should().NotBeNull();
+        savedSnapshot!.FloorSnapshots.Should().ContainSingle();
+        var floorSnapshot = savedSnapshot.FloorSnapshots[0];
+        floorSnapshot.ElementCount.Should().Be(1);
+        floorSnapshot.SourceElementHandles.Should().ContainSingle().Which.Should().Be("CUT");
+        floorSnapshot.SightLineGeometryHash.Should().Be(new SightLineGeometryHasher().ComputeHash(capturedData.Floors[0].Elements));
+        floorSnapshot.SightLineElementCount.Should().Be(0);
+        floorSnapshot.SightLineSourceElementHandles.Should().NotBeNull();
+        floorSnapshot.SightLineSourceElementHandles.Should().BeEmpty();
+        floorSnapshot.SightLineHashVersion.Should().Be(SightLineGeometryHasher.CurrentHashVersion);
     }
 
     [Fact]
