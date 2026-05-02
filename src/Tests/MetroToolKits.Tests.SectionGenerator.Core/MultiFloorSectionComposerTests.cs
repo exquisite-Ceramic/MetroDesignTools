@@ -88,4 +88,60 @@ public class MultiFloorSectionComposerTests
 
         result.TotalHeight.Should().Be(10100);
     }
+
+    [Fact]
+    public void Generate_WithRecognitionDataCarriesCandidatesButDoesNotCreateSightLines()
+    {
+        var composer = MakeComposer();
+        var floor = MakeFloor("F1");
+        var floors = new[] { floor };
+        var executionContexts = ExecutionContexts(
+            ("F1", true, new Line3D(new Point3D(-500, 2500, 0), new Point3D(6500, 2500, 0))));
+        var cutWall = new Wall
+        {
+            SourceHandle = "CUT",
+            StartPoint = new Point3D(0, 0, 0),
+            EndPoint = new Point3D(0, 5000, 0),
+            Height = 3000,
+            Thickness = 200,
+            BaseElevation = 0
+        };
+        var candidateWall = new Wall
+        {
+            SourceHandle = "CANDIDATE",
+            StartPoint = new Point3D(1000, 1000, 0),
+            EndPoint = new Point3D(2000, 1000, 0),
+            Height = 3000,
+            Thickness = 200,
+            BaseElevation = 0
+        };
+        var recognitionData = new Dictionary<string, SectionFloorRecognitionData>(StringComparer.OrdinalIgnoreCase)
+        {
+            [floor.Name] = new()
+            {
+                Floor = floor,
+                CutElements = new BuildingElement[] { cutWall },
+                SightLineCandidates = new[]
+                {
+                    new SectionSightLineCandidate
+                    {
+                        Element = candidateWall,
+                        SourceHandle = "CANDIDATE",
+                        ElementType = "Wall",
+                        MinChainage = 1000,
+                        MaxChainage = 2000,
+                        MinDepth = 100,
+                        MaxDepth = 300
+                    }
+                }
+            }
+        };
+
+        var result = composer.Generate(executionContexts, ViewDir, recognitionData, floors);
+
+        result.Floors.Should().ContainSingle();
+        result.AllSightLines.Should().BeEmpty();
+        result.Floors[0].Elements.Should().ContainSingle().Which.SourceHandle.Should().Be("CUT");
+        result.Floors[0].Elements.Should().NotContain(element => element.SourceHandle == "CANDIDATE");
+    }
 }

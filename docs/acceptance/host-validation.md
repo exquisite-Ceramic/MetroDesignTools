@@ -148,6 +148,17 @@ P4 手工宿主验收建议至少覆盖以下命令：
   当前状态：`Pending manual host validation`
   说明：已引入 `SectionRecognitionSet` / `ViewDepthCandidate` 模型分离基础，`LayerBasedElementRecognizer` V2 可产出 viewDepth candidates；旧生成链路仍不消费 candidates，不与剖切线相交但位于 `viewDepth` strip 内的元素目前不会生成 `SightLines`；投影看线未实现，hash/update detection 尚未纳入 sightline geometry，仍需要真实 `acad.exe` 验证。
 
+## viewDepth SightLines Stage A Status
+
+- This section supersedes the preceding P0 wording that said the generation pipeline did not consume candidates.
+- Stage A has introduced a Core input boundary for separated cut elements and sight-line candidates.
+- App-layer `ViewDepthCandidate` data is mapped into Core-layer `SectionSightLineCandidate` data before section composition.
+- Stage A does not generate `ElementSectionData.SightLines`.
+- Stage A does not change drawing output, layer options, source-ref XData, `SectionSnapshot`, `FloorGeometryHasher`, `CheckSectionUpdates`, or `UpdateSection`.
+- SightLines projection remains pending.
+- snapshot/hash/update detection still does not include sight-line geometry.
+- AutoCAD host validation remains `Pending manual host validation`; this still requires real `acad.exe` validation.
+
 ## P4.2b Manual NETLOAD Result
 
 当前手动宿主验收记录如下：

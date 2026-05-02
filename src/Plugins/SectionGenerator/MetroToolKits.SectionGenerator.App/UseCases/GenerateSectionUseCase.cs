@@ -194,6 +194,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
 
             // 逐层识别构件，同时输出进度
             var floorElements = new Dictionary<string, IReadOnlyList<BuildingElement>>();
+            var floorRecognitionData = new Dictionary<string, SectionFloorRecognitionData>(StringComparer.OrdinalIgnoreCase);
             var participatingFloors = new List<FloorConfig>();
             var skippedFloorCount = 0;
             currentStage = PipelineStage.ElementRecognition;
@@ -238,6 +239,12 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
                     request.ViewDepth,
                     context.EffectiveScope);
                 floorElements[floor.Name] = recognition.CutElements;
+                floorRecognitionData[floor.Name] = new SectionFloorRecognitionData
+                {
+                    Floor = floor,
+                    CutElements = recognition.CutElements,
+                    SightLineCandidates = recognition.ViewDepthCandidates.Select(MapSightLineCandidate).ToList()
+                };
                 totalRecognizedCount += recognition.CutElements.Count;
                 diagnostics.AddRange(AddFloorContext(floor.Name, recognition.Diagnostics));
 
@@ -312,7 +319,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
             // 多楼层堆叠计算
             currentStage = PipelineStage.SectionComposition;
             var composeSw = Stopwatch.StartNew();
-            var multiData = _multiComposer.Generate(scopeResolution.Floors, viewDirection, floorElements, floors);
+            var multiData = _multiComposer.Generate(scopeResolution.Floors, viewDirection, floorRecognitionData, floors);
             composeSw.Stop();
             _logger.LogDebug("多楼层剖切计算耗时 {ElapsedMs}ms，总高度: {TotalHeight:F2}",
                 composeSw.ElapsedMilliseconds, multiData.TotalHeight);
@@ -475,6 +482,18 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
         var dir = sectionLine.Direction.Normalized;
         return new Vector3D(-dir.Y, dir.X, 0);
     }
+
+    private static SectionSightLineCandidate MapSightLineCandidate(ViewDepthCandidate candidate)
+        => new()
+        {
+            Element = candidate.Element,
+            SourceHandle = candidate.SourceHandle,
+            ElementType = candidate.ElementType,
+            MinChainage = candidate.MinChainage,
+            MaxChainage = candidate.MaxChainage,
+            MinDepth = candidate.MinDepth,
+            MaxDepth = candidate.MaxDepth
+        };
 
     private static IReadOnlyList<OperationDiagnostic> AddFloorContext(
         string floorName,

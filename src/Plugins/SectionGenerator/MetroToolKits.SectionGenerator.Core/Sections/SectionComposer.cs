@@ -32,8 +32,24 @@ public sealed class SectionComposer
         IEnumerable<BuildingElement> elements,
         FloorConfig floorConfig,
         double baseElevation = 0)
+        => Generate(
+            sectionLine,
+            viewDirection,
+            new SectionFloorRecognitionData
+            {
+                Floor = floorConfig,
+                CutElements = elements.ToList()
+            },
+            baseElevation);
+
+    public SectionGeometryData Generate(
+        Line3D sectionLine,
+        Vector3D viewDirection,
+        SectionFloorRecognitionData recognitionData,
+        double baseElevation = 0)
     {
         var projector = new SectionCoordinateProjector(sectionLine);
+        var floorConfig = recognitionData.Floor;
         var verticalProfile = _verticalProfileBuilder.Build(floorConfig, projector.SectionLength, baseElevation);
         var context = new SectionGeometryContext
         {
@@ -43,7 +59,7 @@ public sealed class SectionComposer
             VerticalProfile = verticalProfile
         };
 
-        var elementList = elements.ToList();
+        var elementList = recognitionData.CutElements.ToList();
         var slabElements = elementList
             .Where(static element => element is Slab or CompositeSlabElement)
             .ToList();

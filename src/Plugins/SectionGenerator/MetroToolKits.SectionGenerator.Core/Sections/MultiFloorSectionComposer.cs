@@ -29,6 +29,26 @@ public sealed class MultiFloorSectionComposer
         IReadOnlyDictionary<string, IReadOnlyList<BuildingElement>> floorElements,
         IReadOnlyList<FloorConfig> floors)
     {
+        var floorRecognitionData = floors.ToDictionary(
+            floor => floor.Name,
+            floor => new SectionFloorRecognitionData
+            {
+                Floor = floor,
+                CutElements = floorElements.TryGetValue(floor.Name, out var list)
+                    ? list
+                    : Array.Empty<BuildingElement>()
+            },
+            StringComparer.OrdinalIgnoreCase);
+
+        return Generate(executionContexts, viewDirection, floorRecognitionData, floors);
+    }
+
+    public MultiFloorSectionData Generate(
+        IReadOnlyDictionary<string, FloorExecutionContext> executionContexts,
+        Vector3D viewDirection,
+        IReadOnlyDictionary<string, SectionFloorRecognitionData> floorRecognitionData,
+        IReadOnlyList<FloorConfig> floors)
+    {
         var floorDataList = new List<SectionGeometryData>();
         double cumulativeElevation = 0;
 
@@ -38,15 +58,14 @@ public sealed class MultiFloorSectionComposer
                 context.CanParticipate &&
                 context.SectionLine.HasValue)
             {
-                var elements = floorElements.TryGetValue(floor.Name, out var list)
-                    ? list
-                    : Array.Empty<BuildingElement>();
+                var recognitionData = floorRecognitionData.TryGetValue(floor.Name, out var data)
+                    ? data
+                    : new SectionFloorRecognitionData { Floor = floor };
 
                 var floorData = _singleFloorComposer.Generate(
                     context.SectionLine.Value,
                     viewDirection,
-                    elements,
-                    floor,
+                    recognitionData,
                     baseElevation: cumulativeElevation);
 
                 floorDataList.Add(floorData);

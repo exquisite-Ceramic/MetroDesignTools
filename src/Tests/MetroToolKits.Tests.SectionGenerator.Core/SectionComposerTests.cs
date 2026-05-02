@@ -54,6 +54,91 @@ public class SectionComposerTests
     }
 
     [Fact]
+    public void Generate_WithRecognitionDataAndNoCandidates_MatchesLegacyOutput()
+    {
+        var composer = new SectionComposer();
+        var sectionLine = new Line3D(new Point3D(-500, 2500, 0), new Point3D(6500, 2500, 0));
+        var floor = DefaultFloor();
+        var wall = new Wall
+        {
+            SourceHandle = "CUT",
+            StartPoint = new Point3D(0, 0, 0),
+            EndPoint = new Point3D(0, 5000, 0),
+            Height = 3000,
+            Thickness = 200,
+            BaseElevation = 0
+        };
+
+        var legacy = composer.Generate(sectionLine, ViewDirection, new BuildingElement[] { wall }, floor);
+        var staged = composer.Generate(
+            sectionLine,
+            ViewDirection,
+            new SectionFloorRecognitionData
+            {
+                Floor = floor,
+                CutElements = new BuildingElement[] { wall }
+            });
+
+        staged.Elements.Should().HaveSameCount(legacy.Elements);
+        staged.AllCutLines.Select(LineSignature).Should().Equal(legacy.AllCutLines.Select(LineSignature));
+        staged.AllSightLines.Should().BeEmpty();
+        staged.SlabLines.Select(LineSignature).Should().Equal(legacy.SlabLines.Select(LineSignature));
+    }
+
+    [Fact]
+    public void Generate_WithSightLineCandidates_DoesNotCreateStageBGeometry()
+    {
+        var composer = new SectionComposer();
+        var sectionLine = new Line3D(new Point3D(-500, 2500, 0), new Point3D(6500, 2500, 0));
+        var cutWall = new Wall
+        {
+            SourceHandle = "CUT",
+            StartPoint = new Point3D(0, 0, 0),
+            EndPoint = new Point3D(0, 5000, 0),
+            Height = 3000,
+            Thickness = 200,
+            BaseElevation = 0
+        };
+        var candidateWall = new Wall
+        {
+            SourceHandle = "CANDIDATE",
+            StartPoint = new Point3D(1000, 1000, 0),
+            EndPoint = new Point3D(2000, 1000, 0),
+            Height = 3000,
+            Thickness = 200,
+            BaseElevation = 0
+        };
+
+        var data = composer.Generate(
+            sectionLine,
+            ViewDirection,
+            new SectionFloorRecognitionData
+            {
+                Floor = DefaultFloor(),
+                CutElements = new BuildingElement[] { cutWall },
+                SightLineCandidates = new[]
+                {
+                    new SectionSightLineCandidate
+                    {
+                        Element = candidateWall,
+                        SourceHandle = "CANDIDATE",
+                        ElementType = "Wall",
+                        MinChainage = 1000,
+                        MaxChainage = 2000,
+                        MinDepth = 100,
+                        MaxDepth = 300
+                    }
+                }
+            });
+
+        data.Elements.Should().ContainSingle().Which.SourceHandle.Should().Be("CUT");
+        data.Elements.Should().NotContain(element => element.SourceHandle == "CANDIDATE");
+        data.Elements.SelectMany(element => element.SightLines).Should().BeEmpty();
+        data.Elements.SelectMany(element => element.CutLineSegments).Should().NotBeEmpty();
+        data.Elements.SelectMany(element => element.HatchRegions).Should().NotBeEmpty();
+    }
+
+    [Fact]
     public void Generate_VerticalSectionLine_StillProduces2DGeometry()
     {
         var composer = new SectionComposer();
@@ -121,4 +206,7 @@ public class SectionComposerTests
             Math.Abs(line.Start.X) < 1e-6 &&
             Math.Abs(line.End.X - 6000) < 1e-6);
     }
+
+    private static string LineSignature(Line3D line)
+        => $"{line.Start.X:F6},{line.Start.Y:F6},{line.End.X:F6},{line.End.Y:F6}";
 }
