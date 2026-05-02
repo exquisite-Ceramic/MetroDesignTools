@@ -146,7 +146,7 @@ P4 手工宿主验收建议至少覆盖以下命令：
   当前状态：`Pending manual host validation`
 - `viewDepth` 当前已在 `GenerateSection`、快照、`CheckSectionUpdates`、`UpdateSection` 链路中传递；`SectionViewDepthFilter` 纯几何 helper 已实现并有单元测试覆盖，但 `LayerBasedElementRecognizer` 业务语义仍未闭环，因为当前识别仍依赖 `IntersectsSection`。
   当前状态：`Pending manual host validation`
-  说明：已引入 `SectionRecognitionSet` / `ViewDepthCandidate` 模型分离基础，但 viewDepth candidates 尚未由 recognizer 产出；不与剖切线相交但位于 `viewDepth` strip 内的元素，目前不会生成 `SightLines`；投影看线未实现，hash/update detection 尚未纳入 sightline geometry，仍需要真实 `acad.exe` 验证。
+  说明：已引入 `SectionRecognitionSet` / `ViewDepthCandidate` 模型分离基础，`LayerBasedElementRecognizer` V2 可产出 viewDepth candidates；旧生成链路仍不消费 candidates，不与剖切线相交但位于 `viewDepth` strip 内的元素目前不会生成 `SightLines`；投影看线未实现，hash/update detection 尚未纳入 sightline geometry，仍需要真实 `acad.exe` 验证。
 
 ## P4.2b Manual NETLOAD Result
 

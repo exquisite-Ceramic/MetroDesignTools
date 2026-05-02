@@ -20,7 +20,7 @@ namespace MetroToolKits.SectionGenerator.Infrastructure.Recognition;
 /// 基于图层映射的构件识别器。
 /// 增强模式支持模板驱动装配，但未绑定模板时仍沿用主线稳定识别。
 /// </summary>
-public sealed class LayerBasedElementRecognizer : IElementRecognizer
+public sealed class LayerBasedElementRecognizer : ISectionElementRecognizerV2
 {
     private readonly ILogger<LayerBasedElementRecognizer> _logger;
     private readonly ElementConversionBackupService _backupService;
@@ -53,6 +53,24 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
     }
 
     public ElementRecognitionResult RecognizeElements(Line3D sectionLine, double viewDepth, ScopeBounds2D? scopeBounds = null)
+        => RecognizeElementsCore(sectionLine, viewDepth, scopeBounds, collectViewDepthCandidates: false).RecognitionResult;
+
+    public SectionRecognitionSet RecognizeSectionElements(Line3D sectionLine, double viewDepth, ScopeBounds2D? scopeBounds = null)
+    {
+        var result = RecognizeElementsCore(sectionLine, viewDepth, scopeBounds, collectViewDepthCandidates: true);
+        return new SectionRecognitionSet
+        {
+            CutElements = result.RecognitionResult.Elements,
+            ViewDepthCandidates = result.ViewDepthCandidates,
+            Diagnostics = result.RecognitionResult.Diagnostics
+        };
+    }
+
+    private RecognitionScanResult RecognizeElementsCore(
+        Line3D sectionLine,
+        double viewDepth,
+        ScopeBounds2D? scopeBounds,
+        bool collectViewDepthCandidates)
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
         if (doc == null)
@@ -64,12 +82,17 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
         {
             var elements = new List<BuildingElement>();
             var diagnostics = new List<OperationDiagnostic>();
+            var viewDepthCandidates = new List<ViewDepthCandidate>();
             var viewDirection = ComputeViewDirection(sectionLine);
             var matchedLayerCount = 0;
             var intersectingElementCount = 0;
             var wallCandidates = new Dictionary<(string Layer, string TemplateId), List<WallCandidate>>();
 
-            _logger.LogDebug("当前识别器暂未使用 viewDepth 过滤，收到视图深度 {ViewDepth}", viewDepth);
+            _logger.LogDebug(
+                collectViewDepthCandidates
+                    ? "构件识别 V2 将收集 viewDepth 候选，视图深度 {ViewDepth}"
+                    : "当前旧识别链路暂未使用 viewDepth 过滤，收到视图深度 {ViewDepth}",
+                viewDepth);
 
             using var tr = doc.Database.TransactionManager.StartTransaction();
             var bt = (BlockTable)tr.GetObject(doc.Database.BlockTableId, OpenMode.ForRead);
@@ -125,9 +148,11 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
                         element,
                         sectionLine,
                         viewDirection,
+                        viewDepth,
                         scopeBounds,
                         entity.Layer,
                         diagnostics,
+                        collectViewDepthCandidates ? viewDepthCandidates : null,
                         elements,
                         ref intersectingElementCount))
                 {
@@ -147,9 +172,11 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
                                 legacyWall,
                                 sectionLine,
                                 viewDirection,
+                                viewDepth,
                                 scopeBounds,
                                 layerName,
                                 diagnostics,
+                                collectViewDepthCandidates ? viewDepthCandidates : null,
                                 elements,
                                 ref intersectingElementCount))
                         {
@@ -170,9 +197,11 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
                                 wall,
                                 sectionLine,
                                 viewDirection,
+                                viewDepth,
                                 scopeBounds,
                                 layerName,
                                 diagnostics,
+                                collectViewDepthCandidates ? viewDepthCandidates : null,
                                 elements,
                                 ref intersectingElementCount))
                         {
@@ -188,15 +217,17 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
                     template,
                     sectionLine,
                     viewDirection,
+                    viewDepth,
                     scopeBounds,
                     diagnostics,
+                    collectViewDepthCandidates ? viewDepthCandidates : null,
                     elements,
                     ref intersectingElementCount);
             }
 
             tr.Commit();
 
-            return new ElementRecognitionResult
+            var recognitionResult = new ElementRecognitionResult
             {
                 Elements = elements,
                 Diagnostics = diagnostics,
@@ -204,6 +235,7 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
                 MatchedLayerCount = matchedLayerCount,
                 IntersectingElementCount = intersectingElementCount
             };
+            return new RecognitionScanResult(recognitionResult, viewDepthCandidates);
         }
         catch (InfrastructureException)
         {
@@ -285,16 +317,18 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
         BuildingElement element,
         Line3D sectionLine,
         Vector3D viewDirection,
+        double viewDepth,
         ScopeBounds2D? scopeBounds,
         string layerName,
         ICollection<OperationDiagnostic> diagnostics,
+        ICollection<ViewDepthCandidate>? viewDepthCandidates,
         ICollection<BuildingElement> recognizedElements,
         ref int intersectingElementCount)
     {
-        bool intersectsSection;
+        SectionElementClassification classification;
         try
         {
-            intersectsSection = IntersectsSection(element, sectionLine, viewDirection);
+            classification = ClassifyElementForSection(element, sectionLine, viewDirection, viewDepth, scopeBounds);
         }
         catch (Exception ex)
         {
@@ -306,8 +340,13 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
             return false;
         }
 
-        if (!intersectsSection)
+        if (!classification.IntersectsSection)
         {
+            if (classification.ViewDepthCandidate != null)
+            {
+                viewDepthCandidates?.Add(classification.ViewDepthCandidate);
+            }
+
             diagnostics.Add(SectionGenerationDiagnosticFactory.NoIntersectingElements(
                 nameof(LayerBasedElementRecognizer),
                 element.SourceHandle,
@@ -329,6 +368,89 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
             element.ElementType,
             layerName);
         return true;
+    }
+
+    internal static SectionElementClassification ClassifyElementForSection(
+        BuildingElement element,
+        Line3D sectionLine,
+        Vector3D viewDirection,
+        double viewDepth,
+        ScopeBounds2D? scopeBounds)
+    {
+        if (IntersectsSection(element, sectionLine, viewDirection))
+        {
+            return new SectionElementClassification(true, null);
+        }
+
+        return new SectionElementClassification(
+            false,
+            TryCreateViewDepthCandidate(element, sectionLine, viewDepth, scopeBounds));
+    }
+
+    internal static ViewDepthCandidate? TryCreateViewDepthCandidate(
+        BuildingElement element,
+        Line3D sectionLine,
+        double viewDepth,
+        ScopeBounds2D? scopeBounds)
+    {
+        if (viewDepth <= 1e-6)
+        {
+            return null;
+        }
+
+        var footprint = element.GetBoundingBox();
+        if (footprint == null || footprint.VertexCount == 0)
+        {
+            return null;
+        }
+
+        if (scopeBounds.HasValue)
+        {
+            var elementBounds = ScopeBounds2D.FromPolygon(footprint);
+            if (!elementBounds.HasValue || !elementBounds.Value.Intersects(scopeBounds.Value))
+            {
+                return null;
+            }
+        }
+
+        if (!SectionViewDepthFilter.IntersectsSingleSidedStrip(sectionLine, viewDepth, footprint))
+        {
+            return null;
+        }
+
+        var axis = new Vector3D(
+            sectionLine.End.X - sectionLine.Start.X,
+            sectionLine.End.Y - sectionLine.Start.Y,
+            0);
+        if (axis.Length <= 1e-6)
+        {
+            return null;
+        }
+
+        var horizontalAxis = axis.Normalized;
+        var viewAxis = new Vector3D(-horizontalAxis.Y, horizontalAxis.X, 0);
+        var projected = footprint.Vertices
+            .Select(point =>
+            {
+                var offset = new Vector3D(point.X - sectionLine.Start.X, point.Y - sectionLine.Start.Y, 0);
+                return new
+                {
+                    Chainage = Vector3D.Dot(offset, horizontalAxis),
+                    Depth = Vector3D.Dot(offset, viewAxis)
+                };
+            })
+            .ToList();
+
+        return new ViewDepthCandidate
+        {
+            Element = element,
+            SourceHandle = element.SourceHandle ?? string.Empty,
+            ElementType = element.ElementType,
+            MinChainage = projected.Min(point => point.Chainage),
+            MaxChainage = projected.Max(point => point.Chainage),
+            MinDepth = projected.Min(point => point.Depth),
+            MaxDepth = projected.Max(point => point.Depth)
+        };
     }
 
     private static bool IntersectsSection(BuildingElement element, Line3D sectionLine, Vector3D viewDirection)
@@ -354,8 +476,10 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
         WallAssemblyTemplate template,
         Line3D sectionLine,
         Vector3D viewDirection,
+        double viewDepth,
         ScopeBounds2D? scopeBounds,
         ICollection<OperationDiagnostic> diagnostics,
+        ICollection<ViewDepthCandidate>? viewDepthCandidates,
         ICollection<BuildingElement> recognizedElements,
         ref int intersectingElementCount)
     {
@@ -398,9 +522,11 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
                     wall,
                     sectionLine,
                     viewDirection,
+                    viewDepth,
                     scopeBounds,
                     left.Candidate.LayerName,
                     diagnostics,
+                    viewDepthCandidates,
                     recognizedElements,
                     ref intersectingElementCount))
             {
@@ -799,6 +925,14 @@ public sealed class LayerBasedElementRecognizer : IElementRecognizer
             InnerException = innerException
         });
     }
+
+    internal readonly record struct SectionElementClassification(
+        bool IntersectsSection,
+        ViewDepthCandidate? ViewDepthCandidate);
+
+    private sealed record RecognitionScanResult(
+        ElementRecognitionResult RecognitionResult,
+        IReadOnlyList<ViewDepthCandidate> ViewDepthCandidates);
 
     private sealed record WallCandidate(
         string SourceHandle,
