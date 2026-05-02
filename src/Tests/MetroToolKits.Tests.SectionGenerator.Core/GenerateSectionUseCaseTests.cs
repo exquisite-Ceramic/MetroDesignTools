@@ -282,7 +282,7 @@ public class GenerateSectionUseCaseTests
             CutLineHandle = "10",
             CutLineStart = new Point3D(0, 0, 0),
             CutLineEnd = new Point3D(0, 20, 0),
-            ViewDepth = 3000,
+            ViewDepth = 1234,
             InsertionPoint = new Point3D(5000, 0, 0),
             LocalScopeBounds = localScope,
             LocalScopeFloorName = "F1"
@@ -291,13 +291,14 @@ public class GenerateSectionUseCaseTests
         result.Status.Should().Be(OperationStatus.Success);
         recognizer.Received(1).RecognizeElements(
             Arg.Any<Line3D>(),
-            3000,
+            1234,
             Arg.Is<ScopeBounds2D?>(scope => scope.HasValue && scope.Value.Equals(localScope)));
         snapshotRepo.Received(1).Save(
             "ABCD",
             Arg.Is<SectionSnapshot>(snapshot =>
                 snapshot.LocalScopeBounds.HasValue &&
                 snapshot.LocalScopeBounds.Value.Equals(localScope) &&
+                snapshot.ViewDepth == 1234 &&
                 snapshot.GeometryAnchorX == 0 &&
                 snapshot.GeneratedFloorNames.SequenceEqual(new[] { "F1" })));
     }

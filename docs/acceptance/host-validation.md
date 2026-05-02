@@ -144,9 +144,9 @@ P4 手工宿主验收建议至少覆盖以下命令：
 
 - `FloorConfig` 全局顶板/底板坡度的保存、重新打开回读、以及生成执行态取值一致性，仍需在真实 `acad.exe` 中完成手工宿主验证。
   当前状态：`Pending manual host validation`
-- `viewDepth` 当前已在 `GenerateSection`、快照、`CheckSectionUpdates`、`UpdateSection` 链路中传递，但 `LayerBasedElementRecognizer` 仍未应用视图深度过滤。
+- `viewDepth` 当前已在 `GenerateSection`、快照、`CheckSectionUpdates`、`UpdateSection` 链路中传递；`SectionViewDepthFilter` 纯几何 helper 已实现并有单元测试覆盖，但 `LayerBasedElementRecognizer` 业务语义仍未闭环，因为当前识别仍依赖 `IntersectsSection`。
   当前状态：`Pending manual host validation`
-  说明：在补齐几何规则、诊断语义与测试覆盖前，暂不把它实现为正式深度裁剪逻辑。
+  说明：不与剖切线相交但位于 `viewDepth` strip 内的元素，目前不会生成 `SightLines`；投影看线未实现，仍需要真实 `acad.exe` 验证。
 
 ## P4.2b Manual NETLOAD Result
 

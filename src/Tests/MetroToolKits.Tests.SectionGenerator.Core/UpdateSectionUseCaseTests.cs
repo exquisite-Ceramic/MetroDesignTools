@@ -24,7 +24,7 @@ public class UpdateSectionUseCaseTests
             InsertionPoint = new Point3D(100, 200, 0),
             GeometryAnchorX = 0,
             SectionDirection = new Point3D(0, 1, 0),
-            ViewDepth = 3000,
+            ViewDepth = 4321,
             TargetFloorName = "F1",
             LocalScopeFloorName = "F1",
             LocalScopeBounds = new ScopeBounds2D
@@ -79,7 +79,7 @@ public class UpdateSectionUseCaseTests
             request.CutLineEnd.Equals(resolvedLine.End) &&
             request.InsertionPoint.Equals(snapshot.InsertionPoint) &&
             request.GeometryAnchorX == 0 &&
-            request.ViewDepth == 3000 &&
+            request.ViewDepth == 4321 &&
             request.TargetFloorName == "F1" &&
             request.LocalScopeFloorName == "F1" &&
             request.LocalScopeBounds.HasValue &&

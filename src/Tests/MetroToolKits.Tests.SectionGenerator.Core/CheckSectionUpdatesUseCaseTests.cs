@@ -371,6 +371,25 @@ public class CheckSectionUpdatesUseCaseTests
     }
 
     [Fact]
+    public void Execute_UsesSnapshotViewDepthForRecognition()
+    {
+        var elements = new[] { MakeWall() };
+        var hash = new FloorGeometryHasher().ComputeHash(elements);
+        var snapshotRepo = SnapshotRepoWithSingleSnapshot(hash, viewDepth: 1234);
+
+        var recognizer = Substitute.For<IElementRecognizer>();
+        recognizer.RecognizeElements(Arg.Any<Line3D>(), Arg.Any<double>())
+            .Returns(new ElementRecognitionResult { Elements = elements });
+
+        var result = BuildUseCase(snapshotRepo, recognizer).Execute();
+
+        result.Items[0].Status.Should().Be(SectionUpdateStatus.UpToDate);
+        recognizer.Received(1).RecognizeElements(
+            Arg.Any<Line3D>(),
+            1234);
+    }
+
+    [Fact]
     public void Execute_ConfiguredBoundaryTemplateMissing_ReturnsUnknown()
     {
         var floor = DefaultFloor("F1");
@@ -454,7 +473,9 @@ public class CheckSectionUpdatesUseCaseTests
             NullLogger<CheckSectionUpdatesUseCase>.Instance);
     }
 
-    private static ISectionSnapshotRepository SnapshotRepoWithSingleSnapshot(string? geometryHash = null)
+    private static ISectionSnapshotRepository SnapshotRepoWithSingleSnapshot(
+        string? geometryHash = null,
+        double viewDepth = 3000)
     {
         var repo = Substitute.For<ISectionSnapshotRepository>();
         repo.Load("H1").Returns(new SectionSnapshot
@@ -463,7 +484,7 @@ public class CheckSectionUpdatesUseCaseTests
             SourceCutLineHandle = "71",
             CutLineStart = new Point3D(0, 0, 0),
             CutLineEnd = new Point3D(0, 20, 0),
-            ViewDepth = 3000,
+            ViewDepth = viewDepth,
             FloorSnapshots = new List<FloorSnapshot>
             {
                 new() { FloorName = "F1", GeometryHash = geometryHash ?? string.Empty, ElementCount = 1 }
