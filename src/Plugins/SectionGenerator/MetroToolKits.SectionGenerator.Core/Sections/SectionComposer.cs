@@ -12,18 +12,25 @@ namespace MetroToolKits.SectionGenerator.Core.Sections;
 public sealed class SectionComposer
 {
     private readonly FloorVerticalProfileBuilder _verticalProfileBuilder;
+    private readonly SightLineComposer _sightLineComposer;
 
     /// <summary>
     /// 仅用于测试和兼容回退；生产链请通过 DI 注入共享的 FloorVerticalProfileBuilder。
     /// </summary>
     public SectionComposer()
-        : this(new FloorVerticalProfileBuilder())
+        : this(new FloorVerticalProfileBuilder(), new SightLineComposer())
     {
     }
 
     public SectionComposer(FloorVerticalProfileBuilder verticalProfileBuilder)
+        : this(verticalProfileBuilder, new SightLineComposer())
+    {
+    }
+
+    public SectionComposer(FloorVerticalProfileBuilder verticalProfileBuilder, SightLineComposer sightLineComposer)
     {
         _verticalProfileBuilder = verticalProfileBuilder;
+        _sightLineComposer = sightLineComposer;
     }
 
     public SectionGeometryData Generate(
@@ -107,6 +114,8 @@ public sealed class SectionComposer
 
             elementDataList.Add(data);
         }
+
+        elementDataList.AddRange(_sightLineComposer.Compose(recognitionData.SightLineCandidates, baseElevation));
 
         var slabLineSegments = _verticalProfileBuilder.BuildBoundaryLineSegments(floorConfig, verticalProfile, wallIntervals)
             .Where(segment => !IsDegenerate(segment.Line))

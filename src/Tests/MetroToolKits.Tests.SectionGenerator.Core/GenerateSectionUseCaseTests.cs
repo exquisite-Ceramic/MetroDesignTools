@@ -158,7 +158,7 @@ public class GenerateSectionUseCaseTests
     }
 
     [Fact]
-    public void Execute_WithV2Recognizer_UsesCutElementsAndDoesNotPersistViewDepthCandidates()
+    public void Execute_WithV2Recognizer_DrawsSightLinesButKeepsSnapshotCutOnly()
     {
         var floor = DefaultFloor(
             "F1",
@@ -226,9 +226,13 @@ public class GenerateSectionUseCaseTests
 
         capturedData.Should().NotBeNull();
         capturedData!.Floors.Should().ContainSingle();
-        capturedData.Floors[0].Elements.Should().ContainSingle()
-            .Which.SourceHandle.Should().Be("CUT");
-        capturedData.Floors[0].AllSightLines.Should().BeEmpty();
+        capturedData.Floors[0].Elements.Should().HaveCount(2);
+        capturedData.Floors[0].Elements.Should().Contain(element => element.SourceHandle == "CUT");
+        var candidateData = capturedData.Floors[0].Elements.Single(element => element.SourceHandle == "CANDIDATE");
+        candidateData.CutLineSegments.Should().BeEmpty();
+        candidateData.HatchRegions.Should().BeEmpty();
+        candidateData.SightLines.Should().HaveCount(4);
+        capturedData.Floors[0].AllSightLines.Should().HaveCount(4);
 
         savedSnapshot.Should().NotBeNull();
         savedSnapshot!.FloorSnapshots.Should().ContainSingle();

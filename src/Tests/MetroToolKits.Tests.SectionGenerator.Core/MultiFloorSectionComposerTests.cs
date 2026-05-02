@@ -90,13 +90,15 @@ public class MultiFloorSectionComposerTests
     }
 
     [Fact]
-    public void Generate_WithRecognitionDataCarriesCandidatesButDoesNotCreateSightLines()
+    public void Generate_WithRecognitionDataCreatesSightLinesOnCandidateFloorOnly()
     {
         var composer = MakeComposer();
-        var floor = MakeFloor("F1");
-        var floors = new[] { floor };
+        var candidateFloor = MakeFloor("F1");
+        var emptyCandidateFloor = MakeFloor("F2");
+        var floors = new[] { candidateFloor, emptyCandidateFloor };
         var executionContexts = ExecutionContexts(
-            ("F1", true, new Line3D(new Point3D(-500, 2500, 0), new Point3D(6500, 2500, 0))));
+            ("F1", true, new Line3D(new Point3D(-500, 2500, 0), new Point3D(6500, 2500, 0))),
+            ("F2", true, new Line3D(new Point3D(-500, 2500, 0), new Point3D(6500, 2500, 0))));
         var cutWall = new Wall
         {
             SourceHandle = "CUT",
@@ -117,9 +119,9 @@ public class MultiFloorSectionComposerTests
         };
         var recognitionData = new Dictionary<string, SectionFloorRecognitionData>(StringComparer.OrdinalIgnoreCase)
         {
-            [floor.Name] = new()
+            [candidateFloor.Name] = new()
             {
-                Floor = floor,
+                Floor = candidateFloor,
                 CutElements = new BuildingElement[] { cutWall },
                 SightLineCandidates = new[]
                 {
@@ -134,14 +136,22 @@ public class MultiFloorSectionComposerTests
                         MaxDepth = 300
                     }
                 }
+            },
+            [emptyCandidateFloor.Name] = new()
+            {
+                Floor = emptyCandidateFloor,
+                CutElements = new BuildingElement[] { cutWall },
+                SightLineCandidates = Array.Empty<SectionSightLineCandidate>()
             }
         };
 
         var result = composer.Generate(executionContexts, ViewDir, recognitionData, floors);
 
-        result.Floors.Should().ContainSingle();
-        result.AllSightLines.Should().BeEmpty();
-        result.Floors[0].Elements.Should().ContainSingle().Which.SourceHandle.Should().Be("CUT");
-        result.Floors[0].Elements.Should().NotContain(element => element.SourceHandle == "CANDIDATE");
+        result.Floors.Should().HaveCount(2);
+        result.Floors[0].AllSightLines.Should().HaveCount(4);
+        result.Floors[0].Elements.Should().Contain(element => element.SourceHandle == "CUT");
+        result.Floors[0].Elements.Should().Contain(element => element.SourceHandle == "CANDIDATE");
+        result.Floors[1].AllSightLines.Should().BeEmpty();
+        result.Floors[1].Elements.Should().ContainSingle().Which.SourceHandle.Should().Be("CUT");
     }
 }

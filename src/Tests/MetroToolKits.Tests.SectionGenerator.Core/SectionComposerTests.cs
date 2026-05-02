@@ -86,7 +86,7 @@ public class SectionComposerTests
     }
 
     [Fact]
-    public void Generate_WithSightLineCandidates_DoesNotCreateStageBGeometry()
+    public void Generate_WithSightLineCandidates_CreatesSightLinesOnlyForCandidate()
     {
         var composer = new SectionComposer();
         var sectionLine = new Line3D(new Point3D(-500, 2500, 0), new Point3D(6500, 2500, 0));
@@ -131,11 +131,24 @@ public class SectionComposerTests
                 }
             });
 
-        data.Elements.Should().ContainSingle().Which.SourceHandle.Should().Be("CUT");
-        data.Elements.Should().NotContain(element => element.SourceHandle == "CANDIDATE");
-        data.Elements.SelectMany(element => element.SightLines).Should().BeEmpty();
-        data.Elements.SelectMany(element => element.CutLineSegments).Should().NotBeEmpty();
-        data.Elements.SelectMany(element => element.HatchRegions).Should().NotBeEmpty();
+        data.Elements.Should().HaveCount(2);
+
+        var cutData = data.Elements.Single(element => element.SourceHandle == "CUT");
+        cutData.CutLineSegments.Should().NotBeEmpty();
+        cutData.HatchRegions.Should().NotBeEmpty();
+        cutData.SightLines.Should().BeEmpty();
+
+        var candidateData = data.Elements.Single(element => element.SourceHandle == "CANDIDATE");
+        candidateData.CutLines.Should().BeEmpty();
+        candidateData.CutLineSegments.Should().BeEmpty();
+        candidateData.HatchRegions.Should().BeEmpty();
+        candidateData.SightLines.Select(LineSignature).Should().Equal(new[]
+        {
+            "1000.000000,0.000000,2000.000000,0.000000",
+            "2000.000000,0.000000,2000.000000,3000.000000",
+            "2000.000000,3000.000000,1000.000000,3000.000000",
+            "1000.000000,3000.000000,1000.000000,0.000000"
+        });
     }
 
     [Fact]

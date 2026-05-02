@@ -440,6 +440,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
             var sourceHandles = floorGeometry == null
                 ? new List<string>()
                 : floorGeometry.Elements
+                    .Where(HasCutGeometry)
                     .SelectMany(e => e.SourceHandles.Count > 0 ? e.SourceHandles : new[] { e.SourceHandle })
                     .Where(h => !string.IsNullOrWhiteSpace(h))
                     .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -482,6 +483,11 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
         var dir = sectionLine.Direction.Normalized;
         return new Vector3D(-dir.Y, dir.X, 0);
     }
+
+    private static bool HasCutGeometry(ElementSectionData element)
+        => element.CutLineSegments.Count > 0 ||
+           element.CutLines.Count > 0 ||
+           element.HatchRegions.Count > 0;
 
     private static SectionSightLineCandidate MapSightLineCandidate(ViewDepthCandidate candidate)
         => new()
