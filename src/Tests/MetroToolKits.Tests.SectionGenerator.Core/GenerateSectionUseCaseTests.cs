@@ -8,6 +8,7 @@ using MetroToolKits.Foundation.Core.Logging;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Diagnostics;
 using MetroToolKits.SectionGenerator.App.Models;
+using MetroToolKits.SectionGenerator.App.Support;
 using MetroToolKits.SectionGenerator.App.UseCases;
 using MetroToolKits.SectionGenerator.Core.Sections;
 using NSubstitute;
@@ -154,6 +155,95 @@ public class GenerateSectionUseCaseTests
         capturedData!.Floors.Should().ContainSingle();
         capturedData.Floors[0].Elements.Should().ContainSingle();
         capturedData.Floors[0].AllSightLines.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Execute_WithV2Recognizer_UsesCutElementsAndDoesNotPersistViewDepthCandidates()
+    {
+        var floor = DefaultFloor(
+            "F1",
+            new Point3D(0, 0, 0),
+            new Point3D(10, 0, 0),
+            new Point3D(0, 10, 0));
+        var outputConfig = new SectionOutputConfig();
+        var configRepo = Substitute.For<IFloorConfigRepository>();
+        configRepo.Load().Returns(LoadedConfig(new SectionConfig
+        {
+            AlignmentBaseFloorName = "F1",
+            Floors = new List<FloorConfig> { floor }
+        }, outputConfig));
+
+        var cutWall = MakeWallAtX(0, "CUT");
+        var candidateWall = MakeWallAtX(2000, "CANDIDATE");
+        var recognizer = new FakeSectionElementRecognizerV2(new SectionRecognitionSet
+        {
+            CutElements = new[] { cutWall },
+            ViewDepthCandidates = new[]
+            {
+                new ViewDepthCandidate
+                {
+                    Element = candidateWall,
+                    SourceHandle = candidateWall.SourceHandle ?? string.Empty,
+                    ElementType = candidateWall.ElementType,
+                    MinChainage = 1,
+                    MaxChainage = 2,
+                    MinDepth = 3,
+                    MaxDepth = 4
+                }
+            }
+        });
+
+        MultiFloorSectionData? capturedData = null;
+        var drawingService = Substitute.For<IDrawingService>();
+        drawingService.DrawMultiFloorSectionBlock(
+                Arg.Do<MultiFloorSectionData>(data => capturedData = data),
+                Arg.Any<Point3D>(),
+                Arg.Any<IReadOnlyList<FloorConfig>>(),
+                Arg.Any<SectionOutputConfig>(),
+                Arg.Any<double>())
+            .Returns(new DrawSectionBlockResult
+            {
+                BlockName = "MK_剖面_F1",
+                BlockHandle = "ABCD"
+            });
+
+        SectionSnapshot? savedSnapshot = null;
+        var snapshotRepo = Substitute.For<ISectionSnapshotRepository>();
+        snapshotRepo
+            .When(repo => repo.Save("ABCD", Arg.Any<SectionSnapshot>()))
+            .Do(call => savedSnapshot = call.ArgAt<SectionSnapshot>(1));
+
+        var result = BuildUseCase(
+                configRepo: configRepo,
+                recognizer: recognizer,
+                drawingService: drawingService,
+                snapshotRepo: snapshotRepo)
+            .Execute(CreateRequest());
+
+        result.Status.Should().Be(OperationStatus.Success);
+        recognizer.V2CallCount.Should().Be(1);
+        recognizer.LegacyCallCount.Should().Be(0);
+
+        capturedData.Should().NotBeNull();
+        capturedData!.Floors.Should().ContainSingle();
+        capturedData.Floors[0].Elements.Should().ContainSingle()
+            .Which.SourceHandle.Should().Be("CUT");
+        capturedData.Floors[0].AllSightLines.Should().BeEmpty();
+
+        savedSnapshot.Should().NotBeNull();
+        savedSnapshot!.FloorSnapshots.Should().ContainSingle();
+        var floorSnapshot = savedSnapshot.FloorSnapshots[0];
+        floorSnapshot.ElementCount.Should().Be(1);
+        floorSnapshot.SourceElementHandles.Should().ContainSingle().Which.Should().Be("CUT");
+        floorSnapshot.SourceElementHandles.Should().NotContain("CANDIDATE");
+
+        var expectedHash = SectionOutputConfigHasher.Combine(
+            new FloorGeometryHasher().ComputeHash(
+                new[] { cutWall },
+                floor,
+                capturedData.Floors[0].VerticalProfile),
+            outputConfig);
+        floorSnapshot.GeometryHash.Should().Be(expectedHash);
     }
 
     [Fact]
@@ -527,4 +617,42 @@ public class GenerateSectionUseCaseTests
         Config = config,
         OutputConfig = outputConfig ?? new SectionOutputConfig()
     };
+
+    private sealed class FakeSectionElementRecognizerV2 : ISectionElementRecognizerV2
+    {
+        private readonly SectionRecognitionSet _recognition;
+
+        public FakeSectionElementRecognizerV2(SectionRecognitionSet recognition)
+        {
+            _recognition = recognition;
+        }
+
+        public int V2CallCount { get; private set; }
+        public int LegacyCallCount { get; private set; }
+
+        public ElementRecognitionResult RecognizeElements(
+            Line3D sectionLine,
+            double viewDepth,
+            ScopeBounds2D? scopeBounds = null)
+        {
+            LegacyCallCount++;
+            return new ElementRecognitionResult
+            {
+                Elements = _recognition.CutElements,
+                Diagnostics = _recognition.Diagnostics,
+                IntersectingElementCount = _recognition.CutElements.Count,
+                MatchedLayerCount = _recognition.CutElements.Count,
+                ScannedEntityCount = _recognition.CutElements.Count
+            };
+        }
+
+        public SectionRecognitionSet RecognizeSectionElements(
+            Line3D sectionLine,
+            double viewDepth,
+            ScopeBounds2D? scopeBounds = null)
+        {
+            V2CallCount++;
+            return _recognition;
+        }
+    }
 }

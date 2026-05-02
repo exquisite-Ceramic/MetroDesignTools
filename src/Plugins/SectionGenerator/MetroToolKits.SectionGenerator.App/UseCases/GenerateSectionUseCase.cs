@@ -232,23 +232,25 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
                 else
                     _userLogger.SectionGenerating(floor.Name);
 
-                var recognition = RecognizeElements(
+                var recognition = RecognizeFloorElements(
+                    floor.Name,
                     context.SectionLine.Value,
                     request.ViewDepth,
                     context.EffectiveScope);
-                floorElements[floor.Name] = recognition.Elements;
-                totalRecognizedCount += recognition.Elements.Count;
+                floorElements[floor.Name] = recognition.CutElements;
+                totalRecognizedCount += recognition.CutElements.Count;
                 diagnostics.AddRange(AddFloorContext(floor.Name, recognition.Diagnostics));
 
                 _logger.LogDebug(
-                    "楼层 {FloorName} 扫描 {ScannedCount} 个实体，命中图层 {MatchedCount} 个，相交构件 {IntersectingCount} 个，最终识别 {ElementCount} 个构件",
+                    "楼层 {FloorName} 扫描 {ScannedCount} 个实体，命中图层 {MatchedCount} 个，相交构件 {IntersectingCount} 个，最终识别 {ElementCount} 个可剖切构件，视深候选 {ViewDepthCandidateCount} 个",
                     floor.Name,
                     recognition.ScannedEntityCount,
                     recognition.MatchedLayerCount,
                     recognition.IntersectingElementCount,
-                    recognition.Elements.Count);
+                    recognition.CutElements.Count,
+                    recognition.ViewDepthCandidates.Count);
 
-                if (recognition.Elements.Count == 0)
+                if (recognition.CutElements.Count == 0)
                 {
                     diagnostics.Add(SectionGenerationDiagnosticFactory.NoRecognizedElements(
                         "GenerateSectionUseCase",
@@ -553,14 +555,52 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
             _ => SectionGenerationFailures.AlignmentBaseFloorInvalid(diagnostic.Message)
         };
 
-    private ElementRecognitionResult RecognizeElements(
+    private FloorRecognitionContext RecognizeFloorElements(
+        string floorName,
         Line3D sectionLine,
         double viewDepth,
         ScopeBounds2D? scopeBounds)
-        => (scopeBounds.HasValue
+    {
+        if (_elementRecognizer is ISectionElementRecognizerV2 sectionRecognizer)
+        {
+            var recognition = (scopeBounds.HasValue
+                ? sectionRecognizer.RecognizeSectionElements(sectionLine, viewDepth, scopeBounds)
+                : sectionRecognizer.RecognizeSectionElements(sectionLine, viewDepth))
+                ?? new SectionRecognitionSet();
+
+            return new FloorRecognitionContext(
+                floorName,
+                recognition.CutElements ?? Array.Empty<BuildingElement>(),
+                recognition.ViewDepthCandidates ?? Array.Empty<ViewDepthCandidate>(),
+                recognition.Diagnostics ?? Array.Empty<OperationDiagnostic>(),
+                recognition.CutElements?.Count ?? 0,
+                recognition.CutElements?.Count ?? 0,
+                recognition.CutElements?.Count ?? 0);
+        }
+
+        var legacy = (scopeBounds.HasValue
             ? _elementRecognizer.RecognizeElements(sectionLine, viewDepth, scopeBounds)
             : _elementRecognizer.RecognizeElements(sectionLine, viewDepth))
            ?? new ElementRecognitionResult();
+
+        return new FloorRecognitionContext(
+            floorName,
+            legacy.Elements ?? Array.Empty<BuildingElement>(),
+            Array.Empty<ViewDepthCandidate>(),
+            legacy.Diagnostics ?? Array.Empty<OperationDiagnostic>(),
+            legacy.ScannedEntityCount,
+            legacy.MatchedLayerCount,
+            legacy.IntersectingElementCount);
+    }
+
+    private sealed record FloorRecognitionContext(
+        string FloorName,
+        IReadOnlyList<BuildingElement> CutElements,
+        IReadOnlyList<ViewDepthCandidate> ViewDepthCandidates,
+        IReadOnlyList<OperationDiagnostic> Diagnostics,
+        int ScannedEntityCount,
+        int MatchedLayerCount,
+        int IntersectingElementCount);
 
     private static OperationDiagnostic MapAlignmentDiagnostic(FloorExecutionContext context)
     {
