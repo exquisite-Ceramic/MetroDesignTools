@@ -1,6 +1,7 @@
 using FluentAssertions;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.Core.Sections;
+using System.Text.Json;
 
 namespace MetroToolKits.Tests.SectionGenerator.Core;
 
@@ -17,6 +18,10 @@ public class SectionSnapshotTests
         snap.ElementCount.Should().Be(0);
         snap.SourceElementHandles.Should().NotBeNull();
         snap.SourceElementHandles.Should().BeEmpty();
+        snap.SightLineGeometryHash.Should().BeNull();
+        snap.SightLineElementCount.Should().BeNull();
+        snap.SightLineSourceElementHandles.Should().BeNull();
+        snap.SightLineHashVersion.Should().BeNull();
     }
 
     [Fact]
@@ -33,6 +38,54 @@ public class SectionSnapshotTests
         snap.GeometryHash.Should().Be("abc123");
         snap.ElementCount.Should().Be(42);
         snap.SourceElementHandles.Should().ContainSingle().Which.Should().Be("1A2B");
+    }
+
+    [Fact]
+    public void FloorSnapshot_LegacyJsonMissingSightLineFields_DeserializesAsMissing()
+    {
+        const string json = """
+        {
+          "FloorName": "F1",
+          "GeometryHash": "cut-hash",
+          "ElementCount": 1,
+          "SourceElementHandles": [ "CUT" ]
+        }
+        """;
+
+        var snap = JsonSerializer.Deserialize<FloorSnapshot>(json);
+
+        snap.Should().NotBeNull();
+        snap!.FloorName.Should().Be("F1");
+        snap.SightLineGeometryHash.Should().BeNull();
+        snap.SightLineElementCount.Should().BeNull();
+        snap.SightLineSourceElementHandles.Should().BeNull();
+        snap.SightLineHashVersion.Should().BeNull();
+    }
+
+    [Fact]
+    public void FloorSnapshot_NewSightLineFields_RoundTrip()
+    {
+        var snap = new FloorSnapshot
+        {
+            FloorName = "F1",
+            GeometryHash = "cut-hash",
+            ElementCount = 1,
+            SourceElementHandles = new List<string> { "CUT" },
+            SightLineGeometryHash = "sight-hash",
+            SightLineElementCount = 0,
+            SightLineSourceElementHandles = new List<string>(),
+            SightLineHashVersion = SightLineGeometryHasher.CurrentHashVersion
+        };
+
+        var json = JsonSerializer.Serialize(snap);
+        var roundTrip = JsonSerializer.Deserialize<FloorSnapshot>(json);
+
+        roundTrip.Should().NotBeNull();
+        roundTrip!.SightLineGeometryHash.Should().Be("sight-hash");
+        roundTrip.SightLineElementCount.Should().Be(0);
+        roundTrip.SightLineSourceElementHandles.Should().NotBeNull();
+        roundTrip.SightLineSourceElementHandles.Should().BeEmpty();
+        roundTrip.SightLineHashVersion.Should().Be(SightLineGeometryHasher.CurrentHashVersion);
     }
 
     // ── SectionSnapshot ───────────────────────────────────────────────────────

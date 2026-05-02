@@ -7,6 +7,7 @@
 - The first projection rule is intentionally conservative: candidate chainage range becomes section-local X, element vertical range becomes section-local Y, and Core emits a rectangle outline only.
 - Occlusion, hidden-line handling, front/back ordering, and type-specific sightline styling are not implemented.
 - Snapshot/hash/update detection still does not include sightline geometry.
+- Phase C1 introduces independent sightline hash model fields and hashing tests only. `CheckSectionUpdates` / `UpdateSection` are not connected to sightline hash yet.
 - `CadDrawingService` was not changed in Phase B. Real AutoCAD drawing behavior remains Pending: 需要真实 `acad.exe` 验证.
 
 本文档是 P4.1 的宿主验收与发布输出检查草案，目标是先确认 MetroDesignToolKits / SectionGenerator 在真实 AutoCAD 宿主中的构建入口、发布目录、`NETLOAD` 入口 DLL、基础命令清单，以及后续 `accoreconsole.exe` 自动化验收的落点。

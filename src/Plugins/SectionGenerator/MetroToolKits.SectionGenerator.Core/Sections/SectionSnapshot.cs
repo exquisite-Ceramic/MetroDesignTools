@@ -12,6 +12,10 @@ public sealed class FloorSnapshot
     public string GeometryHash  { get; set; } = string.Empty;
     public int    ElementCount  { get; set; }
     public List<string> SourceElementHandles { get; set; } = new();
+    public string? SightLineGeometryHash { get; set; }
+    public int? SightLineElementCount { get; set; }
+    public List<string>? SightLineSourceElementHandles { get; set; }
+    public int? SightLineHashVersion { get; set; }
 }
 
 /// <summary>
