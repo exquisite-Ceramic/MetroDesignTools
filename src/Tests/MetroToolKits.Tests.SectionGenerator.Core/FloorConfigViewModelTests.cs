@@ -135,6 +135,12 @@ public class FloorConfigViewModelTests
         document.Config.GlobalSlopeEnabled = true;
         document.Config.GlobalSlopeValue = 0.015;
         document.Config.GlobalSlopeTarget = "FinishLayer";
+        document.Config.GlobalTopSlopeEnabled = true;
+        document.Config.GlobalTopSlopeValue = 0.015;
+        document.Config.GlobalTopSlopeTarget = "FinishLayer";
+        document.Config.GlobalBottomSlopeEnabled = true;
+        document.Config.GlobalBottomSlopeValue = 0.01;
+        document.Config.GlobalBottomSlopeTarget = "StructuralSlab";
         document.Config.Floors[0].AlignmentPoints =
         [
             new Point3D(0, 0, 0),
@@ -156,9 +162,92 @@ public class FloorConfigViewModelTests
         request.FloorConfig.GlobalSlopeEnabled.Should().BeTrue();
         request.FloorConfig.GlobalSlopePercent.Should().Be(1.5);
         request.FloorConfig.GlobalSlopeTarget.Should().Be("FinishLayer");
+        request.FloorConfig.GlobalTopSlopeEnabled.Should().BeTrue();
+        request.FloorConfig.GlobalTopSlopePercent.Should().Be(1.5);
+        request.FloorConfig.GlobalTopSlopeTarget.Should().Be("FinishLayer");
+        request.FloorConfig.GlobalBottomSlopeEnabled.Should().BeTrue();
+        request.FloorConfig.GlobalBottomSlopePercent.Should().Be(1.0);
+        request.FloorConfig.GlobalBottomSlopeTarget.Should().Be("StructuralSlab");
         request.FloorConfig.Floors.Should().HaveCount(2);
         request.FloorConfig.Floors[0].AlignmentPoints.Should().HaveCount(3);
         request.FloorConfig.Floors[0].ScopeBounds!.MaxY.Should().Be(200);
+    }
+
+    [Fact]
+    public void Load_UsesExplicitTopAndBottomGlobalSlopeValues()
+    {
+        var document = CreateDocument(CreateFloor("F1"));
+        document.Config.GlobalSlopeEnabled = false;
+        document.Config.GlobalSlopeValue = 0.005;
+        document.Config.GlobalSlopeTarget = "StructuralSlab";
+        document.Config.GlobalTopSlopeEnabled = true;
+        document.Config.GlobalTopSlopeValue = 0.02;
+        document.Config.GlobalTopSlopeTarget = "FinishLayer";
+        document.Config.GlobalBottomSlopeEnabled = true;
+        document.Config.GlobalBottomSlopeValue = 0.01;
+        document.Config.GlobalBottomSlopeTarget = "StructuralSlab";
+
+        var viewModel = CreateViewModel(document, "F1");
+
+        viewModel.GlobalTopSlopeEnabled.Should().BeTrue();
+        viewModel.GlobalTopSlopePercent.Should().Be(2.0);
+        viewModel.GlobalTopSlopeTarget.Should().Be("FinishLayer");
+        viewModel.GlobalBottomSlopeEnabled.Should().BeTrue();
+        viewModel.GlobalBottomSlopePercent.Should().Be(1.0);
+        viewModel.GlobalBottomSlopeTarget.Should().Be("StructuralSlab");
+        viewModel.GlobalSlopeEnabled.Should().BeTrue("兼容字段应镜像当前顶板全局坡度状态");
+        viewModel.GlobalSlopePercent.Should().Be(2.0);
+        viewModel.GlobalSlopeTarget.Should().Be("FinishLayer");
+    }
+
+    [Fact]
+    public void Load_WhenOnlyLegacyGlobalSlopeExists_FallsBackToTopGlobalSlope()
+    {
+        var document = CreateDocument(CreateFloor("F1"));
+        document.Config.GlobalSlopeEnabled = true;
+        document.Config.GlobalSlopeValue = 0.018;
+        document.Config.GlobalSlopeTarget = "FinishLayer";
+        document.Config.GlobalTopSlopeEnabled = false;
+        document.Config.GlobalTopSlopeValue = 0;
+        document.Config.GlobalTopSlopeTarget = string.Empty;
+        document.Config.GlobalBottomSlopeEnabled = false;
+        document.Config.GlobalBottomSlopeValue = 0;
+        document.Config.GlobalBottomSlopeTarget = "StructuralSlab";
+
+        var viewModel = CreateViewModel(document, "F1");
+
+        viewModel.GlobalTopSlopeEnabled.Should().BeTrue("旧配置只写 legacy GlobalSlope 时，UI 仍应回读为顶板全局坡度");
+        viewModel.GlobalTopSlopePercent.Should().BeApproximately(1.8, 0.000001);
+        viewModel.GlobalTopSlopeTarget.Should().Be("FinishLayer");
+        viewModel.GlobalBottomSlopeEnabled.Should().BeFalse();
+        viewModel.GlobalSlopeEnabled.Should().BeTrue();
+        viewModel.GlobalSlopePercent.Should().BeApproximately(1.8, 0.000001);
+        viewModel.GlobalSlopeTarget.Should().Be("FinishLayer");
+    }
+
+    [Fact]
+    public void ApplyGlobalSettings_SyncsLegacyCompatibilityFieldAndBottomSlope()
+    {
+        var viewModel = CreateViewModel(CreateDocument(CreateFloor("F1")), "F1");
+
+        viewModel.ApplyGlobalSettings(
+            alignmentBaseFloorName: "F1",
+            globalTopSlopeEnabled: true,
+            globalTopSlopePercent: 2.5,
+            globalTopSlopeTarget: "FinishLayer",
+            globalBottomSlopeEnabled: true,
+            globalBottomSlopePercent: 1.25,
+            globalBottomSlopeTarget: "StructuralSlab");
+
+        viewModel.GlobalTopSlopeEnabled.Should().BeTrue();
+        viewModel.GlobalTopSlopePercent.Should().Be(2.5);
+        viewModel.GlobalTopSlopeTarget.Should().Be("FinishLayer");
+        viewModel.GlobalBottomSlopeEnabled.Should().BeTrue();
+        viewModel.GlobalBottomSlopePercent.Should().Be(1.25);
+        viewModel.GlobalBottomSlopeTarget.Should().Be("StructuralSlab");
+        viewModel.GlobalSlopeEnabled.Should().BeTrue();
+        viewModel.GlobalSlopePercent.Should().Be(2.5);
+        viewModel.GlobalSlopeTarget.Should().Be("FinishLayer");
     }
 
     [Fact]

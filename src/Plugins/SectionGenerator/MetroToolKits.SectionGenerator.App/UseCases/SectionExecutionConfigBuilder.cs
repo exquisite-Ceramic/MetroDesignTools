@@ -124,8 +124,9 @@ internal static class SectionExecutionConfigBuilder
     {
         if (sourceConfig.GlobalSlopeEnabled)
         {
-            // 图纸级全局坡度开启后，楼层 legacy 坡度值仍可保留在配置里，
-            // 但执行态不再参与生效，避免与全局坡度同时作用。
+            // Legacy GlobalSlope 仅保留兼容字段。
+            // 执行态中一旦开启，就不再让楼层级 legacy 坡度继续生效，
+            // 并仅作为“顶边界板全局坡度”的兼容回退来源。
             floor.HasSlope = false;
         }
 
@@ -148,6 +149,7 @@ internal static class SectionExecutionConfigBuilder
             floor.BottomBoundarySlab.SlopeValue = sourceConfig.GlobalBottomSlopeValue;
             floor.BottomBoundarySlab.SlopeTarget = sourceConfig.GlobalBottomSlopeTarget;
         }
+        // 底边界板没有 legacy GlobalSlope 兼容回退；只有显式的 GlobalBottomSlope 才能覆盖楼层配置。
     }
 
     private static BoundarySlabConfig CloneBoundarySlab(BoundarySlabConfig? boundarySlab)

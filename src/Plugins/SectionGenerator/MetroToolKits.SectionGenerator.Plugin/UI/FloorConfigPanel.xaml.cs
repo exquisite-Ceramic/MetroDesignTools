@@ -47,6 +47,8 @@ public partial class FloorConfigPanel : UserControl
         BaseFloorComboBox.ItemsSource = _viewModel.Floors;
         GlobalSlopeCheck.Checked += GlobalSlopeCheck_Changed;
         GlobalSlopeCheck.Unchecked += GlobalSlopeCheck_Changed;
+        GlobalBottomSlopeCheck.Checked += GlobalBottomSlopeCheck_Changed;
+        GlobalBottomSlopeCheck.Unchecked += GlobalBottomSlopeCheck_Changed;
     }
 
     public void Initialize(
@@ -131,9 +133,12 @@ public partial class FloorConfigPanel : UserControl
         ArgumentNullException.ThrowIfNull(_sectionOutputConfigMapper);
         _viewModel.Load(_document, _sectionOutputConfigMapper, selectedFloorName);
 
-        GlobalSlopeCheck.IsChecked = _viewModel.GlobalSlopeEnabled;
-        GlobalSlopeValueBox.Text = _viewModel.GlobalSlopePercent.ToString("F2");
-        GlobalSlopeTargetBox.SelectedIndex = _viewModel.GlobalSlopeTarget == "FinishLayer" ? 1 : 0;
+        GlobalSlopeCheck.IsChecked = _viewModel.GlobalTopSlopeEnabled;
+        GlobalSlopeValueBox.Text = _viewModel.GlobalTopSlopePercent.ToString("F2");
+        SelectSlopeTarget(GlobalSlopeTargetBox, _viewModel.GlobalTopSlopeTarget);
+        GlobalBottomSlopeCheck.IsChecked = _viewModel.GlobalBottomSlopeEnabled;
+        GlobalBottomSlopeValueBox.Text = _viewModel.GlobalBottomSlopePercent.ToString("F2");
+        SelectSlopeTarget(GlobalBottomSlopeTargetBox, _viewModel.GlobalBottomSlopeTarget);
         BaseFloorComboBox.SelectedItem = _viewModel.Floors.FirstOrDefault(floor =>
             string.Equals(floor.Name, _viewModel.AlignmentBaseFloorName, StringComparison.OrdinalIgnoreCase));
         LoadOutputConfig(_viewModel.OutputConfig);
@@ -731,11 +736,24 @@ public partial class FloorConfigPanel : UserControl
     private void GlobalSlopeCheck_Changed(object sender, RoutedEventArgs e)
         => UpdateSlopeControlAvailability();
 
+    private void GlobalBottomSlopeCheck_Changed(object sender, RoutedEventArgs e)
+        => UpdateSlopeControlAvailability();
+
     private void UpdateSlopeControlAvailability()
     {
         var legacySlopeOverriddenByGlobal = GlobalSlopeCheck.IsChecked == true;
         var topSlopeOverriddenByGlobal = GlobalSlopeCheck.IsChecked == true;
-        var bottomSlopeOverriddenByGlobal = _viewModel.GlobalBottomSlopeEnabled;
+        var bottomSlopeOverriddenByGlobal = GlobalBottomSlopeCheck.IsChecked == true;
+
+        ApplyGlobalSlopeEditorState(
+            GlobalSlopeValueBox,
+            GlobalSlopeTargetBox,
+            GlobalSlopeCheck.IsChecked == true);
+
+        ApplyGlobalSlopeEditorState(
+            GlobalBottomSlopeValueBox,
+            GlobalBottomSlopeTargetBox,
+            GlobalBottomSlopeCheck.IsChecked == true);
 
         ApplySlopeEditorState(
             SlopeCheck,
@@ -776,6 +794,15 @@ public partial class FloorConfigPanel : UserControl
         valueBox.IsEnabled = editorEnabled && valueEnabledWhenEditorAvailable;
         checkBox.ToolTip = tooltip;
         valueBox.ToolTip = tooltip;
+    }
+
+    private static void ApplyGlobalSlopeEditorState(
+        TextBox valueBox,
+        ComboBox targetBox,
+        bool enabled)
+    {
+        valueBox.IsEnabled = enabled;
+        targetBox.IsEnabled = enabled;
     }
 
     private void TopBoundaryTemplateBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -868,33 +895,69 @@ public partial class FloorConfigPanel : UserControl
 
     private bool TryCommitGlobalConfig(bool strictNumericParsing, out string errorMessage)
     {
-        var globalSlopePercent = _viewModel.GlobalSlopePercent;
-        if (!GlobalSlopeCheck.IsChecked.HasValue || GlobalSlopeCheck.IsChecked == false || !GlobalSlopeValueBox.IsEnabled)
+        var globalTopSlopePercent = _viewModel.GlobalTopSlopePercent;
+        if (GlobalSlopeCheck.IsChecked == true && GlobalSlopeValueBox.IsEnabled)
         {
-            // Disabled global slope editor keeps the last committed numeric value.
-        }
-        else if (double.TryParse(GlobalSlopeValueBox.Text, out var parsedGlobalSlopePercent))
-        {
-            globalSlopePercent = parsedGlobalSlopePercent;
-        }
-        else if (strictNumericParsing)
-        {
-            errorMessage = "图纸级全局坡度必须为有效数字。";
-            return false;
+            if (double.TryParse(GlobalSlopeValueBox.Text, out var parsedGlobalSlopePercent))
+            {
+                globalTopSlopePercent = parsedGlobalSlopePercent;
+            }
+            else if (strictNumericParsing)
+            {
+                errorMessage = "图纸级顶板全局坡度必须为有效数字。";
+                return false;
+            }
         }
 
-        var globalSlopeEnabled = GlobalSlopeCheck.IsChecked == true;
-        var globalSlopeTarget = (GlobalSlopeTargetBox.SelectedItem as ComboBoxItem)?.Tag?.ToString()
-            ?? _viewModel.GlobalSlopeTarget
-            ?? "StructuralSlab";
+        var globalBottomSlopePercent = _viewModel.GlobalBottomSlopePercent;
+        if (GlobalBottomSlopeCheck.IsChecked == true && GlobalBottomSlopeValueBox.IsEnabled)
+        {
+            if (double.TryParse(GlobalBottomSlopeValueBox.Text, out var parsedGlobalBottomSlopePercent))
+            {
+                globalBottomSlopePercent = parsedGlobalBottomSlopePercent;
+            }
+            else if (strictNumericParsing)
+            {
+                errorMessage = "图纸级底板全局坡度必须为有效数字。";
+                return false;
+            }
+        }
+
+        var globalTopSlopeEnabled = GlobalSlopeCheck.IsChecked == true;
+        var globalTopSlopeTarget = ReadSlopeTarget(
+            GlobalSlopeTargetBox,
+            _viewModel.GlobalTopSlopeTarget);
+        var globalBottomSlopeEnabled = GlobalBottomSlopeCheck.IsChecked == true;
+        var globalBottomSlopeTarget = ReadSlopeTarget(
+            GlobalBottomSlopeTargetBox,
+            _viewModel.GlobalBottomSlopeTarget);
 
         _viewModel.ApplyGlobalSettings(
             (BaseFloorComboBox.SelectedItem as FloorEditViewModel)?.Name,
-            globalSlopeEnabled,
-            globalSlopePercent,
-            globalSlopeTarget);
+            globalTopSlopeEnabled,
+            globalTopSlopePercent,
+            globalTopSlopeTarget,
+            globalBottomSlopeEnabled,
+            globalBottomSlopePercent,
+            globalBottomSlopeTarget);
         errorMessage = string.Empty;
         return true;
+    }
+
+    private static string ReadSlopeTarget(ComboBox comboBox, string fallbackTarget)
+        => (comboBox.SelectedItem as ComboBoxItem)?.Tag?.ToString()
+           ?? fallbackTarget
+           ?? "StructuralSlab";
+
+    private static void SelectSlopeTarget(ComboBox comboBox, string? target)
+    {
+        var normalizedTarget = string.IsNullOrWhiteSpace(target)
+            ? "StructuralSlab"
+            : target.Trim();
+        var selectedItem = comboBox.Items
+            .OfType<ComboBoxItem>()
+            .FirstOrDefault(item => string.Equals(item.Tag?.ToString(), normalizedTarget, StringComparison.OrdinalIgnoreCase));
+        comboBox.SelectedItem = selectedItem ?? comboBox.Items.OfType<ComboBoxItem>().FirstOrDefault();
     }
 
     private bool TryCommitUiStateToDocument(bool strictNumericParsing, out string errorMessage)

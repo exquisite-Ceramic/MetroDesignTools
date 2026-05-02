@@ -54,15 +54,25 @@ public sealed class FloorConfigViewModel
         }
 
         AlignmentBaseFloorName = Document.Config.AlignmentBaseFloorName;
-        GlobalSlopeEnabled = Document.Config.GlobalSlopeEnabled;
-        GlobalSlopePercent = ToPercent(Document.Config.GlobalSlopeValue);
-        GlobalSlopeTarget = Document.Config.GlobalSlopeTarget;
-        GlobalTopSlopeEnabled = Document.Config.GlobalTopSlopeEnabled;
-        GlobalTopSlopePercent = ToPercent(Document.Config.GlobalTopSlopeValue);
-        GlobalTopSlopeTarget = Document.Config.GlobalTopSlopeTarget;
+        var explicitTopSlopeEnabled = Document.Config.GlobalTopSlopeEnabled;
+        var explicitTopSlopePercent = ToPercent(Document.Config.GlobalTopSlopeValue);
+        var explicitTopSlopeTarget = Document.Config.GlobalTopSlopeTarget;
+        var legacyGlobalSlopeEnabled = Document.Config.GlobalSlopeEnabled;
+        var legacyGlobalSlopePercent = ToPercent(Document.Config.GlobalSlopeValue);
+        var legacyGlobalSlopeTarget = Document.Config.GlobalSlopeTarget;
+
+        GlobalTopSlopeEnabled = explicitTopSlopeEnabled || legacyGlobalSlopeEnabled;
+        GlobalTopSlopePercent = explicitTopSlopeEnabled ? explicitTopSlopePercent : legacyGlobalSlopePercent;
+        GlobalTopSlopeTarget = explicitTopSlopeEnabled
+            ? explicitTopSlopeTarget
+            : legacyGlobalSlopeTarget;
         GlobalBottomSlopeEnabled = Document.Config.GlobalBottomSlopeEnabled;
         GlobalBottomSlopePercent = ToPercent(Document.Config.GlobalBottomSlopeValue);
         GlobalBottomSlopeTarget = Document.Config.GlobalBottomSlopeTarget;
+        // Legacy GlobalSlope 字段仅保留兼容用途，当前 UI/保存链路以显式顶板全局坡度为准。
+        GlobalSlopeEnabled = GlobalTopSlopeEnabled;
+        GlobalSlopePercent = GlobalTopSlopePercent;
+        GlobalSlopeTarget = GlobalTopSlopeTarget;
         OutputConfig.Load(outputConfigMapper.ToDto(Document.OutputConfig));
 
         SelectedFloor = !string.IsNullOrWhiteSpace(selectedFloorName)
@@ -159,17 +169,25 @@ public sealed class FloorConfigViewModel
 
     public void ApplyGlobalSettings(
         string? alignmentBaseFloorName,
-        bool globalSlopeEnabled,
-        double globalSlopePercent,
-        string? globalSlopeTarget)
+        bool globalTopSlopeEnabled,
+        double globalTopSlopePercent,
+        string? globalTopSlopeTarget,
+        bool globalBottomSlopeEnabled,
+        double globalBottomSlopePercent,
+        string? globalBottomSlopeTarget)
     {
         AlignmentBaseFloorName = alignmentBaseFloorName?.Trim() ?? string.Empty;
-        GlobalSlopeEnabled = globalSlopeEnabled;
-        GlobalSlopePercent = globalSlopePercent;
-        GlobalSlopeTarget = globalSlopeTarget?.Trim() ?? string.Empty;
-        GlobalTopSlopeEnabled = globalSlopeEnabled;
-        GlobalTopSlopePercent = globalSlopePercent;
-        GlobalTopSlopeTarget = GlobalSlopeTarget;
+        GlobalTopSlopeEnabled = globalTopSlopeEnabled;
+        GlobalTopSlopePercent = globalTopSlopePercent;
+        GlobalTopSlopeTarget = globalTopSlopeTarget?.Trim() ?? string.Empty;
+        GlobalBottomSlopeEnabled = globalBottomSlopeEnabled;
+        GlobalBottomSlopePercent = globalBottomSlopePercent;
+        GlobalBottomSlopeTarget = globalBottomSlopeTarget?.Trim() ?? string.Empty;
+
+        // 兼容旧配置字段：继续把“全局坡度”镜像为顶板全局坡度，避免旧读取方失配。
+        GlobalSlopeEnabled = GlobalTopSlopeEnabled;
+        GlobalSlopePercent = GlobalTopSlopePercent;
+        GlobalSlopeTarget = GlobalTopSlopeTarget;
     }
 
     public void ClearSelectedFloorAlignment()

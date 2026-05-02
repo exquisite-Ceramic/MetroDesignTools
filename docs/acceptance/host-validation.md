@@ -140,6 +140,14 @@ P4 手工宿主验收建议至少覆盖以下命令：
 - `P4.2g - UpdateSection Host Validation Plan`
 - `accoreconsole.exe Follow-up Plan`
 
+## P0 Follow-up Notes
+
+- `FloorConfig` 全局顶板/底板坡度的保存、重新打开回读、以及生成执行态取值一致性，仍需在真实 `acad.exe` 中完成手工宿主验证。
+  当前状态：`Pending manual host validation`
+- `viewDepth` 当前已在 `GenerateSection`、快照、`CheckSectionUpdates`、`UpdateSection` 链路中传递，但 `LayerBasedElementRecognizer` 仍未应用视图深度过滤。
+  当前状态：`Pending manual host validation`
+  说明：在补齐几何规则、诊断语义与测试覆盖前，暂不把它实现为正式深度裁剪逻辑。
+
 ## P4.2b Manual NETLOAD Result
 
 当前手动宿主验收记录如下：

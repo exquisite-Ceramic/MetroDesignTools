@@ -125,6 +125,61 @@ public class SectionExecutionConfigBuilderTests
         floor.BottomBoundarySlab.SlopeTarget.Should().Be("LocalBottom");
     }
 
+    [Fact]
+    public void TryBuild_WhenOnlyLegacyGlobalSlopeEnabled_OnlyTopBoundaryUsesCompatibilityFallback()
+    {
+        var sourceDocument = new LoadedSectionConfig
+        {
+            Config = new SectionConfig
+            {
+                AlignmentBaseFloorName = "F1",
+                GlobalSlopeEnabled = true,
+                GlobalSlopeValue = 0.02,
+                GlobalSlopeTarget = "FinishLayer",
+                GlobalTopSlopeEnabled = false,
+                GlobalBottomSlopeEnabled = false,
+                Floors =
+                [
+                    new FloorConfig
+                    {
+                        Name = "F1",
+                        Height = 5200,
+                        HasSlope = true,
+                        SlopeValue = 0.03,
+                        SlopeTarget = "LegacyLocal",
+                        TopBoundarySlab = new BoundarySlabConfig
+                        {
+                            TemplateId = "TOP-1",
+                            SlopeEnabled = false,
+                            SlopeValue = 0,
+                            SlopeTarget = "LocalTop"
+                        },
+                        BottomBoundarySlab = new BoundarySlabConfig
+                        {
+                            TemplateId = "BOT-1",
+                            SlopeEnabled = false,
+                            SlopeValue = 0,
+                            SlopeTarget = "LocalBottom"
+                        }
+                    }
+                ]
+            }
+        };
+
+        var (success, executionDocument, errorMessage) = InvokeTryBuild(sourceDocument, Array.Empty<string>(), "F1");
+
+        success.Should().BeTrue();
+        errorMessage.Should().BeEmpty();
+
+        var floor = executionDocument.Config.Floors.Should().ContainSingle().Subject;
+        floor.HasSlope.Should().BeFalse("legacy 全局坡度开启后，楼层兼容坡度不应继续参与执行态");
+        floor.TopBoundarySlab.SlopeEnabled.Should().BeTrue("legacy 全局坡度兼容回退只作用于顶边界板");
+        floor.TopBoundarySlab.SlopeValue.Should().BeApproximately(0.02, 0.000001);
+        floor.TopBoundarySlab.SlopeTarget.Should().Be("FinishLayer");
+        floor.BottomBoundarySlab.SlopeEnabled.Should().BeFalse("底边界板不应误用 legacy 全局坡度");
+        floor.BottomBoundarySlab.SlopeTarget.Should().Be("LocalBottom");
+    }
+
     private static (bool Success, LoadedSectionConfig ExecutionDocument, string ErrorMessage) InvokeTryBuild(
         LoadedSectionConfig sourceDocument,
         IReadOnlyList<string> includedFloorNames,

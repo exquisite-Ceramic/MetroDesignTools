@@ -231,28 +231,56 @@
 
                     <GroupBox Grid.Row="1" Header="全局坡度与基准层">
                         <Grid Margin="6">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="90"/>
                                 <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="140"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <CheckBox Grid.Column="0" x:Name="GlobalSlopeCheck" Content="全局坡度" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <Label Grid.Column="1" Content="坡度值 (%):" VerticalAlignment="Center"/>
-                            <TextBox Grid.Column="2" x:Name="GlobalSlopeValueBox" Width="60" Margin="4,0"/>
-                            <Label Grid.Column="3" Content="作用对象:" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                            <ComboBox Grid.Column="4" x:Name="GlobalSlopeTargetBox" Margin="4,0" Width="120" HorizontalAlignment="Left">
+
+                            <CheckBox Grid.Row="0"
+                                      Grid.Column="0"
+                                      x:Name="GlobalSlopeCheck"
+                                      Content="顶板全局坡度"
+                                      VerticalAlignment="Center"
+                                      Margin="0,0,10,0"/>
+                            <Label Grid.Row="0" Grid.Column="1" Content="坡度值 (%):" VerticalAlignment="Center"/>
+                            <TextBox Grid.Row="0" Grid.Column="2" x:Name="GlobalSlopeValueBox" Width="70" Margin="4,0"/>
+                            <Label Grid.Row="0" Grid.Column="3" Content="作用对象:" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                            <ComboBox Grid.Row="0" Grid.Column="4" x:Name="GlobalSlopeTargetBox" Margin="4,0" Width="120" HorizontalAlignment="Left">
                                 <ComboBoxItem Content="结构楼板" Tag="StructuralSlab" IsSelected="True"/>
                                 <ComboBoxItem Content="装修面层" Tag="FinishLayer"/>
                             </ComboBox>
-                            <Label Grid.Column="5" Content="基准层:" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                            <ComboBox Grid.Column="6"
+
+                            <CheckBox Grid.Row="1"
+                                      Grid.Column="0"
+                                      x:Name="GlobalBottomSlopeCheck"
+                                      Content="底板全局坡度"
+                                      VerticalAlignment="Center"
+                                      Margin="0,6,10,0"/>
+                            <Label Grid.Row="1" Grid.Column="1" Content="坡度值 (%):" VerticalAlignment="Center" Margin="0,6,0,0"/>
+                            <TextBox Grid.Row="1" Grid.Column="2" x:Name="GlobalBottomSlopeValueBox" Width="70" Margin="4,6,0,0"/>
+                            <Label Grid.Row="1" Grid.Column="3" Content="作用对象:" VerticalAlignment="Center" Margin="10,6,0,0"/>
+                            <ComboBox Grid.Row="1" Grid.Column="4" x:Name="GlobalBottomSlopeTargetBox" Margin="4,6,0,0" Width="120" HorizontalAlignment="Left">
+                                <ComboBoxItem Content="结构楼板" Tag="StructuralSlab" IsSelected="True"/>
+                                <ComboBoxItem Content="装修面层" Tag="FinishLayer"/>
+                            </ComboBox>
+
+                            <Label Grid.Row="2" Grid.Column="0" Content="基准层:" VerticalAlignment="Center" Margin="0,10,0,0"/>
+                            <ComboBox Grid.Row="2"
+                                      Grid.Column="1"
+                                      Grid.ColumnSpan="4"
                                       x:Name="BaseFloorComboBox"
-                                      Margin="4,0"
+                                      Margin="4,10,0,0"
                                       Width="140"
+                                      HorizontalAlignment="Left"
                                       DisplayMemberPath="Name"
                                       SelectionChanged="BaseFloorComboBox_SelectionChanged"/>
                         </Grid>
