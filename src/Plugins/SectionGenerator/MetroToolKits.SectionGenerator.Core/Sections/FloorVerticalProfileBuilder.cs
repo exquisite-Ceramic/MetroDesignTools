@@ -140,16 +140,19 @@ public sealed class FloorVerticalProfileBuilder
     public IReadOnlyList<Line3D> BuildBoundaryLines(
         FloorConfig floor,
         FloorVerticalProfile profile,
-        IReadOnlyList<(double StartX, double EndX)> wallIntervals)
-        => BuildBoundaryLineSegments(floor, profile, wallIntervals)
+        IReadOnlyList<(double StartX, double EndX)> wallIntervals,
+        FloorStackLayoutItem? stackLayoutItem = null)
+        => BuildBoundaryLineSegments(floor, profile, wallIntervals, stackLayoutItem)
             .Select(segment => segment.Line)
             .ToList();
 
     public IReadOnlyList<SectionLineSegment> BuildBoundaryLineSegments(
         FloorConfig floor,
         FloorVerticalProfile profile,
-        IReadOnlyList<(double StartX, double EndX)> wallIntervals)
+        IReadOnlyList<(double StartX, double EndX)> wallIntervals,
+        FloorStackLayoutItem? stackLayoutItem = null)
     {
+        var layoutItem = stackLayoutItem ?? FloorStackLayoutItem.CreateDrawAll(floor);
         var segments = new List<SectionLineSegment>();
         var bottomDefinition = ResolveBoundaryDefinition(
             floor,
@@ -168,38 +171,47 @@ public sealed class FloorVerticalProfileBuilder
             ? profile.TopBoundaryTop.EndY - (profile.TopBoundaryBottom.EndY + topDefinition.TopmostOffsetFromBottom)
             : 0d;
 
-        segments.AddRange(BuildBoundaryLinesFor(
-            bottomDefinition,
-            anchorAtTop: true,
-            anchorStartY: profile.BottomBoundaryTop.StartY,
-            anchorEndY: profile.BottomBoundaryTop.EndY,
-            profile.SectionLength,
-            wallIntervals,
-            bottomFinishSlopeDelta));
-
-        segments.AddRange(BuildBoundaryLinesFor(
-            topDefinition,
-            anchorAtTop: false,
-            anchorStartY: profile.TopBoundaryBottom.StartY,
-            anchorEndY: profile.TopBoundaryBottom.EndY,
-            profile.SectionLength,
-            wallIntervals,
-            topFinishSlopeDelta));
-
-        segments.Add(new SectionLineSegment
+        if (layoutItem.BottomBoundary.DrawLines)
         {
-            Line = new Line3D(
-                new Point3D(0, profile.BottomBoundaryBottom.StartY, 0),
-                new Point3D(0, profile.TopBoundaryTop.StartY, 0)),
-            Role = SectionLineRole.Structural
-        });
-        segments.Add(new SectionLineSegment
+            segments.AddRange(BuildBoundaryLinesFor(
+                bottomDefinition,
+                anchorAtTop: true,
+                anchorStartY: profile.BottomBoundaryTop.StartY,
+                anchorEndY: profile.BottomBoundaryTop.EndY,
+                profile.SectionLength,
+                wallIntervals,
+                bottomFinishSlopeDelta));
+        }
+
+        if (layoutItem.TopBoundary.DrawLines)
         {
-            Line = new Line3D(
-                new Point3D(profile.SectionLength, profile.BottomBoundaryBottom.EndY, 0),
-                new Point3D(profile.SectionLength, profile.TopBoundaryTop.EndY, 0)),
-            Role = SectionLineRole.Structural
-        });
+            segments.AddRange(BuildBoundaryLinesFor(
+                topDefinition,
+                anchorAtTop: false,
+                anchorStartY: profile.TopBoundaryBottom.StartY,
+                anchorEndY: profile.TopBoundaryBottom.EndY,
+                profile.SectionLength,
+                wallIntervals,
+                topFinishSlopeDelta));
+        }
+
+        if (layoutItem.BottomBoundary.DrawLines && layoutItem.TopBoundary.DrawLines)
+        {
+            segments.Add(new SectionLineSegment
+            {
+                Line = new Line3D(
+                    new Point3D(0, profile.BottomBoundaryBottom.StartY, 0),
+                    new Point3D(0, profile.TopBoundaryTop.StartY, 0)),
+                Role = SectionLineRole.Structural
+            });
+            segments.Add(new SectionLineSegment
+            {
+                Line = new Line3D(
+                    new Point3D(profile.SectionLength, profile.BottomBoundaryBottom.EndY, 0),
+                    new Point3D(profile.SectionLength, profile.TopBoundaryTop.EndY, 0)),
+                Role = SectionLineRole.Structural
+            });
+        }
 
         return segments
             .Where(segment => segment.Line.Start.DistanceTo(segment.Line.End) > 1e-6)
@@ -208,23 +220,33 @@ public sealed class FloorVerticalProfileBuilder
 
     public IReadOnlyList<SectionHatchRegion> BuildBoundaryHatchRegions(
         FloorConfig floor,
-        FloorVerticalProfile profile)
+        FloorVerticalProfile profile,
+        FloorStackLayoutItem? stackLayoutItem = null)
     {
+        var layoutItem = stackLayoutItem ?? FloorStackLayoutItem.CreateDrawAll(floor);
         var regions = new List<SectionHatchRegion>();
-        TryAddStructuralBoundaryHatch(
-            regions,
-            profile.BottomStructuralBottom.StartY,
-            profile.BottomStructuralBottom.EndY,
-            profile.BottomStructuralTop.StartY,
-            profile.BottomStructuralTop.EndY,
-            profile.SectionLength);
-        TryAddStructuralBoundaryHatch(
-            regions,
-            profile.TopStructuralBottom.StartY,
-            profile.TopStructuralBottom.EndY,
-            profile.TopStructuralTop.StartY,
-            profile.TopStructuralTop.EndY,
-            profile.SectionLength);
+        if (layoutItem.BottomBoundary.DrawHatch)
+        {
+            TryAddStructuralBoundaryHatch(
+                regions,
+                profile.BottomStructuralBottom.StartY,
+                profile.BottomStructuralBottom.EndY,
+                profile.BottomStructuralTop.StartY,
+                profile.BottomStructuralTop.EndY,
+                profile.SectionLength);
+        }
+
+        if (layoutItem.TopBoundary.DrawHatch)
+        {
+            TryAddStructuralBoundaryHatch(
+                regions,
+                profile.TopStructuralBottom.StartY,
+                profile.TopStructuralBottom.EndY,
+                profile.TopStructuralTop.StartY,
+                profile.TopStructuralTop.EndY,
+                profile.SectionLength);
+        }
+
         return regions;
     }
 

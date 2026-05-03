@@ -3,6 +3,7 @@ using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
 using MetroToolKits.SectionGenerator.App.Abstractions;
 using MetroToolKits.SectionGenerator.App.Models;
+using MetroToolKits.SectionGenerator.App.ViewModels;
 using MetroToolKits.SectionGenerator.Contracts.Floors;
 using MetroToolKits.SectionGenerator.Contracts.Workbench;
 using MetroToolKits.SectionGenerator.Core.Sections;
@@ -36,7 +37,13 @@ public sealed class FloorConfigDocumentAssembler : IFloorConfigDocumentAssembler
             SelectedBaseFloorName = effectiveBaseFloorName,
             ConfigSourceStatusText = BuildConfigSourceStatus(document.RuntimeState),
             Issues = documentIssues,
-            FloorSummaries = floorDetails.Select(detail => BuildFloorSummary(detail, floors.Count == 1, string.IsNullOrWhiteSpace(config.AlignmentBaseFloorName), baseFloorMissing)).ToArray(),
+            FloorSummaries = floorDetails.Select((detail, index) => BuildFloorSummary(
+                detail,
+                index,
+                floors.Count,
+                floors.Count == 1,
+                string.IsNullOrWhiteSpace(config.AlignmentBaseFloorName),
+                baseFloorMissing)).ToArray(),
             FloorDetails = floorDetails
         };
     }
@@ -96,6 +103,8 @@ public sealed class FloorConfigDocumentAssembler : IFloorConfigDocumentAssembler
 
     private static FloorSummaryDto BuildFloorSummary(
         FloorDetailDto detail,
+        int floorIndex,
+        int floorCount,
         bool isSingleFloor,
         bool baseFloorWasImplicit,
         bool baseFloorMissing)
@@ -116,6 +125,7 @@ public sealed class FloorConfigDocumentAssembler : IFloorConfigDocumentAssembler
         return new FloorSummaryDto
         {
             FloorName = detail.FloorName,
+            StackRoleText = FloorStackUiStateBuilder.Create(floorIndex, floorCount).RoleText,
             IsBaseFloor = detail.IsBaseFloor,
             HasBlockingIssues = baseFloorMissing || detail.MissingRequirements.Count > 0,
             StatusText = statusText

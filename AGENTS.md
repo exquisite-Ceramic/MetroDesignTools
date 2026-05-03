@@ -1,38 +1,54 @@
-目标背景：
+你正在修改仓库：
 
-当前用户在 AutoCAD 中 COPY 已转换过的墙体后，新实体会保留图层 MK\_结构墙\_\*，但不会自动拥有 MK\_ElementBackup 中按 Handle 保存的转换元数据，例如 ConvertedType=Wall、TemplateId=xxx。
+E:/CAD二次开发/MetroDesignToolKits
 
-因此剖面生成时，复制墙体虽然仍会被图层识别为 Wall，但 GetTemplateId 返回空，导致它不会应用墙体模板，而是退回 legacy BuildingWall 逻辑，使用默认 Thickness=200，最终出现墙体表达不一致、填充越界等问题。
+
+
+当前已确认：
+
+Core 层默认使用 FloorStackBoundaryPolicy.ShareInteriorBoundaries：
+
+\- 单层：bottom/top 都生效
+
+\- 多层首层：bottom/top 都生效
+
+\- 多层非首层：bottom 不输出、不填充、不计高；top 生效
+
+
+
+当前 UI 问题：
+
+FloorConfigPanel 仍按旧模型显示每层都有“底板厚度 / 底边界板模板 / 底板坡度”，导致用户误以为非首层 bottom 配置会参与生成。
+
+实际在 ShareInteriorBoundaries 下，非首层 bottom 配置会保留，但当前生成不使用。
+
+
 
 本次目标：
 
-当 GenSection 检测到“位于已转换墙图层，但缺少墙体模板元数据”的实体时，不要静默按 legacy wall 生成。
+让 FloorConfigPanel 具备楼层角色感知：
 
-应该弹窗提示用户：
+1\. 当前楼层显示：单层 / 底层 / 中间层 / 顶层。
 
-检测到若干复制/异常墙体缺少模板信息，是否将它们绑定到同图层已有墙体模板？
+2\. 显示堆叠策略：共享层间板。
 
-用户确认后，补写转换元数据，再继续生成剖面。
+3\. 非首层禁用 bottom 相关输入，并提示“由上一层上部层间板表达”。
 
-用户拒绝或无法推断模板时，不应继续生成错误墙体，应给出清晰提示。
+4\. 动态调整 bottom/top 文案。
 
-架构约束：
+5\. 楼层列表显示角色。
 
-1\. Core 层不能引用 AutoCAD API，也不能处理弹窗。
+6\. 添加、删除、上移、下移、选择楼层后，角色 UI 必须刷新。
 
-2\. App 层负责 use case、结果模型、诊断，不直接依赖 AutoCAD 类型。
+7\. 不修改 Core 生成逻辑。
 
-3\. Infrastructure 层可以访问 AutoCAD Database、Transaction、Entity、Handle，并负责扫描和补写 MK\_ElementBackup 元数据。
+8\. 不修改 FloorConfig 保存结构。
 
-4\. Plugin/Command/UI 层负责弹窗确认，不要在 Recognizer 或 Core 里弹窗。
+9\. 非首层 bottom 配置值不删除、不清空，只是在当前策略下禁用并提示。
 
-5\. 不要把复制墙缺少模板信息的实体静默退回 ConvertToWall legacy 逻辑。
+10\. 不修改 CadDrawingService、HatchWriter、SightLine、复制墙模板元数据逻辑。
 
-6\. 不要破坏已转换实体的原始图层还原能力。不要简单调用会覆盖 OriginalLayer 的方法，除非确认不会覆盖正确数据。
+11\. 不触碰无关文件，例如 AGENTS.md。
 
-7\. 修改要小步、可编译、可测试。
-
-8\. 保持现有 Result / Diagnostic / CommandPresenter 风格。
-
-9\. 完成后输出修改文件、核心逻辑、测试结果、仍需 AutoCAD 2018 验证的点。
+12\. 完成后编译 App / Plugin，并输出修改文件、刷新入口、编译结果。
 

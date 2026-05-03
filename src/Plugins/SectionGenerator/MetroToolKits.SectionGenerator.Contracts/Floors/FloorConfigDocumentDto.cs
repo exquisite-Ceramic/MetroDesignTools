@@ -23,6 +23,8 @@ public sealed class FloorSummaryDto
 {
     public string FloorName { get; init; } = string.Empty;
 
+    public string StackRoleText { get; init; } = string.Empty;
+
     public bool IsBaseFloor { get; init; }
 
     public bool HasBlockingIssues { get; init; }

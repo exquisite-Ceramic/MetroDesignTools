@@ -15,6 +15,9 @@ namespace MetroToolKits.SectionGenerator.Plugin.UI;
 
 public partial class FloorConfigPanel : UserControl
 {
+    private const string BottomBoundarySuppressedToolTip =
+        "当前堆叠策略为“共享层间板”，本层下边界由上一层上部层间板表达；本层底边界配置会保留，但当前生成不使用。";
+
     private readonly ObservableCollection<FloorSummaryDto> _floorSummaries = new();
     private readonly FloorConfigViewModel _viewModel = new();
     private ILogger _logger = Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance;
@@ -158,6 +161,7 @@ public partial class FloorConfigPanel : UserControl
             EditPanel.IsEnabled = false;
         }
 
+        RefreshFloorStackRoleUi();
         UpdateSlopeControlAvailability();
         RefreshFloorSummaryList(CurrentFloor?.Name);
         _logger.LogDebug("楼层配置面板加载，楼层数: {Count}", _viewModel.Floors.Count);
@@ -530,6 +534,7 @@ public partial class FloorConfigPanel : UserControl
             {
                 BindFloorToUI(floor);
                 EditPanel.IsEnabled = true;
+                RefreshFloorStackRoleUi();
                 RefreshFloorSummaryList(floor.Name);
                 return;
             }
@@ -537,6 +542,7 @@ public partial class FloorConfigPanel : UserControl
 
         _viewModel.SelectFloor((FloorEditViewModel?)null);
         EditPanel.IsEnabled = false;
+        RefreshFloorStackRoleUi();
     }
 
     private void AddFloor_Click(object sender, RoutedEventArgs e)
@@ -551,6 +557,7 @@ public partial class FloorConfigPanel : UserControl
         RefreshFloorSummaryList(newFloor.Name);
         BindFloorToUI(newFloor);
         EditPanel.IsEnabled = true;
+        RefreshFloorStackRoleUi();
         _logger.LogInformation("添加楼层: {FloorName}", newFloor.Name);
     }
 
@@ -575,10 +582,12 @@ public partial class FloorConfigPanel : UserControl
         {
             BindFloorToUI(CurrentFloor);
             EditPanel.IsEnabled = true;
+            RefreshFloorStackRoleUi();
         }
         else
         {
             EditPanel.IsEnabled = false;
+            RefreshFloorStackRoleUi();
         }
         _logger.LogInformation("删除楼层: {FloorName}", name);
     }
@@ -595,6 +604,7 @@ public partial class FloorConfigPanel : UserControl
         _viewModel.SelectFloor(CurrentFloor);
         _viewModel.MoveSelectedFloorUp();
         RefreshFloorSummaryList(CurrentFloor?.Name);
+        RefreshFloorStackRoleUi();
     }
 
     private void MoveDown_Click(object sender, RoutedEventArgs e)
@@ -609,6 +619,7 @@ public partial class FloorConfigPanel : UserControl
         _viewModel.SelectFloor(CurrentFloor);
         _viewModel.MoveSelectedFloorDown();
         RefreshFloorSummaryList(CurrentFloor?.Name);
+        RefreshFloorStackRoleUi();
     }
 
     private void BindFloorToUI(FloorEditViewModel floor)
@@ -643,6 +654,79 @@ public partial class FloorConfigPanel : UserControl
         ScopeStatus.Foreground = hasScope
             ? System.Windows.Media.Brushes.Green
             : System.Windows.Media.Brushes.Gray;
+        RefreshFloorStackRoleUi();
+    }
+
+    private void RefreshFloorStackRoleUi()
+    {
+        var state = CreateCurrentFloorStackUiState();
+        if (state == null)
+        {
+            FloorStackRoleInfoBorder.Visibility = Visibility.Collapsed;
+            FloorStackRoleInfoText.Text = "未选择楼层。";
+            ApplyBottomBoundaryEditorState(isBottomBoundaryEffective: true);
+            UpdateSlopeControlAvailability();
+            return;
+        }
+
+        BottomThicknessLabel.Content = state.BottomThicknessLabelText;
+        TopThicknessLabel.Content = state.TopThicknessLabelText;
+        BottomBoundaryTemplateLabel.Content = state.BottomBoundaryLabelText;
+        TopBoundaryTemplateLabel.Content = state.TopBoundaryLabelText;
+        BottomSlopeLabel.Content = state.BottomSlopeLabelText;
+        TopSlopeLabel.Content = state.TopSlopeLabelText;
+
+        var lines = new List<string>
+        {
+            $"当前楼层角色：{state.RoleText}",
+            $"堆叠策略：{state.StackPolicyText}",
+            state.RoleDescription
+        };
+
+        if (!state.IsBottomBoundaryEffective &&
+            !string.IsNullOrWhiteSpace(state.BottomBoundaryHint))
+        {
+            lines.Add(state.BottomBoundaryHint);
+        }
+
+        FloorStackRoleInfoText.Text = string.Join(Environment.NewLine, lines);
+        FloorStackRoleInfoBorder.Visibility = Visibility.Visible;
+        ApplyBottomBoundaryEditorState(state.IsBottomBoundaryEffective);
+        UpdateSlopeControlAvailability();
+    }
+
+    private FloorStackUiState? CreateCurrentFloorStackUiState()
+    {
+        if (CurrentFloor == null)
+        {
+            return null;
+        }
+
+        var floorIndex = _viewModel.Floors.IndexOf(CurrentFloor);
+        return floorIndex >= 0
+            ? FloorStackUiStateBuilder.Create(floorIndex, _viewModel.Floors.Count)
+            : null;
+    }
+
+    private bool IsCurrentBottomBoundaryEffective()
+        => CreateCurrentFloorStackUiState()?.IsBottomBoundaryEffective ?? true;
+
+    private void ApplyBottomBoundaryEditorState(bool isBottomBoundaryEffective)
+    {
+        var tooltip = isBottomBoundaryEffective
+            ? null
+            : BottomBoundarySuppressedToolTip;
+
+        BottomSlabBox.IsEnabled = isBottomBoundaryEffective;
+        EditBottomTemplateButton.IsEnabled = isBottomBoundaryEffective;
+        BottomBoundaryTemplateBox.IsEnabled = isBottomBoundaryEffective;
+
+        BottomThicknessLabel.ToolTip = tooltip;
+        BottomSlabBox.ToolTip = tooltip;
+        EditBottomTemplateButton.ToolTip = tooltip;
+        BottomBoundaryTemplateLabel.ToolTip = tooltip;
+        BottomBoundaryTemplateBox.ToolTip = tooltip;
+        BottomSlopeLabel.ToolTip = tooltip;
     }
 
     private void SaveCurrentEdits()
@@ -744,6 +828,7 @@ public partial class FloorConfigPanel : UserControl
         var legacySlopeOverriddenByGlobal = GlobalSlopeCheck.IsChecked == true;
         var topSlopeOverriddenByGlobal = GlobalSlopeCheck.IsChecked == true;
         var bottomSlopeOverriddenByGlobal = GlobalBottomSlopeCheck.IsChecked == true;
+        var bottomBoundaryEffective = IsCurrentBottomBoundaryEffective();
 
         ApplyGlobalSlopeEditorState(
             GlobalSlopeValueBox,
@@ -776,11 +861,13 @@ public partial class FloorConfigPanel : UserControl
         ApplySlopeEditorState(
             BottomSlopeCheck,
             BottomSlopeValueBox,
-            !bottomSlopeOverriddenByGlobal,
+            bottomBoundaryEffective && !bottomSlopeOverriddenByGlobal,
             BottomSlopeCheck.IsChecked == true,
-            bottomSlopeOverriddenByGlobal
-                ? "已启用图纸级全局底板坡度，底边界板坡度暂不生效。关闭全局底板坡度后可恢复编辑。"
-                : null);
+            !bottomBoundaryEffective
+                ? BottomBoundarySuppressedToolTip
+                : (bottomSlopeOverriddenByGlobal
+                    ? "已启用图纸级全局底板坡度，底边界板坡度暂不生效。关闭全局底板坡度后可恢复编辑。"
+                    : null));
     }
 
     private static void ApplySlopeEditorState(

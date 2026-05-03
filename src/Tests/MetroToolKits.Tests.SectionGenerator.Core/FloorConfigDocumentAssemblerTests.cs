@@ -65,6 +65,26 @@ public class FloorConfigDocumentAssemblerTests
     }
 
     [Fact]
+    public void Assemble_WhenMultipleFloors_BuildsStackRoleText()
+    {
+        var document = CreateDocument(new SectionConfig
+        {
+            Floors =
+            [
+                new FloorConfig { Name = "F1" },
+                new FloorConfig { Name = "F2" },
+                new FloorConfig { Name = "F3" }
+            ]
+        });
+
+        var dto = _assembler.Assemble(document);
+
+        dto.FloorSummaries.Select(summary => $"{summary.FloorName} · {summary.StackRoleText}")
+            .Should()
+            .Equal("F1 · 底层", "F2 · 中间层", "F3 · 顶层");
+    }
+
+    [Fact]
     public void Assemble_WhenBaseFloorMissingThreePoints_ReportsAlignmentIssue()
     {
         var document = CreateDocument(new SectionConfig

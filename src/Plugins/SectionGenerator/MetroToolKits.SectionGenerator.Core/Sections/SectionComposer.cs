@@ -55,11 +55,14 @@ public sealed class SectionComposer
         Vector3D viewDirection,
         SectionFloorRecognitionData recognitionData,
         double baseElevation = 0,
-        SightLineComposerOptions? sightLineOptions = null)
+        SightLineComposerOptions? sightLineOptions = null,
+        FloorStackLayoutItem? stackLayoutItem = null)
     {
         var projector = new SectionCoordinateProjector(sectionLine);
         var floorConfig = recognitionData.Floor;
-        var verticalProfile = _verticalProfileBuilder.Build(floorConfig, projector.SectionLength, baseElevation);
+        var layoutItem = stackLayoutItem ?? FloorStackLayoutItem.CreateDrawAll(floorConfig, baseElevation);
+        var effectiveBaseElevation = layoutItem.BaseElevation;
+        var verticalProfile = _verticalProfileBuilder.Build(floorConfig, projector.SectionLength, effectiveBaseElevation);
         var context = new SectionGeometryContext
         {
             SectionLine = sectionLine,
@@ -119,23 +122,27 @@ public sealed class SectionComposer
 
         elementDataList.AddRange(_sightLineComposer.Compose(
             recognitionData.SightLineCandidates,
-            baseElevation,
+            effectiveBaseElevation,
             sightLineOptions));
 
-        var slabLineSegments = _verticalProfileBuilder.BuildBoundaryLineSegments(floorConfig, verticalProfile, wallIntervals)
+        var slabLineSegments = _verticalProfileBuilder.BuildBoundaryLineSegments(
+                floorConfig,
+                verticalProfile,
+                wallIntervals,
+                layoutItem)
             .Where(segment => !IsDegenerate(segment.Line))
             .ToList();
 
         return new SectionGeometryData
         {
             FloorName = floorConfig.Name,
-            BaseElevation = baseElevation,
+            BaseElevation = effectiveBaseElevation,
             FloorHeight = floorConfig.Height,
             VerticalProfile = verticalProfile,
             Elements = elementDataList,
             SlabLines = slabLineSegments.Select(segment => segment.Line).ToList(),
             SlabLineSegments = slabLineSegments,
-            HatchRegions = _verticalProfileBuilder.BuildBoundaryHatchRegions(floorConfig, verticalProfile)
+            HatchRegions = _verticalProfileBuilder.BuildBoundaryHatchRegions(floorConfig, verticalProfile, layoutItem)
         };
     }
 

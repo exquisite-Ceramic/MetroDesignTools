@@ -42,7 +42,12 @@ public class MultiFloorSectionComposerTests
             ("F1", true, new Line3D(new Point3D(0, 0, 0), new Point3D(0, 1000, 0))),
             ("F2", true, new Line3D(new Point3D(100, 0, 0), new Point3D(100, 1000, 0))));
 
-        var result = composer.Generate(executionContexts, ViewDir, new Dictionary<string, IReadOnlyList<BuildingElement>>(), floors);
+        var result = composer.Generate(
+            executionContexts,
+            ViewDir,
+            new Dictionary<string, IReadOnlyList<BuildingElement>>(),
+            floors,
+            boundaryPolicy: FloorStackBoundaryPolicy.DrawAll);
 
         result.Floors.Should().HaveCount(2);
     }
@@ -62,7 +67,12 @@ public class MultiFloorSectionComposerTests
             ("F2", false, null),
             ("F3", true, new Line3D(new Point3D(200, 0, 0), new Point3D(200, 1000, 0))));
 
-        var result = composer.Generate(executionContexts, ViewDir, new Dictionary<string, IReadOnlyList<BuildingElement>>(), floors);
+        var result = composer.Generate(
+            executionContexts,
+            ViewDir,
+            new Dictionary<string, IReadOnlyList<BuildingElement>>(),
+            floors,
+            boundaryPolicy: FloorStackBoundaryPolicy.DrawAll);
 
         result.Floors.Should().HaveCount(2);
         result.Floors[0].FloorName.Should().Be("F1");
@@ -84,7 +94,12 @@ public class MultiFloorSectionComposerTests
             ("F1", true, new Line3D(new Point3D(0, 0, 0), new Point3D(0, 1000, 0))),
             ("F2", true, new Line3D(new Point3D(100, 0, 0), new Point3D(100, 1000, 0))));
 
-        var result = composer.Generate(executionContexts, ViewDir, new Dictionary<string, IReadOnlyList<BuildingElement>>(), floors);
+        var result = composer.Generate(
+            executionContexts,
+            ViewDir,
+            new Dictionary<string, IReadOnlyList<BuildingElement>>(),
+            floors,
+            boundaryPolicy: FloorStackBoundaryPolicy.DrawAll);
 
         result.TotalHeight.Should().Be(10100);
     }

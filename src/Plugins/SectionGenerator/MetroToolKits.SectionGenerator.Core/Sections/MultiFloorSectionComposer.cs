@@ -10,10 +10,19 @@ namespace MetroToolKits.SectionGenerator.Core.Sections;
 public sealed class MultiFloorSectionComposer
 {
     private readonly SectionComposer _singleFloorComposer;
+    private readonly FloorStackLayoutPlanner _stackLayoutPlanner;
 
     public MultiFloorSectionComposer(SectionComposer singleFloorComposer)
+        : this(singleFloorComposer, new FloorStackLayoutPlanner())
+    {
+    }
+
+    public MultiFloorSectionComposer(
+        SectionComposer singleFloorComposer,
+        FloorStackLayoutPlanner stackLayoutPlanner)
     {
         _singleFloorComposer = singleFloorComposer;
+        _stackLayoutPlanner = stackLayoutPlanner;
     }
 
     /// <summary>
@@ -23,12 +32,14 @@ public sealed class MultiFloorSectionComposer
     /// <param name="viewDirection">视图方向</param>
     /// <param name="floorElements">每层的构件列表，key = 楼层名称</param>
     /// <param name="floors">楼层配置列表（按楼层顺序）</param>
+    /// <param name="boundaryPolicy">楼层边界板堆叠策略；DrawAll 保留旧行为，可用于回退。</param>
     public MultiFloorSectionData Generate(
         IReadOnlyDictionary<string, FloorExecutionContext> executionContexts,
         Vector3D viewDirection,
         IReadOnlyDictionary<string, IReadOnlyList<BuildingElement>> floorElements,
         IReadOnlyList<FloorConfig> floors,
-        SightLineComposerOptions? sightLineOptions = null)
+        SightLineComposerOptions? sightLineOptions = null,
+        FloorStackBoundaryPolicy boundaryPolicy = FloorStackBoundaryPolicy.ShareInteriorBoundaries)
     {
         var floorRecognitionData = floors.ToDictionary(
             floor => floor.Name,
@@ -41,7 +52,7 @@ public sealed class MultiFloorSectionComposer
             },
             StringComparer.OrdinalIgnoreCase);
 
-        return Generate(executionContexts, viewDirection, floorRecognitionData, floors, sightLineOptions);
+        return Generate(executionContexts, viewDirection, floorRecognitionData, floors, sightLineOptions, boundaryPolicy);
     }
 
     public MultiFloorSectionData Generate(
@@ -49,13 +60,17 @@ public sealed class MultiFloorSectionComposer
         Vector3D viewDirection,
         IReadOnlyDictionary<string, SectionFloorRecognitionData> floorRecognitionData,
         IReadOnlyList<FloorConfig> floors,
-        SightLineComposerOptions? sightLineOptions = null)
+        SightLineComposerOptions? sightLineOptions = null,
+        FloorStackBoundaryPolicy boundaryPolicy = FloorStackBoundaryPolicy.ShareInteriorBoundaries)
     {
         var floorDataList = new List<SectionGeometryData>();
+        var layoutPlan = _stackLayoutPlanner.Create(floors, boundaryPolicy);
         double cumulativeElevation = 0;
 
-        foreach (var floor in floors)
+        foreach (var plannedItem in layoutPlan.Items)
         {
+            var floor = plannedItem.Floor;
+            var layoutItem = plannedItem with { BaseElevation = cumulativeElevation };
             if (executionContexts.TryGetValue(floor.Name, out var context) &&
                 context.CanParticipate &&
                 context.SectionLine.HasValue)
@@ -69,15 +84,16 @@ public sealed class MultiFloorSectionComposer
                     viewDirection,
                     recognitionData,
                     baseElevation: cumulativeElevation,
-                    sightLineOptions: sightLineOptions);
+                    sightLineOptions: sightLineOptions,
+                    stackLayoutItem: layoutItem);
 
                 floorDataList.Add(floorData);
 
-                cumulativeElevation += ComputeTotalFloorHeight(floorData, floor);
+                cumulativeElevation += ComputeTotalFloorHeight(floorData, floor, layoutItem);
                 continue;
             }
 
-            cumulativeElevation += floor.BottomSlabThickness + floor.Height + floor.TopSlabThickness;
+            cumulativeElevation += ComputeFallbackFloorHeight(floor, layoutItem);
         }
 
         return new MultiFloorSectionData
@@ -87,18 +103,29 @@ public sealed class MultiFloorSectionComposer
         };
     }
 
-    private static double ComputeTotalFloorHeight(SectionGeometryData floorData, FloorConfig fallbackFloor)
+    private static double ComputeTotalFloorHeight(
+        SectionGeometryData floorData,
+        FloorConfig fallbackFloor,
+        FloorStackLayoutItem layoutItem)
     {
         if (floorData.VerticalProfile == null)
         {
-            return fallbackFloor.BottomSlabThickness + fallbackFloor.Height + fallbackFloor.TopSlabThickness;
+            return ComputeFallbackFloorHeight(fallbackFloor, layoutItem);
         }
 
         var profile = floorData.VerticalProfile;
         var bottomThickness = profile.GetBottomStructuralTop(0) - profile.GetBottomStructuralBottom(0);
         var topThickness = profile.GetTopStructuralTop(0) - profile.GetTopStructuralBottom(0);
-        return bottomThickness + floorData.FloorHeight + topThickness;
+        // Height contribution intentionally follows existing structural-thickness behavior.
+        return (layoutItem.BottomBoundary.CountHeight ? bottomThickness : 0)
+               + floorData.FloorHeight
+               + (layoutItem.TopBoundary.CountHeight ? topThickness : 0);
     }
+
+    private static double ComputeFallbackFloorHeight(FloorConfig floor, FloorStackLayoutItem layoutItem)
+        => (layoutItem.BottomBoundary.CountHeight ? floor.BottomSlabThickness : 0)
+           + floor.Height
+           + (layoutItem.TopBoundary.CountHeight ? floor.TopSlabThickness : 0);
 
 }
 
