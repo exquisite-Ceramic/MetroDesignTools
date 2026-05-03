@@ -9,8 +9,10 @@ public sealed class SightLineComposer
 
     public IReadOnlyList<ElementSectionData> Compose(
         IReadOnlyList<SectionSightLineCandidate> candidates,
-        double baseElevation)
+        double baseElevation,
+        SightLineComposerOptions? options = null)
     {
+        options ??= new SightLineComposerOptions();
         if (candidates.Count == 0)
         {
             return Array.Empty<ElementSectionData>();
@@ -19,6 +21,11 @@ public sealed class SightLineComposer
         var result = new List<ElementSectionData>();
         foreach (var candidate in candidates)
         {
+            if (!ShouldGenerateSightLines(candidate.Element, options))
+            {
+                continue;
+            }
+
             var sightLines = BuildRectangle(candidate, baseElevation);
             if (sightLines.Count == 0)
             {
@@ -42,6 +49,23 @@ public sealed class SightLineComposer
         }
 
         return result;
+    }
+
+    private static bool ShouldGenerateSightLines(BuildingElement element, SightLineComposerOptions options)
+    {
+        // 楼板/顶板/底板已经由剖切线、边界线和填充表达；视深矩形会和板边线重复，默认不生成楼板视深线。
+        if (!options.Enabled)
+        {
+            return false;
+        }
+
+        return element switch
+        {
+            Slab or CompositeSlabElement => options.IncludeSlabs,
+            Wall or CompositeWallElement => options.IncludeWalls,
+            Column => options.IncludeColumns,
+            _ => true
+        };
     }
 
     private static IReadOnlyList<Line3D> BuildRectangle(

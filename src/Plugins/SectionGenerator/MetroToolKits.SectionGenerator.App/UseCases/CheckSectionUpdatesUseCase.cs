@@ -246,7 +246,8 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
                             context.SectionLine.Value,
                             ComputeViewDirection(context.SectionLine.Value),
                             baseElevation,
-                            recognition);
+                            recognition,
+                            MapSightLineOptions(outputConfig.SightLineOptions));
                         if (sightLineCheck.Status == SightLineCheckStatus.Outdated)
                         {
                             isOutdated = true;
@@ -378,7 +379,8 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
         Line3D sectionLine,
         Vector3D viewDirection,
         double baseElevation,
-        FloorRecognitionContext recognition)
+        FloorRecognitionContext recognition,
+        SightLineComposerOptions sightLineOptions)
     {
         if (floorSnapshot.SightLineGeometryHash == null)
         {
@@ -425,7 +427,8 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
                 CutElements = recognition.CutElements,
                 SightLineCandidates = recognition.ViewDepthCandidates.Select(MapSightLineCandidate).ToList()
             },
-            baseElevation);
+            baseElevation,
+            sightLineOptions);
         var currentSightLineHash = _sightLineHasher.ComputeHash(floorGeometry.Elements);
         return currentSightLineHash == floorSnapshot.SightLineGeometryHash
             ? SightLineCheckResult.UpToDate()
@@ -532,6 +535,18 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
             MinDepth = candidate.MinDepth,
             MaxDepth = candidate.MaxDepth
         };
+
+    private static SightLineComposerOptions MapSightLineOptions(SightLineOptions? options)
+    {
+        options ??= new SightLineOptions();
+        return new SightLineComposerOptions
+        {
+            Enabled = options.Enabled,
+            IncludeSlabs = options.IncludeSlabs,
+            IncludeWalls = options.IncludeWalls,
+            IncludeColumns = options.IncludeColumns
+        };
+    }
 
     private static LoadedSectionConfig NormalizeLoadedConfig(LoadedSectionConfig? sourceDocument)
     {

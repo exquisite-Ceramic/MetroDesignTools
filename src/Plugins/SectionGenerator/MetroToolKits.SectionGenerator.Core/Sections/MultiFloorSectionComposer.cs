@@ -27,7 +27,8 @@ public sealed class MultiFloorSectionComposer
         IReadOnlyDictionary<string, FloorExecutionContext> executionContexts,
         Vector3D viewDirection,
         IReadOnlyDictionary<string, IReadOnlyList<BuildingElement>> floorElements,
-        IReadOnlyList<FloorConfig> floors)
+        IReadOnlyList<FloorConfig> floors,
+        SightLineComposerOptions? sightLineOptions = null)
     {
         var floorRecognitionData = floors.ToDictionary(
             floor => floor.Name,
@@ -40,14 +41,15 @@ public sealed class MultiFloorSectionComposer
             },
             StringComparer.OrdinalIgnoreCase);
 
-        return Generate(executionContexts, viewDirection, floorRecognitionData, floors);
+        return Generate(executionContexts, viewDirection, floorRecognitionData, floors, sightLineOptions);
     }
 
     public MultiFloorSectionData Generate(
         IReadOnlyDictionary<string, FloorExecutionContext> executionContexts,
         Vector3D viewDirection,
         IReadOnlyDictionary<string, SectionFloorRecognitionData> floorRecognitionData,
-        IReadOnlyList<FloorConfig> floors)
+        IReadOnlyList<FloorConfig> floors,
+        SightLineComposerOptions? sightLineOptions = null)
     {
         var floorDataList = new List<SectionGeometryData>();
         double cumulativeElevation = 0;
@@ -66,7 +68,8 @@ public sealed class MultiFloorSectionComposer
                     context.SectionLine.Value,
                     viewDirection,
                     recognitionData,
-                    baseElevation: cumulativeElevation);
+                    baseElevation: cumulativeElevation,
+                    sightLineOptions: sightLineOptions);
 
                 floorDataList.Add(floorData);
 

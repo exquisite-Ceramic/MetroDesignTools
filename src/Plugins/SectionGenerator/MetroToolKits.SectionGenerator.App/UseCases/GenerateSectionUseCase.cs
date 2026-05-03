@@ -320,7 +320,13 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
             // 多楼层堆叠计算
             currentStage = PipelineStage.SectionComposition;
             var composeSw = Stopwatch.StartNew();
-            var multiData = _multiComposer.Generate(scopeResolution.Floors, viewDirection, floorRecognitionData, floors);
+            var sightLineOptions = MapSightLineOptions(outputConfig.SightLineOptions);
+            var multiData = _multiComposer.Generate(
+                scopeResolution.Floors,
+                viewDirection,
+                floorRecognitionData,
+                floors,
+                sightLineOptions);
             composeSw.Stop();
             _logger.LogDebug("多楼层剖切计算耗时 {ElapsedMs}ms，总高度: {TotalHeight:F2}",
                 composeSw.ElapsedMilliseconds, multiData.TotalHeight);
@@ -545,6 +551,18 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
             MinDepth = candidate.MinDepth,
             MaxDepth = candidate.MaxDepth
         };
+
+    private static SightLineComposerOptions MapSightLineOptions(SightLineOptions? options)
+    {
+        options ??= new SightLineOptions();
+        return new SightLineComposerOptions
+        {
+            Enabled = options.Enabled,
+            IncludeSlabs = options.IncludeSlabs,
+            IncludeWalls = options.IncludeWalls,
+            IncludeColumns = options.IncludeColumns
+        };
+    }
 
     private static IReadOnlyList<OperationDiagnostic> AddFloorContext(
         string floorName,

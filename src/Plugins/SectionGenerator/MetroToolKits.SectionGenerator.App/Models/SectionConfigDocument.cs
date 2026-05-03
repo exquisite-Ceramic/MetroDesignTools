@@ -53,6 +53,8 @@ public sealed class SectionOutputConfig
 
     public HatchOptions HatchOptions { get; set; } = new();
 
+    public SightLineOptions SightLineOptions { get; set; } = new();
+
     public LayerOptions LayerOptions { get; set; } = new();
 }
 
@@ -83,6 +85,17 @@ public sealed class HatchStyleOptions
     public bool UseByLayer { get; set; } = true;
 
     public static HatchStyleOptions CreateDefault() => new();
+}
+
+public sealed class SightLineOptions
+{
+    public bool Enabled { get; set; } = true;
+
+    public bool IncludeSlabs { get; set; }
+
+    public bool IncludeWalls { get; set; } = true;
+
+    public bool IncludeColumns { get; set; } = true;
 }
 
 public sealed class LayerOptions

@@ -11,6 +11,7 @@ public sealed class SectionOutputConfigMapper : ISectionOutputConfigMapper
         var resolvedOutput = outputConfig ?? new SectionOutputConfig();
         var annotation = resolvedOutput.AnnotationOptions ?? new AnnotationOptions();
         var hatch = resolvedOutput.HatchOptions ?? new HatchOptions();
+        var sightLine = resolvedOutput.SightLineOptions ?? new SightLineOptions();
         var layers = resolvedOutput.LayerOptions ?? new LayerOptions();
         var defaultLayers = new LayerOptions();
 
@@ -26,6 +27,13 @@ public sealed class SectionOutputConfigMapper : ISectionOutputConfigMapper
                 WallHatch = MapHatchStyleToDto(hatch.WallHatch),
                 ColumnHatch = MapHatchStyleToDto(hatch.ColumnHatch),
                 SlabHatch = MapHatchStyleToDto(hatch.SlabHatch)
+            },
+            SightLineOptions = new SightLineOptionsDto
+            {
+                Enabled = sightLine.Enabled,
+                IncludeSlabs = sightLine.IncludeSlabs,
+                IncludeWalls = sightLine.IncludeWalls,
+                IncludeColumns = sightLine.IncludeColumns
             },
             LayerOptions = new LayerOptionsDto
             {
@@ -47,6 +55,7 @@ public sealed class SectionOutputConfigMapper : ISectionOutputConfigMapper
 
         var annotation = dto.AnnotationOptions ?? new AnnotationOptionsDto();
         var hatch = dto.HatchOptions ?? new HatchOptionsDto();
+        var sightLine = dto.SightLineOptions ?? new SightLineOptionsDto();
         var layers = dto.LayerOptions ?? new LayerOptionsDto();
         var defaultLayers = new LayerOptionsDto();
 
@@ -62,6 +71,13 @@ public sealed class SectionOutputConfigMapper : ISectionOutputConfigMapper
                 WallHatch = MapHatchStyleToDomain(hatch.WallHatch),
                 ColumnHatch = MapHatchStyleToDomain(hatch.ColumnHatch),
                 SlabHatch = MapHatchStyleToDomain(hatch.SlabHatch)
+            },
+            SightLineOptions = new SightLineOptions
+            {
+                Enabled = sightLine.Enabled,
+                IncludeSlabs = sightLine.IncludeSlabs,
+                IncludeWalls = sightLine.IncludeWalls,
+                IncludeColumns = sightLine.IncludeColumns
             },
             LayerOptions = new LayerOptions
             {

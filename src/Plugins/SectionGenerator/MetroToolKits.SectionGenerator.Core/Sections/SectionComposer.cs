@@ -54,7 +54,8 @@ public sealed class SectionComposer
         Line3D sectionLine,
         Vector3D viewDirection,
         SectionFloorRecognitionData recognitionData,
-        double baseElevation = 0)
+        double baseElevation = 0,
+        SightLineComposerOptions? sightLineOptions = null)
     {
         var projector = new SectionCoordinateProjector(sectionLine);
         var floorConfig = recognitionData.Floor;
@@ -116,7 +117,10 @@ public sealed class SectionComposer
             elementDataList.Add(data);
         }
 
-        elementDataList.AddRange(_sightLineComposer.Compose(recognitionData.SightLineCandidates, baseElevation));
+        elementDataList.AddRange(_sightLineComposer.Compose(
+            recognitionData.SightLineCandidates,
+            baseElevation,
+            sightLineOptions));
 
         var slabLineSegments = _verticalProfileBuilder.BuildBoundaryLineSegments(floorConfig, verticalProfile, wallIntervals)
             .Where(segment => !IsDegenerate(segment.Line))

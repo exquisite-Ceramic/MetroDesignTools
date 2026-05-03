@@ -6,6 +6,8 @@ public sealed class SectionOutputConfigDto
 
     public HatchOptionsDto? HatchOptions { get; init; } = new();
 
+    public SightLineOptionsDto? SightLineOptions { get; init; } = new();
+
     public LayerOptionsDto? LayerOptions { get; init; } = new();
 }
 
@@ -34,6 +36,17 @@ public sealed class HatchStyleDto
     public double Angle { get; init; }
 
     public bool UseByLayer { get; init; } = true;
+}
+
+public sealed class SightLineOptionsDto
+{
+    public bool Enabled { get; init; } = true;
+
+    public bool IncludeSlabs { get; init; }
+
+    public bool IncludeWalls { get; init; } = true;
+
+    public bool IncludeColumns { get; init; } = true;
 }
 
 public sealed class LayerOptionsDto
