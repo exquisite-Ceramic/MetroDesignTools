@@ -22,6 +22,8 @@ public static class SectionGenerationErrorCodes
     public const string NoRecognizedElements = "SectionGenerator.ElementRecognition.NoRecognizedElements";
     public const string UnsupportedEntityType = "SectionGenerator.ElementRecognition.UnsupportedEntityType";
     public const string ConversionFailed = "SectionGenerator.ElementRecognition.ConversionFailed";
+    public const string MissingWallTemplateMetadata = "SectionGenerator.ElementRecognition.MissingWallTemplateMetadata";
+    public const string MissingWallTemplate = "SectionGenerator.ElementRecognition.MissingWallTemplate";
     public const string NoIntersectingElements = "SectionGenerator.ElementRecognition.NoIntersectingElements";
     public const string AmbiguousWallPairing = "SectionGenerator.ElementRecognition.AmbiguousWallPairing";
     public const string EmptyGeometry = "SectionGenerator.SectionComposition.EmptyGeometry";
@@ -304,6 +306,39 @@ public static class SectionGenerationDiagnosticFactory
         Metadata = CreateMetadata(
             ("elementType", elementType),
             ("reason", reason))
+    };
+
+    public static OperationDiagnostic MissingWallTemplateMetadata(
+        string module,
+        string? targetHandle,
+        string layerName) => new()
+    {
+        Level = DiagnosticLevel.Warning,
+        Code = SectionGenerationErrorCodes.MissingWallTemplateMetadata,
+        Stage = PipelineStage.ElementRecognition,
+        Module = module,
+        Message = $"墙体位于已转换图层 {layerName}，但缺少墙体模板信息，可能由复制已转换墙体产生。",
+        TargetHandle = targetHandle,
+        Suggestion = "请运行 GenSection 时选择“绑定到墙体模板并继续”，或重新执行构件转换。",
+        Metadata = CreateMetadata(("layer", layerName))
+    };
+
+    public static OperationDiagnostic MissingWallTemplate(
+        string module,
+        string? targetHandle,
+        string layerName,
+        string templateId) => new()
+    {
+        Level = DiagnosticLevel.Warning,
+        Code = SectionGenerationErrorCodes.MissingWallTemplate,
+        Stage = PipelineStage.ElementRecognition,
+        Module = module,
+        Message = $"墙体位于已转换图层 {layerName}，但模板 {templateId} 不存在，无法应用墙体模板。",
+        TargetHandle = targetHandle,
+        Suggestion = "请检查墙体模板配置，或重新执行构件转换后再生成剖面。",
+        Metadata = CreateMetadata(
+            ("layer", layerName),
+            ("templateId", templateId))
     };
 
     public static OperationDiagnostic NoIntersectingElements(

@@ -55,6 +55,78 @@ public sealed class ElementConversionBackupService
         SetXrecordValue(tr, entityDict, ConvertedTimeKey, DateTime.Now.ToString("O"));
     }
 
+    public bool BackfillConversionMetadata(
+        Transaction tr,
+        Entity entity,
+        string convertedType,
+        string templateId,
+        string? inferredOriginalLayer,
+        bool overwriteTemplateId,
+        out string? failureMessage)
+    {
+        failureMessage = null;
+        if (string.IsNullOrWhiteSpace(convertedType))
+        {
+            failureMessage = "ConvertedType 不能为空。";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(templateId))
+        {
+            failureMessage = "TemplateId 不能为空。";
+            return false;
+        }
+
+        var db = entity.Database;
+        if (db == null)
+        {
+            failureMessage = "实体未关联到数据库。";
+            return false;
+        }
+
+        var dictId = GetOrCreateBackupDictionary(tr, db);
+        if (dictId == ObjectId.Null)
+        {
+            failureMessage = "无法创建转换备份字典。";
+            return false;
+        }
+
+        var dict = (DBDictionary)tr.GetObject(dictId, OpenMode.ForWrite);
+        var entityDictId = GetOrCreateEntityDictionary(tr, dict, entity.Handle.ToString());
+        if (entityDictId == ObjectId.Null)
+        {
+            failureMessage = "无法创建实体转换元数据记录。";
+            return false;
+        }
+
+        var entityDict = (DBDictionary)tr.GetObject(entityDictId, OpenMode.ForWrite);
+        var existingConvertedType = NormalizeValue(GetXrecordValue(tr, entityDict, ConvertedTypeKey));
+        if (!string.IsNullOrWhiteSpace(existingConvertedType) &&
+            !string.Equals(existingConvertedType, convertedType, StringComparison.OrdinalIgnoreCase))
+        {
+            failureMessage = $"实体已有 ConvertedType={existingConvertedType}，不会覆盖为 {convertedType}。";
+            return false;
+        }
+
+        var existingOriginalLayer = NormalizeValue(GetXrecordValue(tr, entityDict, OriginalLayerKey));
+        if (string.IsNullOrWhiteSpace(existingOriginalLayer) &&
+            !string.IsNullOrWhiteSpace(inferredOriginalLayer))
+        {
+            SetXrecordValue(tr, entityDict, OriginalLayerKey, inferredOriginalLayer);
+        }
+
+        SetXrecordValue(tr, entityDict, ConvertedTypeKey, convertedType);
+
+        var existingTemplateId = NormalizeValue(GetXrecordValue(tr, entityDict, TemplateIdKey));
+        if (string.IsNullOrWhiteSpace(existingTemplateId) || overwriteTemplateId)
+        {
+            SetXrecordValue(tr, entityDict, TemplateIdKey, templateId);
+        }
+
+        SetXrecordValue(tr, entityDict, ConvertedTimeKey, DateTime.Now.ToString("O"));
+        return true;
+    }
+
     /// <summary>
     /// 恢复实体原始属性
     /// </summary>
@@ -246,4 +318,7 @@ public sealed class ElementConversionBackupService
         var values = rb.AsArray();
         return values.Length > 0 ? values[0].Value?.ToString() : null;
     }
+
+    private static string? NormalizeValue(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value;
 }

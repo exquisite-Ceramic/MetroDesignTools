@@ -116,12 +116,32 @@ public sealed class LayerBasedElementRecognizer : ISectionElementRecognizerV2
                 matchedLayerCount++;
                 var templateId = _backupService.GetTemplateId(tr, entity);
 
-                if (string.Equals(elementType, "Wall", StringComparison.OrdinalIgnoreCase) &&
-                    !string.IsNullOrWhiteSpace(templateId))
+                if (string.Equals(elementType, "Wall", StringComparison.OrdinalIgnoreCase))
                 {
-                    var template = _wallTemplateCatalog.GetById(templateId);
-                    if (template != null)
+                    if (string.IsNullOrWhiteSpace(templateId))
                     {
+                        if (IsConvertedWallLayer(entity.Layer))
+                        {
+                            diagnostics.Add(SectionGenerationDiagnosticFactory.MissingWallTemplateMetadata(
+                                nameof(LayerBasedElementRecognizer),
+                                entity.Handle.ToString(),
+                                entity.Layer));
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        var template = _wallTemplateCatalog.GetById(templateId);
+                        if (template == null)
+                        {
+                            diagnostics.Add(SectionGenerationDiagnosticFactory.MissingWallTemplate(
+                                nameof(LayerBasedElementRecognizer),
+                                entity.Handle.ToString(),
+                                entity.Layer,
+                                templateId));
+                            continue;
+                        }
+
                         var candidate = ConvertToWallCandidate(entity, template, diagnostics);
                         if (candidate != null)
                         {
@@ -133,8 +153,9 @@ public sealed class LayerBasedElementRecognizer : ISectionElementRecognizerV2
                             }
 
                             candidates.Add(candidate);
-                            continue;
                         }
+
+                        continue;
                     }
                 }
 
@@ -271,6 +292,9 @@ public sealed class LayerBasedElementRecognizer : ISectionElementRecognizerV2
 
         return null;
     }
+
+    private static bool IsConvertedWallLayer(string layerName)
+        => layerName.StartsWith($"{LayerTypeMap["Wall"]}_", StringComparison.OrdinalIgnoreCase);
 
     private BuildingElement? ConvertToElement(
         Entity entity,

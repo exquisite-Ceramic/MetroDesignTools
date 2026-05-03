@@ -68,6 +68,8 @@ public class SectionGeneratorPlugin : IPlugin
         services.AddSingleton<ElementConversionBackupService>();
         services.AddSingleton<ILayerNameProvider, CadLayerNameProvider>();
         services.AddSingleton<IElementConversionService, CadElementConversionService>();
+        services.AddSingleton<IConvertedElementMetadataInspector, CadConvertedElementMetadataInspector>();
+        services.AddSingleton<IConvertedElementMetadataRepairService, CadConvertedElementMetadataRepairService>();
         services.AddSingleton<IGenerationReadinessInspector, GenerationReadinessInspector>();
 
         // 楼层配置仓储（DWG 内嵌配置）
