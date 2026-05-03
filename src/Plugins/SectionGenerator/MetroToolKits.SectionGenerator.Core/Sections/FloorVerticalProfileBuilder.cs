@@ -4,6 +4,7 @@ using MetroToolKits.Foundation.Building.Elements;
 using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
+using MetroToolKits.SectionGenerator.Core.Sections.Hatching;
 
 namespace MetroToolKits.SectionGenerator.Core.Sections;
 
@@ -241,17 +242,17 @@ public sealed class FloorVerticalProfileBuilder
             return;
         }
 
-        regions.Add(new SectionHatchRegion
-        {
-            Category = SectionHatchCategory.Slab,
-            Boundary = new[]
-            {
+        if (SectionHatchRegionFactory.TryCreateQuad(
+                SectionHatchCategory.Slab,
                 new Point3D(0, bottomStart, 0),
                 new Point3D(sectionLength, bottomEnd, 0),
                 new Point3D(sectionLength, topEnd, 0),
-                new Point3D(0, topStart, 0)
-            }
-        });
+                new Point3D(0, topStart, 0),
+                out var region,
+                out _))
+        {
+            regions.Add(region!);
+        }
     }
 
     private IReadOnlyList<SectionLineSegment> BuildBoundaryLinesFor(

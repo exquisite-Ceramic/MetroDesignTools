@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using MetroToolKits.Foundation.Building.Elements;
 using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.Foundation.Core.Diagnostics;
 using MetroToolKits.Foundation.Core.Geometry;
@@ -26,6 +27,8 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
     private readonly FloorAlignmentResolver _alignmentResolver;
     private readonly FloorScopeResolver _scopeResolver;
     private readonly FloorVerticalProfileBuilder _verticalProfileBuilder;
+    private readonly SectionComposer _sectionComposer;
+    private readonly SightLineGeometryHasher _sightLineHasher = new();
     private readonly ILogger<CheckSectionUpdatesUseCase> _logger;
 
     public CheckSectionUpdatesUseCase(
@@ -49,6 +52,7 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
         _alignmentResolver = new FloorAlignmentResolver();
         _scopeResolver     = new FloorScopeResolver();
         _verticalProfileBuilder = verticalProfileBuilder;
+        _sectionComposer = new SectionComposer(verticalProfileBuilder);
         _logger            = logger;
     }
 
@@ -132,6 +136,7 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
             // 重新计算当前哈希，与快照比对
             var outdatedFloors = new List<string>();
             var skippedFloors = new List<string>();
+            var warningMessages = new List<string>();
             var expectedFloorNames = SectionSnapshotFloorScope.ResolveExecutionFloorNames(snapshot);
 
             if (!SectionExecutionConfigBuilder.TryBuild(
@@ -181,6 +186,7 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
             }
 
             var hasUncheckableGeneratedFloor = false;
+            var hasIncompleteSightLineCheck = false;
             foreach (var floorSnap in snapshot.FloorSnapshots)
             {
                 var floor = config.Floors.FirstOrDefault(f => f.Name == floorSnap.FloorName);
@@ -214,10 +220,11 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
                     hasUncheckableGeneratedFloor = true;
                     continue;
                 }
-                var elements = RecognizeElements(
+                var recognition = RecognizeFloorElements(
                     context.SectionLine.Value,
                     snapshot.ViewDepth,
-                    context.EffectiveScope).Elements;
+                    context.EffectiveScope);
+                var elements = recognition.CutElements;
 
                 try
                 {
@@ -230,6 +237,28 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
                     var legacyElementHash = _hasher.ComputeHash(elements);
                     var isOutdated = currentHash != floorSnap.GeometryHash &&
                                      legacyElementHash != floorSnap.GeometryHash;
+                    if (!isOutdated)
+                    {
+                        var sightLineCheck = CheckSightLineGeometry(
+                            snapshot,
+                            floorSnap,
+                            floor,
+                            context.SectionLine.Value,
+                            ComputeViewDirection(context.SectionLine.Value),
+                            baseElevation,
+                            recognition);
+                        if (sightLineCheck.Status == SightLineCheckStatus.Outdated)
+                        {
+                            isOutdated = true;
+                        }
+                        else if (sightLineCheck.Status == SightLineCheckStatus.Unknown)
+                        {
+                            hasIncompleteSightLineCheck = true;
+                            warningMessages.Add(sightLineCheck.Message);
+                            diagnostics.Add(sightLineCheck.Diagnostic);
+                        }
+                    }
+
                     var requestedTopTemplateId = string.IsNullOrWhiteSpace(floor.TopBoundarySlab.TemplateId)
                         ? null
                         : floor.TopBoundarySlab.TemplateId;
@@ -276,11 +305,21 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
                 }
             }
 
-            var status = hasUncheckableGeneratedFloor
-                ? SectionUpdateStatus.Unknown
-                : outdatedFloors.Count > 0
-                    ? SectionUpdateStatus.Outdated
+            var status = outdatedFloors.Count > 0
+                ? SectionUpdateStatus.Outdated
+                : hasUncheckableGeneratedFloor || hasIncompleteSightLineCheck
+                    ? SectionUpdateStatus.Unknown
                     : SectionUpdateStatus.UpToDate;
+
+            var warningMessage = skippedFloors.Count > 0
+                ? $"部分楼层未参与检查: {string.Join(", ", skippedFloors)}"
+                : null;
+            if (warningMessages.Count > 0)
+            {
+                warningMessage = string.IsNullOrWhiteSpace(warningMessage)
+                    ? string.Join("; ", warningMessages.Distinct())
+                    : $"{warningMessage}; {string.Join("; ", warningMessages.Distinct())}";
+            }
 
             results.Add(new SectionCheckResult
             {
@@ -289,9 +328,7 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
                 Status         = status,
                 OutdatedFloors = outdatedFloors,
                 SkippedFloors  = skippedFloors,
-                WarningMessage = skippedFloors.Count > 0
-                    ? $"部分楼层未参与检查: {string.Join(", ", skippedFloors)}"
-                    : null,
+                WarningMessage = warningMessage,
                 Snapshot       = snapshot
             });
         }
@@ -332,6 +369,67 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
         }
 
         return cumulative;
+    }
+
+    private SightLineCheckResult CheckSightLineGeometry(
+        SectionSnapshot snapshot,
+        FloorSnapshot floorSnapshot,
+        FloorConfig floor,
+        Line3D sectionLine,
+        Vector3D viewDirection,
+        double baseElevation,
+        FloorRecognitionContext recognition)
+    {
+        if (floorSnapshot.SightLineGeometryHash == null)
+        {
+            var message = $"剖面块 {snapshot.BlockName}，楼层 {floorSnapshot.FloorName} 的旧快照未包含看线 hash，无法确认 viewDepth 看线是否最新";
+            return SightLineCheckResult.Unknown(
+                message,
+                BuildSightLineDiagnostic(
+                    SectionGenerationErrorCodes.SightLineHashMissing,
+                    floorSnapshot.FloorName,
+                    message,
+                    "请重新生成该剖面，以写入看线 hash 后再执行更新检查。"));
+        }
+
+        if (floorSnapshot.SightLineHashVersion != SightLineGeometryHasher.CurrentHashVersion)
+        {
+            var message = $"剖面块 {snapshot.BlockName}，楼层 {floorSnapshot.FloorName} 的看线 hash 版本不匹配，无法确认 viewDepth 看线是否最新";
+            return SightLineCheckResult.Unknown(
+                message,
+                BuildSightLineDiagnostic(
+                    SectionGenerationErrorCodes.SightLineHashVersionMismatch,
+                    floorSnapshot.FloorName,
+                    message,
+                    "请重新生成该剖面，以升级看线 hash 版本后再执行更新检查。"));
+        }
+
+        if (!recognition.HasSightLineRecognition)
+        {
+            var message = $"剖面块 {snapshot.BlockName}，楼层 {floorSnapshot.FloorName} 当前识别器不支持 viewDepth 看线候选，无法确认看线是否最新";
+            return SightLineCheckResult.Unknown(
+                message,
+                BuildSightLineDiagnostic(
+                    SectionGenerationErrorCodes.SightLineRecognizerUnavailable,
+                    floorSnapshot.FloorName,
+                    message,
+                    "请使用支持 ISectionElementRecognizerV2 的识别器重新执行更新检查。"));
+        }
+
+        var floorGeometry = _sectionComposer.Generate(
+            sectionLine,
+            viewDirection,
+            new SectionFloorRecognitionData
+            {
+                Floor = floor,
+                CutElements = recognition.CutElements,
+                SightLineCandidates = recognition.ViewDepthCandidates.Select(MapSightLineCandidate).ToList()
+            },
+            baseElevation);
+        var currentSightLineHash = _sightLineHasher.ComputeHash(floorGeometry.Elements);
+        return currentSightLineHash == floorSnapshot.SightLineGeometryHash
+            ? SightLineCheckResult.UpToDate()
+            : SightLineCheckResult.Outdated();
     }
 
     private Foundation.Core.Geometry.Line3D ResolveSectionLine(SectionSnapshot snapshot)
@@ -388,14 +486,52 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
     private static string BuildMissingEmbeddedConfigMessage(string drawingName)
         => $"当前图纸 {drawingName} 缺少内嵌楼层配置，无法确认剖面是否最新";
 
-    private ElementRecognitionResult RecognizeElements(
+    private FloorRecognitionContext RecognizeFloorElements(
         Line3D sectionLine,
         double viewDepth,
         ScopeBounds2D? scopeBounds)
-        => (scopeBounds.HasValue
+    {
+        if (_elementRecognizer is ISectionElementRecognizerV2 sectionRecognizer)
+        {
+            var recognition = (scopeBounds.HasValue
+                ? sectionRecognizer.RecognizeSectionElements(sectionLine, viewDepth, scopeBounds)
+                : sectionRecognizer.RecognizeSectionElements(sectionLine, viewDepth))
+                ?? new SectionRecognitionSet();
+
+            return new FloorRecognitionContext(
+                recognition.CutElements ?? Array.Empty<BuildingElement>(),
+                recognition.ViewDepthCandidates ?? Array.Empty<ViewDepthCandidate>(),
+                true);
+        }
+
+        var legacy = (scopeBounds.HasValue
             ? _elementRecognizer.RecognizeElements(sectionLine, viewDepth, scopeBounds)
             : _elementRecognizer.RecognizeElements(sectionLine, viewDepth))
            ?? new ElementRecognitionResult();
+
+        return new FloorRecognitionContext(
+            legacy.Elements ?? Array.Empty<BuildingElement>(),
+            Array.Empty<ViewDepthCandidate>(),
+            false);
+    }
+
+    private static Vector3D ComputeViewDirection(Line3D sectionLine)
+    {
+        var dir = sectionLine.Direction.Normalized;
+        return new Vector3D(-dir.Y, dir.X, 0);
+    }
+
+    private static SectionSightLineCandidate MapSightLineCandidate(ViewDepthCandidate candidate)
+        => new()
+        {
+            Element = candidate.Element,
+            SourceHandle = candidate.SourceHandle,
+            ElementType = candidate.ElementType,
+            MinChainage = candidate.MinChainage,
+            MaxChainage = candidate.MaxChainage,
+            MinDepth = candidate.MinDepth,
+            MaxDepth = candidate.MaxDepth
+        };
 
     private static LoadedSectionConfig NormalizeLoadedConfig(LoadedSectionConfig? sourceDocument)
     {
@@ -424,6 +560,27 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
             Message = BuildMissingEmbeddedConfigMessage(drawingName),
             Suggestion = "请先打开 FloorConfig 保存当前图纸配置后，再执行更新检查。",
             Metadata = metadata
+        };
+    }
+
+    private static OperationDiagnostic BuildSightLineDiagnostic(
+        string code,
+        string floorName,
+        string message,
+        string suggestion)
+    {
+        return new OperationDiagnostic
+        {
+            Level = DiagnosticLevel.Warning,
+            Code = code,
+            Stage = PipelineStage.ElementRecognition,
+            Module = nameof(CheckSectionUpdatesUseCase),
+            Message = message,
+            Suggestion = suggestion,
+            Metadata = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["floor"] = floorName
+            }
         };
     }
 
@@ -509,6 +666,39 @@ public sealed class CheckSectionUpdatesUseCase : ICheckSectionUpdatesUseCase
                 SectionGenerationFailures.FloorScopeInvalid(diagnostic.Message, isBaseFloor: true),
             _ => SectionGenerationFailures.AlignmentBaseFloorInvalid(diagnostic.Message)
         };
+
+    private sealed record FloorRecognitionContext(
+        IReadOnlyList<BuildingElement> CutElements,
+        IReadOnlyList<ViewDepthCandidate> ViewDepthCandidates,
+        bool HasSightLineRecognition);
+
+    private enum SightLineCheckStatus
+    {
+        UpToDate,
+        Outdated,
+        Unknown
+    }
+
+    private sealed record SightLineCheckResult(
+        SightLineCheckStatus Status,
+        string Message,
+        OperationDiagnostic Diagnostic)
+    {
+        public static SightLineCheckResult UpToDate() => new(
+            SightLineCheckStatus.UpToDate,
+            string.Empty,
+            new OperationDiagnostic());
+
+        public static SightLineCheckResult Outdated() => new(
+            SightLineCheckStatus.Outdated,
+            string.Empty,
+            new OperationDiagnostic());
+
+        public static SightLineCheckResult Unknown(string message, OperationDiagnostic diagnostic) => new(
+            SightLineCheckStatus.Unknown,
+            message,
+            diagnostic);
+    }
 
     private static OperationDiagnostic MapAlignmentDiagnostic(FloorExecutionContext context)
     {

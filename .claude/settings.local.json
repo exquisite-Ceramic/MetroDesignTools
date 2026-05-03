@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"E:/CAD二次开发/MetroDesignToolKits\" diff --stat HEAD~5..HEAD)",
+      "Bash(git *)"
+    ]
+  }
+}

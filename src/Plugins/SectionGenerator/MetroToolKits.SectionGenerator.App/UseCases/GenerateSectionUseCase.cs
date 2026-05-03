@@ -343,6 +343,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
                 participatingFloors,
                 outputConfig,
                 geometryAnchorX);
+            AddHatchOutputDiagnostics(drawResult.HatchSummary, diagnostics);
 
             // 写入快照（含各楼层哈希）
             currentStage = PipelineStage.SnapshotPersist;
@@ -361,7 +362,7 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
                 string.Join(", ", snapshot.FloorSnapshots.Select(f => $"{f.FloorName}:{f.GeometryHash}")));
 
             sw.Stop();
-            var status = skippedFloorCount > 0
+            var status = skippedFloorCount > 0 || HasHatchOutputWarnings(drawResult.HatchSummary)
                 ? OperationStatus.PartialSuccess
                 : OperationStatus.Success;
 
@@ -503,6 +504,32 @@ public sealed class GenerateSectionUseCase : IGenerateSectionUseCase
         => element.CutLineSegments.Count > 0 ||
            element.CutLines.Count > 0 ||
            element.HatchRegions.Count > 0;
+
+    private static void AddHatchOutputDiagnostics(
+        HatchOutputSummary hatchSummary,
+        ICollection<OperationDiagnostic> diagnostics)
+    {
+        if (!HasHatchOutputWarnings(hatchSummary))
+        {
+            return;
+        }
+
+        if (hatchSummary.SkippedCount > 0 || hatchSummary.FallbackPatternCount > 0)
+        {
+            diagnostics.Add(SectionGenerationDiagnosticFactory.HatchOutputSummary(hatchSummary));
+        }
+
+        foreach (var warning in hatchSummary.Warnings)
+        {
+            diagnostics.Add(SectionGenerationDiagnosticFactory.HatchOutputWarning(warning));
+        }
+    }
+
+    private static bool HasHatchOutputWarnings(HatchOutputSummary hatchSummary)
+        => hatchSummary != null &&
+           (hatchSummary.SkippedCount > 0 ||
+            hatchSummary.FallbackPatternCount > 0 ||
+            hatchSummary.Warnings.Count > 0);
 
     private static bool HasSightLineGeometry(ElementSectionData element)
         => element.SightLines.Count > 0;

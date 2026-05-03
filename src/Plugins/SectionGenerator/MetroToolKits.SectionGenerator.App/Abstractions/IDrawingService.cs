@@ -47,4 +47,5 @@ public sealed class DrawSectionBlockResult
 {
     public string BlockName { get; init; } = string.Empty;
     public string BlockHandle { get; init; } = string.Empty;
+    public HatchOutputSummary HatchSummary { get; init; } = HatchOutputSummary.Empty;
 }

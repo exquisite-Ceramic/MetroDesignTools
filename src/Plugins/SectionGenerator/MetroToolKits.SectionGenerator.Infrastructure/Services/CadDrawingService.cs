@@ -18,6 +18,7 @@ public sealed class CadDrawingService : IDrawingService
 {
     private const string SectionSnapshotAppName = "MK_SectionSnapshot";
     private const string SectionSourceRefAppName = "MK_SectionSourceRef";
+    private readonly CadHatchWriter _hatchWriter = new();
 
     // ── 单层 ──────────────────────────────────────────────────────────────────
 
@@ -102,6 +103,7 @@ public sealed class CadDrawingService : IDrawingService
             bt.Add(blockDef);
             tr.AddNewlyCreatedDBObject(blockDef, true);
             var xOffset = ComputeDrawingOffset(multiData, geometryAnchorX);
+            var hatchResults = new List<CadHatchDrawResult>();
 
             foreach (var floorData in multiData.Floors)
             {
@@ -140,9 +142,10 @@ public sealed class CadDrawingService : IDrawingService
 
                     if (outputConfig.HatchOptions.Enabled)
                     {
-                        foreach (var region in element.HatchRegions.Where(IsValidHatchRegion))
+                        foreach (var region in element.HatchRegions)
                         {
-                            AddHatch(blockDef, tr, region, outputConfig, xOffset);
+                            var result = _hatchWriter.TryWrite(blockDef, tr, region, outputConfig, xOffset);
+                            hatchResults.Add(result);
                         }
                     }
                 }
@@ -167,9 +170,10 @@ public sealed class CadDrawingService : IDrawingService
 
                 if (outputConfig.HatchOptions.Enabled)
                 {
-                    foreach (var region in floorData.HatchRegions.Where(IsValidHatchRegion))
+                    foreach (var region in floorData.HatchRegions)
                     {
-                        AddHatch(blockDef, tr, region, outputConfig, xOffset);
+                        var result = _hatchWriter.TryWrite(blockDef, tr, region, outputConfig, xOffset);
+                        hatchResults.Add(result);
                     }
                 }
             }
@@ -192,7 +196,8 @@ public sealed class CadDrawingService : IDrawingService
             return new DrawSectionBlockResult
             {
                 BlockName = blockName,
-                BlockHandle = blockRef.Handle.ToString()
+                BlockHandle = blockRef.Handle.ToString(),
+                HatchSummary = BuildHatchSummary(hatchResults)
             };
         }
         catch (InfrastructureException)
@@ -349,59 +354,6 @@ public sealed class CadDrawingService : IDrawingService
         tr.AddNewlyCreatedDBObject(text, true);
     }
 
-    private static void AddHatch(
-        BlockTableRecord btr,
-        Transaction tr,
-        SectionHatchRegion region,
-        SectionOutputConfig outputConfig,
-        double xOffset)
-    {
-        if (!IsValidHatchRegion(region))
-        {
-            return;
-        }
-
-        var style = region.Category switch
-        {
-            SectionHatchCategory.Wall => outputConfig.HatchOptions.WallHatch,
-            SectionHatchCategory.Column => outputConfig.HatchOptions.ColumnHatch,
-            SectionHatchCategory.Slab => outputConfig.HatchOptions.SlabHatch,
-            _ => HatchStyleOptions.CreateDefault()
-        };
-        var layer = ResolveHatchLayer(outputConfig, region.Category);
-
-        var boundary = new Polyline();
-        var points = region.Boundary.ToList();
-        for (var i = 0; i < points.Count; i++)
-        {
-            boundary.AddVertexAt(
-                i,
-                new Point2d(points[i].X + xOffset, points[i].Y),
-                0,
-                0,
-                0);
-        }
-
-        boundary.Closed = true;
-        boundary.Layer = layer;
-        boundary.Visible = false;
-        btr.AppendEntity(boundary);
-        tr.AddNewlyCreatedDBObject(boundary, true);
-
-        var hatch = new Hatch
-        {
-            Layer = layer,
-            PatternScale = style.Scale <= 0 ? 100.0 : style.Scale,
-            PatternAngle = style.Angle * Math.PI / 180.0
-        };
-        hatch.SetHatchPattern(HatchPatternType.PreDefined, string.IsNullOrWhiteSpace(style.PatternName) ? "ANSI31" : style.PatternName);
-        btr.AppendEntity(hatch);
-        tr.AddNewlyCreatedDBObject(hatch, true);
-        hatch.Associative = true;
-        hatch.AppendLoop(HatchLoopTypes.External, new ObjectIdCollection(new[] { boundary.ObjectId }));
-        hatch.EvaluateHatch(true);
-    }
-
     private static void AttachSnapshotXData(BlockReference blockRef, Transaction tr,
         MultiFloorSectionData data, Database db)
     {
@@ -429,8 +381,93 @@ public sealed class CadDrawingService : IDrawingService
         return new InfrastructureException(SectionGenerationFailures.DrawFailed(technicalMessage, innerException));
     }
 
-    private static bool IsValidHatchRegion(SectionHatchRegion region)
-        => region.Boundary.Count >= 3;
+    private static HatchOutputSummary BuildHatchSummary(IReadOnlyList<CadHatchDrawResult> results)
+    {
+        if (results.Count == 0)
+        {
+            return HatchOutputSummary.Empty;
+        }
+
+        var warnings = results
+            .Where(result => !result.Succeeded || IsPatternFallback(result))
+            .Select(ToHatchOutputWarning)
+            .ToList();
+
+        return new HatchOutputSummary
+        {
+            RequestedCount = results.Count,
+            CreatedCount = results.Count(result => result.Succeeded),
+            SkippedCount = results.Count(result => !result.Succeeded),
+            FallbackPatternCount = results.Count(IsPatternFallback),
+            Warnings = warnings
+        };
+    }
+
+    private static HatchOutputWarning ToHatchOutputWarning(CadHatchDrawResult result)
+    {
+        var code = ResolveHatchWarningCode(result);
+        return new HatchOutputWarning
+        {
+            Category = result.Category,
+            Code = code,
+            Message = BuildHatchWarningMessage(result, code),
+            PatternName = result.PatternName,
+            EffectivePatternName = result.EffectivePatternName,
+            LayerName = result.LayerName,
+            BoundaryPointCount = result.BoundaryPointCount
+        };
+    }
+
+    private static string ResolveHatchWarningCode(CadHatchDrawResult result)
+    {
+        if (IsPatternFallback(result))
+        {
+            return SectionGenerationErrorCodes.HatchPatternFallback;
+        }
+
+        var message = result.Message ?? string.Empty;
+        if (message.Contains("Invalid hatch boundary", StringComparison.OrdinalIgnoreCase))
+        {
+            return SectionGenerationErrorCodes.HatchBoundaryInvalid;
+        }
+
+        if (message.Contains("Evaluate", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("eInvalidInput", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("Hatch creation failed", StringComparison.OrdinalIgnoreCase))
+        {
+            return SectionGenerationErrorCodes.HatchEvaluateFailed;
+        }
+
+        return SectionGenerationErrorCodes.HatchSkipped;
+    }
+
+    private static string BuildHatchWarningMessage(CadHatchDrawResult result, string code)
+    {
+        if (code == SectionGenerationErrorCodes.HatchPatternFallback)
+        {
+            return $"填充图案 {result.PatternName} 不可用，已回退到 {result.EffectivePatternName}。";
+        }
+
+        var detail = string.IsNullOrWhiteSpace(result.Message)
+            ? "未提供详细错误。"
+            : result.Message;
+
+        return code switch
+        {
+            SectionGenerationErrorCodes.HatchBoundaryInvalid =>
+                $"跳过非法填充区域。{detail}",
+            SectionGenerationErrorCodes.HatchEvaluateFailed =>
+                $"填充输出失败，已跳过该填充区域。{detail}",
+            _ =>
+                $"已跳过填充区域。{detail}"
+        };
+    }
+
+    private static bool IsPatternFallback(CadHatchDrawResult result)
+        => result.Succeeded &&
+           !string.IsNullOrWhiteSpace(result.PatternName) &&
+           !string.IsNullOrWhiteSpace(result.EffectivePatternName) &&
+           !string.Equals(result.PatternName, result.EffectivePatternName, StringComparison.OrdinalIgnoreCase);
 
     private static string ResolveCutLayer(SectionOutputConfig outputConfig, SectionLineRole role)
     {
@@ -438,17 +475,6 @@ public sealed class CadDrawingService : IDrawingService
         {
             SectionLineRole.Structural => SanitizeLayerName(outputConfig.LayerOptions.StructuralLayer, "MK_结构输出"),
             SectionLineRole.Finish => SanitizeLayerName(outputConfig.LayerOptions.FinishLayer, "MK_装修输出"),
-            _ => SanitizeLayerName(outputConfig.LayerOptions.CutLineLayer, "MK_剖切线")
-        };
-    }
-
-    private static string ResolveHatchLayer(SectionOutputConfig outputConfig, SectionHatchCategory category)
-    {
-        return category switch
-        {
-            SectionHatchCategory.Wall => SanitizeLayerName(outputConfig.LayerOptions.WallHatchLayer, "MK_墙填充"),
-            SectionHatchCategory.Column => SanitizeLayerName(outputConfig.LayerOptions.ColumnHatchLayer, "MK_柱填充"),
-            SectionHatchCategory.Slab => SanitizeLayerName(outputConfig.LayerOptions.SlabHatchLayer, "MK_楼板填充"),
             _ => SanitizeLayerName(outputConfig.LayerOptions.CutLineLayer, "MK_剖切线")
         };
     }

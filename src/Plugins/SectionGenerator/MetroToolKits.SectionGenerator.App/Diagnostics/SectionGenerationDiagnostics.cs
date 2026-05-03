@@ -1,4 +1,5 @@
 using MetroToolKits.Foundation.Core.Diagnostics;
+using MetroToolKits.SectionGenerator.App.Models;
 
 namespace MetroToolKits.SectionGenerator.App.Diagnostics;
 
@@ -25,7 +26,14 @@ public static class SectionGenerationErrorCodes
     public const string AmbiguousWallPairing = "SectionGenerator.ElementRecognition.AmbiguousWallPairing";
     public const string EmptyGeometry = "SectionGenerator.SectionComposition.EmptyGeometry";
     public const string DrawFailed = "SectionGenerator.DrawingOutput.DrawFailed";
+    public const string HatchBoundaryInvalid = "SectionGenerator.DrawingOutput.HatchBoundaryInvalid";
+    public const string HatchSkipped = "SectionGenerator.DrawingOutput.HatchSkipped";
+    public const string HatchPatternFallback = "SectionGenerator.DrawingOutput.HatchPatternFallback";
+    public const string HatchEvaluateFailed = "SectionGenerator.DrawingOutput.HatchEvaluateFailed";
     public const string SnapshotSaveFailed = "SectionGenerator.SnapshotPersist.SaveFailed";
+    public const string SightLineHashMissing = "SectionGenerator.UpdateDetection.SightLineHashMissing";
+    public const string SightLineRecognizerUnavailable = "SectionGenerator.UpdateDetection.SightLineRecognizerUnavailable";
+    public const string SightLineHashVersionMismatch = "SectionGenerator.UpdateDetection.SightLineHashVersionMismatch";
     public const string Unexpected = "SectionGenerator.System.Unexpected";
 }
 
@@ -333,6 +341,63 @@ public static class SectionGenerationDiagnosticFactory
             ("templateId", templateId),
             ("intersectionCount", intersectionCount.ToString()))
     };
+
+    public static OperationDiagnostic HatchOutputSummary(HatchOutputSummary summary)
+    {
+        var message = summary.SkippedCount switch
+        {
+            > 0 when summary.FallbackPatternCount > 0 =>
+                $"剖面已生成，但跳过 {summary.SkippedCount} 个非法填充区域，另有 {summary.FallbackPatternCount} 个填充图案使用了回退图案。",
+            > 0 =>
+                $"剖面已生成，但跳过 {summary.SkippedCount} 个非法填充区域。",
+            _ =>
+                $"剖面已生成，但 {summary.FallbackPatternCount} 个填充图案使用了回退图案。"
+        };
+
+        return new OperationDiagnostic
+        {
+            Level = DiagnosticLevel.Warning,
+            Code = summary.SkippedCount > 0
+                ? SectionGenerationErrorCodes.HatchSkipped
+                : SectionGenerationErrorCodes.HatchPatternFallback,
+            Stage = PipelineStage.DrawingOutput,
+            Module = "CadDrawingService",
+            Message = message,
+            Suggestion = summary.SkippedCount > 0
+                ? "建议检查构件边界或关闭填充后重试。"
+                : "建议检查输出配置中的填充图案名称，或改用 AutoCAD 当前环境可用的填充图案。",
+            Metadata = CreateMetadata(
+                ("requestedCount", summary.RequestedCount.ToString()),
+                ("createdCount", summary.CreatedCount.ToString()),
+                ("skippedCount", summary.SkippedCount.ToString()),
+                ("fallbackPatternCount", summary.FallbackPatternCount.ToString()))
+        };
+    }
+
+    public static OperationDiagnostic HatchOutputWarning(HatchOutputWarning warning)
+    {
+        var code = string.IsNullOrWhiteSpace(warning.Code)
+            ? SectionGenerationErrorCodes.HatchSkipped
+            : warning.Code;
+
+        return new OperationDiagnostic
+        {
+            Level = DiagnosticLevel.Warning,
+            Code = code,
+            Stage = PipelineStage.DrawingOutput,
+            Module = "CadDrawingService",
+            Message = warning.Message,
+            Suggestion = code == SectionGenerationErrorCodes.HatchPatternFallback
+                ? "建议检查输出配置中的填充图案名称，或改用 AutoCAD 当前环境可用的填充图案。"
+                : "建议检查构件边界或关闭填充后重试。",
+            Metadata = CreateMetadata(
+                ("category", warning.Category.ToString()),
+                ("patternName", warning.PatternName),
+                ("effectivePatternName", warning.EffectivePatternName),
+                ("layerName", warning.LayerName),
+                ("boundaryPointCount", warning.BoundaryPointCount.ToString()))
+        };
+    }
 
     private static IReadOnlyDictionary<string, string?> CreateMetadata(params (string Key, string? Value)[] entries)
     {

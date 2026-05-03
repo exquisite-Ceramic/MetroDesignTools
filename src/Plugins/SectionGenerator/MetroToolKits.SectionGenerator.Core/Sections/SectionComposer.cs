@@ -1,6 +1,7 @@
 using MetroToolKits.Foundation.Building.Elements;
 using MetroToolKits.Foundation.Building.Types;
 using MetroToolKits.Foundation.Core.Geometry;
+using MetroToolKits.SectionGenerator.Core.Sections.Hatching;
 
 namespace MetroToolKits.SectionGenerator.Core.Sections;
 
@@ -175,17 +176,18 @@ public sealed class SectionComposer
                 Role = role
             }));
 
-            hatchRegions.Add(new SectionHatchRegion
-            {
-                Category = SectionHatchCategory.Wall,
-                Boundary = new[]
-                {
+            if (SectionHatchRegionFactory.TryCreateQuad(
+                    SectionHatchCategory.Wall,
                     projected[0].Start,
                     projected[1].Start,
                     projected[1].End,
-                    projected[0].End
-                }
-            });
+                    projected[0].End,
+                    out var hatchRegion,
+                    out _) &&
+                hatchRegion != null)
+            {
+                hatchRegions.Add(hatchRegion);
+            }
         }
 
         if (cutLineSegments.Count == 0)
@@ -228,20 +230,19 @@ public sealed class SectionComposer
 
         var mainLine = cutLines[0];
         var halfThickness = Math.Max(wall.Thickness / 2.0, 1);
-        var hatchRegions = new[]
+        var hatchRegions = new List<SectionHatchRegion>();
+        if (SectionHatchRegionFactory.TryCreateQuad(
+                SectionHatchCategory.Wall,
+                new Point3D(mainLine.Start.X - halfThickness, mainLine.Start.Y, 0),
+                new Point3D(mainLine.Start.X + halfThickness, mainLine.Start.Y, 0),
+                new Point3D(mainLine.End.X + halfThickness, mainLine.End.Y, 0),
+                new Point3D(mainLine.End.X - halfThickness, mainLine.End.Y, 0),
+                out var hatchRegion,
+                out _) &&
+            hatchRegion != null)
         {
-            new SectionHatchRegion
-            {
-                Category = SectionHatchCategory.Wall,
-                Boundary = new[]
-                {
-                    new Point3D(mainLine.Start.X - halfThickness, mainLine.Start.Y, 0),
-                    new Point3D(mainLine.Start.X + halfThickness, mainLine.Start.Y, 0),
-                    new Point3D(mainLine.End.X + halfThickness, mainLine.End.Y, 0),
-                    new Point3D(mainLine.End.X - halfThickness, mainLine.End.Y, 0)
-                }
-            }
-        };
+            hatchRegions.Add(hatchRegion);
+        }
 
         return new ElementSectionData
         {
@@ -281,17 +282,18 @@ public sealed class SectionComposer
         {
             var left = cutLineSegments[0].Line;
             var right = cutLineSegments[1].Line;
-            hatchRegions.Add(new SectionHatchRegion
-            {
-                Category = SectionHatchCategory.Column,
-                Boundary = new[]
-                {
+            if (SectionHatchRegionFactory.TryCreateQuad(
+                    SectionHatchCategory.Column,
                     left.Start,
                     right.Start,
                     right.End,
-                    left.End
-                }
-            });
+                    left.End,
+                    out var hatchRegion,
+                    out _) &&
+                hatchRegion != null)
+            {
+                hatchRegions.Add(hatchRegion);
+            }
         }
 
         return new ElementSectionData
@@ -668,17 +670,18 @@ public sealed class SectionComposer
                 continue;
             }
 
-            regions.Add(new SectionHatchRegion
-            {
-                Category = SectionHatchCategory.Slab,
-                Boundary = new[]
-                {
+            if (SectionHatchRegionFactory.TryCreateQuad(
+                    SectionHatchCategory.Slab,
                     new Point3D(bottom.Start.X, bottom.Start.Y, 0),
                     new Point3D(bottom.End.X, bottom.End.Y, 0),
                     new Point3D(top.End.X, top.End.Y, 0),
-                    new Point3D(top.Start.X, top.Start.Y, 0)
-                }
-            });
+                    new Point3D(top.Start.X, top.Start.Y, 0),
+                    out var hatchRegion,
+                    out _) &&
+                hatchRegion != null)
+            {
+                regions.Add(hatchRegion);
+            }
         }
 
         return regions;
